@@ -1,8 +1,9 @@
 #!/bin/bash
-# Deprecated alias — use setup_venv_engaging.sbatch
-#SBATCH --job-name=setup_hemit_venv
-#SBATCH --output=logs/setup_hemit_venv_%j.out
-#SBATCH --error=logs/setup_hemit_venv_%j.err
+# One-time: GPU PyTorch for pix2pix conda env. Wait for "torch OK" in log, then run_hemit_reproduce.sbatch
+#
+#SBATCH --job-name=setup_pix2pix
+#SBATCH --output=logs/setup_pix2pix_%j.out
+#SBATCH --error=logs/setup_pix2pix_%j.err
 #SBATCH --partition=mit_normal_gpu
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=4
@@ -12,4 +13,4 @@
 set -euo pipefail
 source "${SLURM_SUBMIT_DIR:-$PWD}/bash_scripts/_common.sh"
 mkdir -p logs
-bash scripts/setup_venv_engaging.sh
+bash scripts/setup_pix2pix_env.sh

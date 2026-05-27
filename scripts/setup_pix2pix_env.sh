@@ -10,17 +10,36 @@ conda activate pix2pix
 # shellcheck source=/dev/null
 source "${REPO_ROOT}/bash_scripts/_cuda.sh"
 
+PY="${CONDA_PREFIX}/bin/python"
+PIP="${CONDA_PREFIX}/bin/pip"
+SITE="${CONDA_PREFIX}/lib/python3.10/site-packages"
+
 echo "GPU: $(nvidia-smi --query-gpu=name --format=csv,noheader | head -1)"
 echo "CONDA_PREFIX=${CONDA_PREFIX}"
 
-conda remove -y pytorch torchvision torchaudio libtorch 2>/dev/null || true
-pip uninstall -y torch torchvision torchaudio 2>/dev/null || true
+# Remove mixed conda + pip torch (causes torch._C attribute errors).
+conda remove -y pytorch torchvision torchaudio libtorch pytorch-cuda 2>/dev/null || true
+"${PIP}" uninstall -y torch torchvision torchaudio 2>/dev/null || true
+rm -rf "${SITE}"/torch "${SITE}"/torchvision "${SITE}"/torch-*.dist-info \
+  "${SITE}"/torchvision-*.dist-info "${SITE}"/functorch 2>/dev/null || true
 
 conda install -y setuptools wheel pip
+"${PIP}" install --upgrade pip setuptools wheel
 
-pip install torch==2.0.1 torchvision==0.15.2 --index-url https://download.pytorch.org/whl/cu118
+# Phase 1: PyTorch only — verify before anything else touches the env.
+"${PIP}" install --no-cache-dir --force-reinstall \
+  torch==2.0.1 torchvision==0.15.2 \
+  --index-url https://download.pytorch.org/whl/cu118
 
-pip install \
+"${PY}" -c "
+import torch
+assert torch.cuda.is_available(), 'CUDA not available'
+x = torch.zeros(1, device='cuda')
+print('torch OK', torch.__version__, torch.version.cuda, x.device)
+"
+
+# Phase 2: project deps (no torch; wandb optional for --use_wandb only).
+"${PIP}" install --no-cache-dir \
   "numpy>=1.19,<2" \
   beautifulsoup4==4.12.3 \
   dominate==2.6.0 \
@@ -32,7 +51,14 @@ pip install \
   scikit-image==0.18.3 \
   scipy==1.7.3 \
   timm==0.4.12 \
-  tqdm==4.61.2 \
-  wandb==0.12.7
+  tqdm==4.61.2
 
-python -c "import torch; assert torch.cuda.is_available(); print('OK', torch.__version__, torch.version.cuda)"
+# Phase 3: re-check torch was not broken by later installs.
+"${PY}" -c "
+import torch
+assert torch.cuda.is_available()
+print('final OK', torch.__version__, torch.version.cuda)
+"
+
+echo "Done. HEMIT reproduce uses display_id 0 (no visdom/wandb)."
+echo "Optional logging: pip install 'wandb==0.12.7' && train.py --use_wandb"

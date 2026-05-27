@@ -8,7 +8,10 @@ from subprocess import Popen, PIPE
 import matplotlib.pyplot as plt
 from scipy.interpolate import make_interp_spline
 
-import wandb
+try:
+    import wandb
+except ImportError:
+    wandb = None
 
 if sys.version_info[0] == 2:
     VisdomExceptionBase = Exception
@@ -114,6 +117,8 @@ class Visualizer():
                 self.create_visdom_connections()
                 
         if self.use_wandb:
+            if wandb is None:
+                raise ImportError('wandb is not installed; pip install wandb or omit --use_wandb')
             self.wandb_run = wandb.init(project='CycleGAN-and-pix2pix', name=opt.name, config=opt) if not wandb.run else wandb.run
             self.wandb_run._label(repo='CycleGAN-and-pix2pix')
 

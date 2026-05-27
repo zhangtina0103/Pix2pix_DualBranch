@@ -32,7 +32,10 @@ from data import create_dataset
 from models import create_model
 from util.visualizer import save_images
 from util import html
-import wandb
+try:
+    import wandb
+except ImportError:
+    wandb = None
 
 if __name__ == '__main__':
     opt = TestOptions().parse()  # get test options
@@ -48,6 +51,8 @@ if __name__ == '__main__':
     
     # initialize logger
     if opt.use_wandb:
+        if wandb is None:
+            raise ImportError('wandb is not installed; pip install wandb or omit --use_wandb')
         wandb_run = wandb.init(project='CycleGAN-and-pix2pix', name=opt.name, config=opt) if not wandb.run else wandb.run
         wandb_run._label(repo='CycleGAN-and-pix2pix')
 

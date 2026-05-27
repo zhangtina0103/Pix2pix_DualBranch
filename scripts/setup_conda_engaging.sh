@@ -4,7 +4,7 @@
 #   srun --gres=gpu:1 --pty bash
 #   cd ~/Pix2pix_DualBranch && bash scripts/setup_conda_engaging.sh
 #
-# Then submit: sbatch scripts/run_hemit_engaging.sbatch
+# Then submit: sbatch bash_scripts/run_hemit_reproduce.sbatch
 
 set -euo pipefail
 
@@ -29,4 +29,4 @@ echo "Installing other deps..."
 pip install -r requirements.txt
 
 python -c "import torch; print('OK:', torch.__version__, 'cuda', torch.cuda.is_available())"
-echo "Done. Submit: sbatch scripts/run_hemit_engaging.sbatch"
+echo "Done. Submit: sbatch bash_scripts/run_hemit_reproduce.sbatch"

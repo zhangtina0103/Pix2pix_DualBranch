@@ -31,5 +31,4 @@ timm==0.4.12
 torch==2.0.0
 torchvision==0.15.1
 tqdm==4.61.2
-visdom==0.1.8.9
 wandb==0.12.7

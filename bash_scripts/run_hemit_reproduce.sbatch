@@ -1,7 +1,7 @@
 #!/bin/bash
 # HEMIT Dual-Branch: official README pipeline (prepare → train → test → post_process)
 #
-# First time only (if torch CUDA error): sbatch bash_scripts/setup_pix2pix_env.sbatch
+# First time only: sbatch bash_scripts/setup_venv_engaging.sbatch
 #
 # Submit from Pix2pix_DualBranch repo root:
 #   mkdir -p logs
@@ -19,10 +19,8 @@
 set -euo pipefail
 source "${SLURM_SUBMIT_DIR:-$PWD}/bash_scripts/_common.sh"
 
-source /home/zhangtin/miniforge3/etc/profile.d/conda.sh
-conda activate pix2pix
 # shellcheck source=/dev/null
-source "${REPO_ROOT}/bash_scripts/_cuda.sh"
+source "${REPO_ROOT}/bash_scripts/_venv.sh"
 
 mkdir -p logs datasets checkpoints results
 
@@ -41,7 +39,7 @@ echo "Started: $(date)"
 if ! python -c "import torch; assert torch.cuda.is_available()"; then
   echo ""
   echo "ERROR: PyTorch cannot use CUDA (libcurand / libcublas missing)."
-  echo "Run once:  sbatch bash_scripts/setup_pix2pix_env.sbatch"
+  echo "Run once:  sbatch bash_scripts/setup_venv_engaging.sbatch"
   echo "Then:      sbatch bash_scripts/run_hemit_reproduce.sbatch"
   exit 1
 fi

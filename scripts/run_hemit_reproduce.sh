@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Reproduce the official HEMIT Dual-Branch README pipeline (no custom settings).
 #
-# From Pix2pix_DualBranch root, conda env activated:
+# From Pix2pix_DualBranch root, venv activated:
+#   source .venv-hemit/bin/activate && source bash_scripts/_cuda.sh
 #
 #   # A) Fastest: their pretrained weights (download from README Google Drive)
 #   #    Unzip so checkpoints/hemit_SwinTResnet_New/ contains *.pth files

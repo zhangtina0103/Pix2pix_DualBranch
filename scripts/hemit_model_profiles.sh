@@ -105,9 +105,11 @@ case "${MODEL}" in
     PRETRAINED_NAME="${PRETRAINED_NAME:-hemit_vanilla_fm_joint}"
     TRAIN_LR="${TRAIN_LR:-0.0002}"
     DATASET_MODE="${DATASET_MODE:-aligned}"
-    FM_CHANNELS="${FM_CHANNELS:-32,64,96}"
-    FM_RESBLOCKS="${FM_RESBLOCKS:-1}"
+    # ~11M params with res=2 (verify: python scripts/count_fm_params.py)
+    FM_CHANNELS="${FM_CHANNELS:-96,192,256}"
+    FM_RESBLOCKS="${FM_RESBLOCKS:-2}"
     FM_STEPS="${FM_STEPS:-25}"
+    VAL_FREQ="${VAL_FREQ:-10}"
     ;;
   *)
     echo "Unknown MODEL=${MODEL}" >&2

@@ -93,10 +93,12 @@ train() {
     --lr "${TRAIN_LR}" --no_flip --verbose
     --n_epochs "${N_EPOCHS}" --n_epochs_decay "${N_EPOCHS_DECAY}"
     --lr_policy step --batch_size "${BATCH_SIZE}"
-    --val_freq 5
-    --lambda_L1 "${LAMBDA_L1:-100}"
+    --val_freq "${VAL_FREQ:-5}"
     "${extra[@]}"
   )
+  if [[ "${PY_MODEL}" != "vanilla_fm" ]]; then
+    train_args+=(--lambda_L1 "${LAMBDA_L1:-100}")
+  fi
   # vanilla_fm uses a conditional UNet (netG), not resnet_9blocks
   if [[ "${PY_MODEL}" != "vanilla_fm" ]]; then
     train_args+=(--netG "${NETG:-resnet_9blocks}")
@@ -118,7 +120,7 @@ test_one() {
   local test_args=(
     --dataroot "${DATAROOT}" --name "${name}"
     --model "${PY_MODEL}" --direction AtoB
-    --epoch "${epoch}" --num_test "${num_test}" --eval
+    --epoch "${epoch}" --num_test "${num_test}" --eval --verbose
     "${extra[@]}"
   )
   if [[ "${PY_MODEL}" != "vanilla_fm" ]]; then

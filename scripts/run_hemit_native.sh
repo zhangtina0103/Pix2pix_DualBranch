@@ -106,11 +106,13 @@ train() {
   esac
   local train_args=(
     --dataroot "${DATAROOT}" --name "${TRAIN_NAME}"
-    --model "${PY_MODEL}" --direction AtoB --display_id 0
+    --model "${PY_MODEL}" --direction AtoB --display_id "${DISPLAY_ID:-0}"
     --lr "${TRAIN_LR}" --no_flip --verbose
     --n_epochs "${N_EPOCHS}" --n_epochs_decay "${N_EPOCHS_DECAY}"
     --lr_policy step --batch_size "${BATCH_SIZE}"
+    --lr_decay_iters "${LR_DECAY_ITERS:-50}"
     --val_freq "${VAL_FREQ:-5}"
+    --save_epoch_freq "${SAVE_EPOCH_FREQ:-5}"
     "${extra[@]}"
   )
   case "${PY_MODEL}" in
@@ -119,6 +121,13 @@ train() {
   # vanilla_fm uses a conditional UNet (netG), not resnet_9blocks
   if [[ "${PY_MODEL}" != "vanilla_fm" ]]; then
     train_args+=(--netG "${NETG}" --ngf "${NGF:-64}")
+  fi
+  if [[ "${CONTINUE_TRAIN:-0}" == "1" ]]; then
+    local load_epoch="${RESUME_FROM_EPOCH:?Set RESUME_FROM_EPOCH when CONTINUE_TRAIN=1}"
+    local epoch_count="${EPOCH_COUNT:-$((load_epoch + 1))}"
+    local end_epoch=$((N_EPOCHS + N_EPOCHS_DECAY))
+    echo "==> resume: load epoch ${load_epoch}, train epochs ${epoch_count}..${end_epoch}"
+    train_args+=(--continue_train --epoch "${load_epoch}" --epoch_count "${epoch_count}")
   fi
   python train.py "${train_args[@]}"
 }

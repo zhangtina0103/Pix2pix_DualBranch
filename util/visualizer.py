@@ -299,48 +299,57 @@ class Visualizer():
             losses (OrderedDict)  -- training losses stored in the format of (name, float) pairs
         """
         if not hasattr(self, 'plot_data'):
-            self.plot_data = {'x': [], 'y0': [], 'y1': [], 'y2': [], 'y3': []}
+            self.plot_data = {'x': [], 'y': {}}
         self.plot_data['x'].append(epoch + counter_ratio)
         for k, v in losses.items():
-            if k == 'G_GAN':
-                self.plot_data['y0'].append(v)
-            elif k == 'G_L1':
-                self.plot_data['y1'].append(v)
-            elif k == 'D_real':
-                self.plot_data['y2'].append(v)
-            elif k == 'D_fake':
-                self.plot_data['y3'].append(v)
-        #if epoch == max_epoch and counter_ratio > 0.9:
-        if epoch == max_epoch:
-            plt.figure()
-            plt.title('Result Analysis')
-            plt.plot(self.plot_data['x'], self.plot_data['y0'], color='green', label='G_GAN')
-            plt.plot(self.plot_data['x'], self.plot_data['y1'], color='red', label='G_L1')
-            plt.plot(self.plot_data['x'], self.plot_data['y2'], color='skyblue', label='D_real')
-            plt.plot(self.plot_data['x'], self.plot_data['y3'], color='blue', label='D_fake')
-            plt.legend()
-            plt.xlabel('epoch times')
-            plt.ylabel('loss')
-            loss_path = os.path.join(self.loss_img_name, 'loss.tif')
-            plt.savefig(loss_path)
+            self.plot_data['y'].setdefault(k, []).append(v)
 
-            plt.figure()
-            plt.title('Result Analysis smooth')
-            x_new = np.linspace(min(self.plot_data['x']), max(self.plot_data['x']), 50)
-            #y0_smooth = spline(self.plot_data['x'], self.plot_data['y0'], x_new)
-            y0_smooth = make_interp_spline(self.plot_data['x'], self.plot_data['y0'])(x_new)
-            y1_smooth = make_interp_spline(self.plot_data['x'], self.plot_data['y1'])(x_new)
-            y2_smooth = make_interp_spline(self.plot_data['x'], self.plot_data['y2'])(x_new)
-            y3_smooth = make_interp_spline(self.plot_data['x'], self.plot_data['y3'])(x_new)
-            plt.plot(x_new, y0_smooth,color='green', label='G_GAN')
-            plt.plot(x_new, y1_smooth, color='red', label='G_L1')
-            plt.plot(x_new, y2_smooth, color='skyblue', label='D_real')
-            plt.plot(x_new, y3_smooth, color='blue', label='D_fake')
-            plt.legend()
-            plt.xlabel('epoch times')
-            plt.ylabel('loss')
-            loss_path2 = os.path.join(self.loss_img_name, 'loss_smooth_50.tif')
-            plt.savefig(loss_path2)
+        if epoch != max_epoch:
+            return
+
+        x = self.plot_data['x']
+        if len(x) == 0:
+            return
+
+        # Prefer familiar colors for GAN baselines; auto-assign for other losses (e.g. FM).
+        color_map = {
+            'G_GAN': 'green',
+            'G_L1': 'red',
+            'D_real': 'skyblue',
+            'D_fake': 'blue',
+            'FM': 'purple',
+        }
+
+        def _plot_series(ax, smooth=False):
+            plotted = []
+            for name, values in self.plot_data['y'].items():
+                if len(values) != len(x):
+                    continue
+                color = color_map.get(name)
+                label = name
+                if smooth and len(x) >= 4:
+                    x_new = np.linspace(min(x), max(x), 50)
+                    y_smooth = make_interp_spline(x, values)(x_new)
+                    ax.plot(x_new, y_smooth, color=color, label=label)
+                else:
+                    ax.plot(x, values, color=color, label=label)
+                plotted.append(name)
+            if plotted:
+                ax.legend()
+            ax.set_xlabel('epoch times')
+            ax.set_ylabel('loss')
+
+        plt.figure()
+        plt.title('Result Analysis')
+        _plot_series(plt.gca(), smooth=False)
+        loss_path = os.path.join(self.loss_img_name, 'loss.tif')
+        plt.savefig(loss_path)
+
+        plt.figure()
+        plt.title('Result Analysis smooth')
+        _plot_series(plt.gca(), smooth=True)
+        loss_path2 = os.path.join(self.loss_img_name, 'loss_smooth_50.tif')
+        plt.savefig(loss_path2)
 
 
 

@@ -55,6 +55,13 @@ train() {
         --lambda_identity "${LAMBDA_IDENTITY:-0.5}"
       )
       ;;
+    vanilla_fm)
+      extra+=(
+        --fm_channels "${FM_CHANNELS:-32,64,96}"
+        --fm_num_res_blocks "${FM_RESBLOCKS:-1}"
+        --fm_steps "${FM_STEPS:-25}"
+      )
+      ;;
   esac
   python train.py \
     --dataroot "${DATAROOT}" --name "${TRAIN_NAME}" \
@@ -71,6 +78,11 @@ test_one() {
   local name="$1" epoch="$2" num_test="$3"
   local extra=()
   [[ -n "${DATASET_MODE:-}" ]] && extra+=(--dataset_mode "${DATASET_MODE}")
+  case "${PY_MODEL}" in
+    vanilla_fm)
+      extra+=(--fm_channels "${FM_CHANNELS:-32,64,96}" --fm_num_res_blocks "${FM_RESBLOCKS:-1}" --fm_steps "${FM_STEPS:-25}")
+      ;;
+  esac
   python test.py \
     --dataroot "${DATAROOT}" --name "${name}" \
     --model "${PY_MODEL}" --direction AtoB \

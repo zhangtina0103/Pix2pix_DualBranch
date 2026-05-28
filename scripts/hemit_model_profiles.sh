@@ -93,6 +93,16 @@ case "${MODEL}" in
     LAMBDA_IDENTITY="${LAMBDA_IDENTITY:-0.5}"
     DATASET_MODE="${DATASET_MODE:-aligned}"
     ;;
+  vanilla_fm)
+    PY_MODEL="${PY_MODEL:-vanilla_fm}"
+    TRAIN_NAME="${TRAIN_NAME:-hemit_vanilla_fm_joint}"
+    PRETRAINED_NAME="${PRETRAINED_NAME:-hemit_vanilla_fm_joint}"
+    TRAIN_LR="${TRAIN_LR:-0.0002}"
+    DATASET_MODE="${DATASET_MODE:-aligned}"
+    FM_CHANNELS="${FM_CHANNELS:-32,64,96}"
+    FM_RESBLOCKS="${FM_RESBLOCKS:-1}"
+    FM_STEPS="${FM_STEPS:-25}"
+    ;;
   *)
     echo "Unknown MODEL=${MODEL}" >&2
     echo "  Native: dualbranch | pix2pix | cut | asp | cyclegan | resnet6 | unet256 | ..." >&2

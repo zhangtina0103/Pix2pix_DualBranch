@@ -3,10 +3,21 @@ import torch.nn as nn
 from torch.nn import init
 import functools
 from torch.optim import lr_scheduler
-import timm
+try:
+    import timm  # Swin backbones
+except Exception:  # pragma: no cover
+    timm = None
 import math
 from torch import einsum
-from einops import rearrange, repeat
+try:
+    from einops import rearrange, repeat
+except Exception:  # pragma: no cover
+    rearrange = None
+    repeat = None
+
+def _need_einops():
+    if rearrange is None or repeat is None:
+        raise ImportError("einops is required for Swin/attention modules. Install with: pip install einops")
 
 
 ###############################################################################
@@ -1159,6 +1170,7 @@ class FeedForward(nn.Module):
 class Attention(nn.Module):
     def __init__(self, dim, heads = 8, dim_head = 64, dropout = 0.):
         super().__init__()
+        _need_einops()
         inner_dim = dim_head *  heads
         project_out = not (heads == 1 and dim_head == dim)
 

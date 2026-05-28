@@ -1,5 +1,5 @@
 import math
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 import torch
 import torch.nn as nn
@@ -92,15 +92,20 @@ class VanillaFMModel(BaseModel):
         parser.add_argument("--fm_num_res_blocks", type=int, default=1,
                             help="ResBlocks per level (tune params)")
         parser.add_argument("--fm_steps", type=int, default=25,
-                            help="Euler steps for sampling during test")
+                            help="ODE steps for sampling (train val / test)")
+        parser.add_argument("--fm_sample_method", type=str, default="heun",
+                            choices=["euler", "heun"],
+                            help="ODE solver for sample()")
         if is_train:
             parser.add_argument("--fm_lambda_l1", type=float, default=0.0,
-                                help="Optional extra L1 on sampled output (0 disables)")
+                                help="Weight for L1(x1_hat, B) with x1_hat=xt+(1-t)*v_pred (pix2pix-like; try 100)")
         return parser
 
     def __init__(self, opt):
         BaseModel.__init__(self, opt)
         self.loss_names = ["FM"]
+        if self.isTrain and float(getattr(opt, "fm_lambda_l1", 0.0)) > 0:
+            self.loss_names.append("L1")
         self.visual_names = ["real_A", "fake_B", "real_B"]
         self.model_names = ["G"]  # we will save netG as 'G'
 
@@ -157,7 +162,15 @@ class VanillaFMModel(BaseModel):
         v_star = x1 - x0
         v_pred = self._v(xt, t)
         self.loss_FM = F.mse_loss(v_pred, v_star)
-        self.loss_FM.backward()
+        loss = self.loss_FM
+        lam_l1 = float(getattr(self.opt, "fm_lambda_l1", 0.0))
+        if lam_l1 > 0:
+            # Differentiable endpoint estimate (exact when v = v*); aligns train with pix2pix L1 target.
+            t_bc = t.view(-1, 1, 1, 1)
+            x1_hat = xt + (1.0 - t_bc) * v_pred
+            self.loss_L1 = F.l1_loss(x1_hat, x1) * lam_l1
+            loss = loss + self.loss_L1
+        loss.backward()
 
     def optimize_parameters(self):
         self.optimizer_G.zero_grad()
@@ -165,18 +178,34 @@ class VanillaFMModel(BaseModel):
         self.optimizer_G.step()
 
     @torch.no_grad()
-    def sample(self, cond_A: torch.Tensor, steps: int = 25) -> torch.Tensor:
+    def sample(self, cond_A: torch.Tensor, steps: int = 25,
+               method: Optional[str] = None) -> torch.Tensor:
         """
-        Euler integrate dx/dt = v_theta(x,t,A) from t=0 to 1.
+        Integrate dx/dt = v_theta(x,t,A) from t=0 to 1 (noise -> multiplex).
+        Uses Heun by default; 25 steps at 1024² is often too few (blurry output).
         """
-        # temporarily set for conditioning
+        method = method or getattr(self.opt, "fm_sample_method", "heun")
         real_A_prev = getattr(self, "real_A", None)
         self.real_A = cond_A
-        x = torch.randn(cond_A.shape[0], self.opt.output_nc, cond_A.shape[2], cond_A.shape[3], device=cond_A.device)
-        dt = 1.0 / float(steps)
+        B = cond_A.shape[0]
+        x = torch.randn(
+            B, self.opt.output_nc, cond_A.shape[2], cond_A.shape[3],
+            device=cond_A.device, dtype=cond_A.dtype,
+        )
+        ts = torch.linspace(0.0, 1.0, steps + 1, device=cond_A.device, dtype=cond_A.dtype)
+
         for i in range(steps):
-            t = torch.full((cond_A.shape[0],), i * dt, device=cond_A.device)
-            x = x + dt * self._v(x, t)
+            t0 = ts[i].expand(B)
+            t1 = ts[i + 1].expand(B)
+            dt = ts[i + 1] - ts[i]
+            v0 = self._v(x, t0)
+            if method == "euler" or i == steps - 1:
+                x = x + dt * v0
+            else:
+                x_mid = x + dt * v0
+                v1 = self._v(x_mid, t1)
+                x = x + dt * (v0 + v1) * 0.5
+
         if real_A_prev is None:
             delattr(self, "real_A")
         else:

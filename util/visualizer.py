@@ -318,6 +318,7 @@ class Visualizer():
             'D_real': 'skyblue',
             'D_fake': 'blue',
             'FM': 'purple',
+            'L1': 'orange',
         }
 
         def _plot_series(ax, smooth=False):

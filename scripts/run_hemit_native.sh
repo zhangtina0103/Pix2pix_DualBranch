@@ -67,7 +67,7 @@ train() {
   assert_py_model
   echo "==> [native] MODEL=${MODEL} PY_MODEL=${PY_MODEL} netG=${netg_label} name=${TRAIN_NAME}"
   if [[ "${PY_MODEL}" == "vanilla_fm" ]]; then
-    echo "    fm_channels=${FM_CHANNELS:-104,208,288} fm_res_blocks=${FM_RESBLOCKS:-2} fm_steps=${FM_STEPS:-25}"
+    echo "    fm_channels=${FM_CHANNELS:-104,208,288} fm_res_blocks=${FM_RESBLOCKS:-2} fm_steps=${FM_STEPS:-50} fm_lambda_l1=${FM_LAMBDA_L1:-100}"
   elif [[ "${MODEL}" == "pix2pix" || "${MODEL}" == "resnet9" || "${MODEL}" == "cut" || "${MODEL}" == "asp" || "${MODEL}" == "cyclegan" ]]; then
     echo "    netG=${NETG} ngf=${NGF:-64} (~11.38M generator; python scripts/count_hemit_g_params.py --model ${MODEL})"
     if [[ "${MODEL}" == "cyclegan" ]]; then
@@ -103,7 +103,9 @@ train() {
       extra+=(
         --fm_channels "${FM_CHANNELS:-104,208,288}"
         --fm_num_res_blocks "${FM_RESBLOCKS:-2}"
-        --fm_steps "${FM_STEPS:-25}"
+        --fm_steps "${FM_STEPS:-50}"
+        --fm_sample_method "${FM_SAMPLE_METHOD:-heun}"
+        --fm_lambda_l1 "${FM_LAMBDA_L1:-100}"
       )
       ;;
   esac
@@ -143,7 +145,14 @@ test_one() {
   [[ -n "${DATASET_MODE:-}" ]] && extra+=(--dataset_mode "${DATASET_MODE}")
   case "${PY_MODEL}" in
     vanilla_fm)
-      extra+=(--fm_channels "${FM_CHANNELS:-104,208,288}" --fm_num_res_blocks "${FM_RESBLOCKS:-2}" --fm_steps "${FM_STEPS:-25}")
+      local test_steps="${FM_TEST_STEPS:-${FM_STEPS:-50}}"
+      echo "    fm_test: steps=${test_steps} method=${FM_SAMPLE_METHOD:-heun} (raise FM_TEST_STEPS if blurry)"
+      extra+=(
+        --fm_channels "${FM_CHANNELS:-104,208,288}"
+        --fm_num_res_blocks "${FM_RESBLOCKS:-2}"
+        --fm_steps "${test_steps}"
+        --fm_sample_method "${FM_SAMPLE_METHOD:-heun}"
+      )
       ;;
   esac
   local test_args=(

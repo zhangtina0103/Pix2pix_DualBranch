@@ -121,7 +121,12 @@ if __name__ == '__main__':
                     imgs = data_val['A']
                     truemasks = data_val['B']
                     imgs = imgs.to(device='cuda',dtype=torch.float)
-                    net = getattr(model, 'net' + 'G')
+                    if hasattr(model, 'netG'):
+                        net = model.netG
+                    elif hasattr(model, 'netG_A'):
+                        net = model.netG_A
+                    else:
+                        raise AttributeError('No generator on model for validation')
                     maskpred = net(imgs)
                     #maskpred = maskpred.cpu().numpy()
                     #truemasks = truemasks.cpu().numpy()

@@ -1,19 +1,15 @@
 #!/usr/bin/env bash
 # HEMIT — one entrypoint, two backends:
 #
-#   A) This repo pix2pix (joint 3ch):  train.py → test.py → post_process.py
-#      MODEL=dualbranch | pix2pix | resnet9 | resnet6 | unet256 | ...
+#   A) Native HEMIT (joint 3ch): train.py → test.py → post_process.py
+#      MODEL=dualbranch | pix2pix | cut | asp | cyclegan | resnet9 | ...
 #
-#   B) hemit/ comparison models (per-marker GAN + FM):
-#      MODEL=cut | asp | cyclegan | fm | fm_plus
-#      train → hemit/training/*  |  metrics → hemit/eval/*  (eval/hemit/*.csv)
+#   B) hemit/ flow matching only: MODEL=fm | fm_plus
 #
 # Examples:
 #   MODEL=dualbranch MODE=all bash scripts/run_hemit_all.sh
-#   MODEL=pix2pix MODE=train bash scripts/run_hemit_all.sh
-#   MODEL=cut MARKER=CD3 MODE=train bash scripts/run_hemit_all.sh
-#   MODEL=fm MARKER=DAPI MODE=train bash scripts/run_hemit_all.sh
-#   MODEL=comparison MODE=metrics bash scripts/run_hemit_all.sh
+#   MODEL=cut MODE=train|test|metrics bash scripts/run_hemit_all.sh
+#   MODEL=fm_plus MODE=train bash scripts/run_hemit_all.sh
 
 set -euo pipefail
 
@@ -32,14 +28,7 @@ die() { echo "ERROR: $*" >&2; exit 1; }
 
 is_native() {
   case "${MODEL}" in
-    dualbranch|pix2pix|resnet9|resnet6|unet256|unet128|unet1024|swint|swint_unet) return 0 ;;
-    *) return 1 ;;
-  esac
-}
-
-is_hemit_gan() {
-  case "${MODEL}" in
-    cut|asp|cyclegan) return 0 ;;
+    dualbranch|pix2pix|resnet9|resnet6|unet256|unet128|unet1024|swint|swint_unet|cut|asp|cyclegan) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -80,11 +69,11 @@ if [[ "${MODEL}" == "comparison" ]]; then
   run_hemit_comparison metrics
 elif is_native; then
   bash "${ROOT}/scripts/run_hemit_native.sh"
-elif is_hemit_gan || is_hemit_fm; then
+elif is_hemit_fm; then
   IFS='|' read -r -a _modes <<< "${MODE}"
   for m in "${_modes[@]}"; do run_hemit_comparison "${m}"; done
 else
-  die "Unknown MODEL=${MODEL}. Native: dualbranch|pix2pix|resnet9|...  Comparison: cut|asp|cyclegan|fm|fm_plus|comparison"
+  die "Unknown MODEL=${MODEL}. Native: dualbranch|pix2pix|cut|asp|cyclegan|...  FM: fm|fm_plus"
 fi
 
 echo "Done."

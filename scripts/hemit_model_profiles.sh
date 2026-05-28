@@ -1,10 +1,11 @@
-# Generator profiles — all use train.py / test.py / post_process.py (joint 3-channel).
+# Generator profiles — train.py → test.py → post_process.py (joint 3-channel multiplex).
 
 MODEL="${MODEL:-dualbranch}"
+PY_MODEL="${PY_MODEL:-pix2pix}"
 
 case "${MODEL}" in
   pix2pix|resnet9)
-    # Classic pix2pix baseline (this repo's train.py, not hemit/ per-marker pix2pix)
+    PY_MODEL="${PY_MODEL:-pix2pix}"
     NETG="${NETG:-resnet_9blocks}"
     TRAIN_NAME="${TRAIN_NAME:-hemit_pix2pix_resnet9}"
     PRETRAINED_NAME="${PRETRAINED_NAME:-hemit_pix2pix_resnet9}"
@@ -12,6 +13,7 @@ case "${MODEL}" in
     LAMBDA_L1="${LAMBDA_L1:-100}"
     ;;
   dualbranch)
+    PY_MODEL="${PY_MODEL:-pix2pix}"
     NETG="${NETG:-SwinTResnet}"
     TRAIN_NAME="${TRAIN_NAME:-hemit_SwinTResnet_New_2}"
     PRETRAINED_NAME="${PRETRAINED_NAME:-hemit_SwinTResnet_New}"
@@ -60,10 +62,41 @@ case "${MODEL}" in
     TRAIN_LR="${TRAIN_LR:-0.00003}"
     LAMBDA_L1="${LAMBDA_L1:-30}"
     ;;
+  cut)
+    PY_MODEL="${PY_MODEL:-cut}"
+    NETG="${NETG:-resnet_9blocks}"
+    TRAIN_NAME="${TRAIN_NAME:-hemit_cut_joint}"
+    PRETRAINED_NAME="${PRETRAINED_NAME:-hemit_cut_joint}"
+    TRAIN_LR="${TRAIN_LR:-0.0002}"
+    LAMBDA_L1="${LAMBDA_L1:-100}"
+    LAMBDA_NCE="${LAMBDA_NCE:-1.0}"
+    DATASET_MODE="${DATASET_MODE:-aligned}"
+    ;;
+  asp)
+    PY_MODEL="${PY_MODEL:-asp}"
+    NETG="${NETG:-resnet_9blocks}"
+    TRAIN_NAME="${TRAIN_NAME:-hemit_asp_joint}"
+    PRETRAINED_NAME="${PRETRAINED_NAME:-hemit_asp_joint}"
+    TRAIN_LR="${TRAIN_LR:-0.0002}"
+    LAMBDA_L1="${LAMBDA_L1:-100}"
+    LAMBDA_ASP="${LAMBDA_ASP:-1.0}"
+    DATASET_MODE="${DATASET_MODE:-aligned}"
+    ;;
+  cyclegan)
+    PY_MODEL="${PY_MODEL:-cycle_gan}"
+    NETG="${NETG:-resnet_9blocks}"
+    TRAIN_NAME="${TRAIN_NAME:-hemit_cyclegan_joint}"
+    PRETRAINED_NAME="${PRETRAINED_NAME:-hemit_cyclegan_joint}"
+    TRAIN_LR="${TRAIN_LR:-0.0002}"
+    LAMBDA_A="${LAMBDA_A:-10.0}"
+    LAMBDA_B="${LAMBDA_B:-10.0}"
+    LAMBDA_IDENTITY="${LAMBDA_IDENTITY:-0.5}"
+    DATASET_MODE="${DATASET_MODE:-aligned}"
+    ;;
   *)
     echo "Unknown MODEL=${MODEL}" >&2
-    echo "  Native: dualbranch | pix2pix | resnet6 | unet256 | unet128 | unet1024 | swint | swint_unet" >&2
-    echo "  Comparison (hemit/): cut | asp | cyclegan | fm | fm_plus" >&2
+    echo "  Native: dualbranch | pix2pix | cut | asp | cyclegan | resnet6 | unet256 | ..." >&2
+    echo "  FM (hemit/): fm | fm_plus" >&2
     echo "  Or set NETG and TRAIN_NAME yourself." >&2
     exit 1
     ;;

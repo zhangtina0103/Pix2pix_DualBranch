@@ -1,7 +1,16 @@
 #!/usr/bin/env bash
-# Train CUT / ASP / CycleGAN / flow matching (hemit/ — not train.py).
+# DEPRECATED for CUT/ASP/CycleGAN — use native pipeline instead:
+#   MODEL=cut|asp|cyclegan MODE=train bash scripts/run_hemit_all.sh
+# This script remains for fm / fm_plus only (via run_hemit_all.sh).
 set -euo pipefail
 source "$(dirname "$0")/common.sh"
+case "${MODEL}" in
+  cut|asp|cyclegan)
+    echo "ERROR: ${MODEL} is now trained via train.py (joint 3ch)." >&2
+    echo "  MODEL=${MODEL} MODE=train bash scripts/run_hemit_all.sh" >&2
+    exit 1
+    ;;
+esac
 cd "${REPO_ROOT}"
 
 DATA_ROOT="${VS_DATA_ROOT:-${HEMIT_SRC:-data/hemit}}"
@@ -12,17 +21,6 @@ EPOCHS="${EPOCHS:-100}"
 CKPT_DIR="${CKPT_DIR:-models/baselines}"
 
 case "${MODEL}" in
-  cyclegan|cut|asp)
-    echo "==> train ${MODEL} | marker=${MARKER} | patch=${PATCH_SIZE}"
-    python hemit/training/train_baseline.py \
-      --model "${MODEL}" \
-      --marker "${MARKER}" \
-      --data-root "${DATA_ROOT}" \
-      --epochs "${EPOCHS}" \
-      --patch-size "${PATCH_SIZE}" \
-      --batch-size "${BATCH_SIZE}" \
-      --checkpoint-dir "${CKPT_DIR}"
-    ;;
   fm|vanilla_fm)
     echo "==> train flow matching (vanilla) | marker=${MARKER}"
     python hemit/training/flow_matching_adapted.py \

@@ -29,29 +29,53 @@ prepare() {
 }
 
 train() {
-  echo "==> [native pix2pix] netG=${NETG} name=${TRAIN_NAME}"
+  echo "==> [native] model=${PY_MODEL} netG=${NETG} name=${TRAIN_NAME}"
   if ! python -c "import torch; assert torch.cuda.is_available()"; then
     die "CUDA not available (login node?). Submit a GPU job, e.g.:
-  MODEL=pix2pix MODE=train sbatch bash_scripts/run_hemit_all.sbatch
+  MODEL=cut MODE=train sbatch bash_scripts/run_hemit_all.sbatch
   # or: srun --partition=mit_normal_gpu --gres=gpu:1 --mem=64G --time=06:00:00 --pty bash"
   fi
   python -c "import torch; print('GPU:', torch.cuda.get_device_name(0))"
+  local extra=()
+  [[ -n "${DATASET_MODE:-}" ]] && extra+=(--dataset_mode "${DATASET_MODE}")
+  case "${PY_MODEL}" in
+    pix2pix)
+      extra+=(--loss_type L1)
+      ;;
+    cut)
+      extra+=(--lambda_NCE "${LAMBDA_NCE:-1.0}")
+      ;;
+    asp)
+      extra+=(--lambda_ASP "${LAMBDA_ASP:-1.0}")
+      ;;
+    cycle_gan)
+      extra+=(
+        --lambda_A "${LAMBDA_A:-10.0}"
+        --lambda_B "${LAMBDA_B:-10.0}"
+        --lambda_identity "${LAMBDA_IDENTITY:-0.5}"
+      )
+      ;;
+  esac
   python train.py \
     --dataroot "${DATAROOT}" --name "${TRAIN_NAME}" \
-    --model pix2pix --direction AtoB --display_id 0 \
-    --lr "${TRAIN_LR}" --lambda_L1 "${LAMBDA_L1}" --no_flip \
-    --netG "${NETG}" \
+    --model "${PY_MODEL}" --direction AtoB --display_id 0 \
+    --lr "${TRAIN_LR}" --no_flip --netG "${NETG}" \
     --n_epochs "${N_EPOCHS}" --n_epochs_decay "${N_EPOCHS_DECAY}" \
     --lr_policy step --batch_size "${BATCH_SIZE}" \
-    --loss_type L1 --val_freq 5
+    --val_freq 5 \
+    --lambda_L1 "${LAMBDA_L1:-100}" \
+    "${extra[@]}"
 }
 
 test_one() {
   local name="$1" epoch="$2" num_test="$3"
+  local extra=()
+  [[ -n "${DATASET_MODE:-}" ]] && extra+=(--dataset_mode "${DATASET_MODE}")
   python test.py \
     --dataroot "${DATAROOT}" --name "${name}" \
-    --model pix2pix --direction AtoB \
-    --epoch "${epoch}" --num_test "${num_test}" --eval --netG "${NETG}"
+    --model "${PY_MODEL}" --direction AtoB \
+    --epoch "${epoch}" --num_test "${num_test}" --eval --netG "${NETG}" \
+    "${extra[@]}"
 }
 
 metrics_one() {

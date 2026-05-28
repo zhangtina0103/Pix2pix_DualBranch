@@ -136,6 +136,12 @@ class VanillaFMModel(BaseModel):
         # for visualization/test we sample from noise -> x1
         self.fake_B = self.sample(self.real_A, steps=int(self.opt.fm_steps))
 
+    def compute_visuals(self):
+        """Training skips forward(); create fake_B for visdom/HTML when display_freq fires."""
+        with torch.no_grad():
+            steps = int(getattr(self.opt, "fm_steps", 25))
+            self.fake_B = self.sample(self.real_A, steps=steps)
+
     def backward_G(self):
         """
         Rectified flow matching:

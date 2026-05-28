@@ -1,6 +1,7 @@
 #!/bin/bash
 # 3 jobs: joint 3-channel CUT, ASP, CycleGAN (same pipeline as pix2pix/dualbranch)
 #   sbatch bash_scripts/train_hemit_gan_array.sbatch
+# CycleGAN uses batch_size=1 by default (4 nets @ 1024²). Still OOM: LAMBDA_IDENTITY=0
 #SBATCH --job-name=hemit_gan
 #SBATCH --output=logs/hemit_gan_%A_%a.out
 #SBATCH --error=logs/hemit_gan_%A_%a.err

@@ -127,7 +127,12 @@ esac
 
 N_EPOCHS="${N_EPOCHS:-50}"
 N_EPOCHS_DECAY="${N_EPOCHS_DECAY:-30}"
-BATCH_SIZE="${BATCH_SIZE:-2}"
+# CycleGAN: 2 generators + 2 discriminators @ 1024²; batch 2 OOMs on ~44GB GPUs.
+if [[ "${MODEL}" == "cyclegan" ]]; then
+  BATCH_SIZE="${BATCH_SIZE:-1}"
+else
+  BATCH_SIZE="${BATCH_SIZE:-2}"
+fi
 PRETRAINED_EPOCH="${PRETRAINED_EPOCH:-20}"
 TEST_EPOCH="${TEST_EPOCH:-$((N_EPOCHS + N_EPOCHS_DECAY))}"
 NUM_TEST="${NUM_TEST:-945}"

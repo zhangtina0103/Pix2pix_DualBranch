@@ -70,6 +70,9 @@ train() {
     echo "    fm_channels=${FM_CHANNELS:-104,208,288} fm_res_blocks=${FM_RESBLOCKS:-2} fm_steps=${FM_STEPS:-25}"
   elif [[ "${MODEL}" == "pix2pix" || "${MODEL}" == "resnet9" || "${MODEL}" == "cut" || "${MODEL}" == "asp" || "${MODEL}" == "cyclegan" ]]; then
     echo "    netG=${NETG} ngf=${NGF:-64} (~11.38M generator; python scripts/count_hemit_g_params.py --model ${MODEL})"
+    if [[ "${MODEL}" == "cyclegan" ]]; then
+      echo "    batch_size=${BATCH_SIZE} (2x G + 2x D; use LAMBDA_IDENTITY=0 if still OOM)"
+    fi
   fi
   if ! python -c "import torch; assert torch.cuda.is_available()"; then
     die "CUDA not available (login node?). Submit a GPU job, e.g.:

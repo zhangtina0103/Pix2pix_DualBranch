@@ -28,7 +28,7 @@ source "${REPO_ROOT}/bash_scripts/_cuda.sh"
 export MODE=train
 export HEMIT_SRC="${HEMIT_SRC:-/home/zhangtin/virtual-staining/data/hemit}"
 export DATAROOT="${DATAROOT:-./datasets/hemit}"
-export FM_CHANNELS="${FM_CHANNELS:-96,192,256}"
+export FM_CHANNELS="${FM_CHANNELS:-104,208,288}"
 export FM_RESBLOCKS="${FM_RESBLOCKS:-2}"
 export FM_STEPS="${FM_STEPS:-25}"
 

@@ -13,7 +13,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 export MODEL=vanilla_fm
-export FM_CHANNELS="${FM_CHANNELS:-96,192,256}"
+export FM_CHANNELS="${FM_CHANNELS:-104,208,288}"
 export FM_RESBLOCKS="${FM_RESBLOCKS:-2}"
 export FM_STEPS="${FM_STEPS:-25}"
 

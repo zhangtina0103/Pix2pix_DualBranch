@@ -113,9 +113,9 @@ train() {
     --val_freq "${VAL_FREQ:-5}"
     "${extra[@]}"
   )
-  if [[ "${PY_MODEL}" != "vanilla_fm" ]]; then
-    train_args+=(--lambda_L1 "${LAMBDA_L1:-100}")
-  fi
+  case "${PY_MODEL}" in
+    pix2pix|cut|asp) train_args+=(--lambda_L1 "${LAMBDA_L1:-100}") ;;
+  esac
   # vanilla_fm uses a conditional UNet (netG), not resnet_9blocks
   if [[ "${PY_MODEL}" != "vanilla_fm" ]]; then
     train_args+=(--netG "${NETG}" --ngf "${NGF:-64}")

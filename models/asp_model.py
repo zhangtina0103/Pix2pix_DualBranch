@@ -1,4 +1,5 @@
 """ASP on paired HEMIT: CUT + adaptive patch NCE weights from target L1."""
+import torch
 from .cut_model import CUTModel
 from .nce_losses import AdaptivePatchNCELoss, get_patch_l1_weights
 

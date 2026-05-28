@@ -26,13 +26,14 @@ def resnet9_g(ngf: int = 64, norm: str = "instance") -> int:
     return count_module(g)
 
 
-def cut_nce_head(ngf: int = 64, norm: str = "instance") -> int:
+def cut_nce_projectors(ngf: int = 64, norm: str = "instance") -> int:
     g = networks.define_G(
         3, 3, ngf, "resnet_9blocks", norm, True, "normal", 0.02, []
     )
     core = generator_module(g)
     f = EncoderFeatureExtractor(core)
-    return count_module(f)
+    # netF holds a ref to G; only projectors are separate parameters
+    return count_module(f.projectors)
 
 
 def fm_g(channels: str, num_res_blocks: int) -> int:
@@ -62,10 +63,10 @@ def main():
         add("pix2pix (netG, batch norm)", n_batch, "MODEL=pix2pix|resnet9")
     if args.model in ("cut", "asp", "all"):
         n_inst = resnet9_g(args.ngf, "instance")
-        n_f = cut_nce_head(args.ngf, "instance")
+        n_f = cut_nce_projectors(args.ngf, "instance")
         add("cut/asp netG (instance norm)", n_inst, "inference checkpoint *_net_G.pth")
-        add("cut/asp netF (NCE projectors)", n_f, "train only; not used at test")
-        add("cut/asp G+F (trained together)", n_inst + n_f, "optimizer only")
+        add("cut/asp netF (NCE projectors only)", n_f, "train only; not in *_net_G.pth")
+        add("cut/asp G+F (optimizer)", n_inst + n_f, "train only")
     if args.model in ("cyclegan", "all"):
         n = resnet9_g(args.ngf, "instance")
         add("cyclegan netG_A or netG_B (each)", n, "H&E→multiplex uses G_A at test")

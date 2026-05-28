@@ -35,7 +35,7 @@ is_native() {
 
 is_hemit_fm() {
   case "${MODEL}" in
-    fm|fm_plus|vanilla_fm) return 0 ;;
+    fm|fm_plus) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -63,6 +63,11 @@ run_hemit_comparison() {
 }
 
 echo "===== HEMIT  MODEL=${MODEL}  MODE=${MODE} ====="
+if is_native; then
+  # shellcheck source=/dev/null
+  source "${ROOT}/scripts/hemit_model_profiles.sh"
+  echo "Profile: PY_MODEL=${PY_MODEL} TRAIN_NAME=${TRAIN_NAME}"
+fi
 
 if [[ "${MODEL}" == "comparison" ]]; then
   export MODEL=comparison

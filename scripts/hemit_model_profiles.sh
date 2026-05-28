@@ -1,11 +1,11 @@
 # Generator profiles — train.py → test.py → post_process.py (joint 3-channel multiplex).
 
 MODEL="${MODEL:-dualbranch}"
-PY_MODEL="${PY_MODEL:-pix2pix}"
+# PY_MODEL is set per MODEL below (do not default to pix2pix before the case).
 
 case "${MODEL}" in
   pix2pix|resnet9)
-    PY_MODEL="${PY_MODEL:-pix2pix}"
+    PY_MODEL=pix2pix
     NETG="${NETG:-resnet_9blocks}"
     TRAIN_NAME="${TRAIN_NAME:-hemit_pix2pix_resnet9}"
     PRETRAINED_NAME="${PRETRAINED_NAME:-hemit_pix2pix_resnet9}"
@@ -13,7 +13,7 @@ case "${MODEL}" in
     LAMBDA_L1="${LAMBDA_L1:-100}"
     ;;
   dualbranch)
-    PY_MODEL="${PY_MODEL:-pix2pix}"
+    PY_MODEL=pix2pix
     NETG="${NETG:-SwinTResnet}"
     TRAIN_NAME="${TRAIN_NAME:-hemit_SwinTResnet_New_2}"
     PRETRAINED_NAME="${PRETRAINED_NAME:-hemit_SwinTResnet_New}"
@@ -21,6 +21,7 @@ case "${MODEL}" in
     LAMBDA_L1="${LAMBDA_L1:-30}"
     ;;
   resnet6)
+    PY_MODEL=pix2pix
     NETG="${NETG:-resnet_6blocks}"
     TRAIN_NAME="${TRAIN_NAME:-hemit_resnet6}"
     PRETRAINED_NAME="${PRETRAINED_NAME:-hemit_resnet6}"
@@ -28,6 +29,7 @@ case "${MODEL}" in
     LAMBDA_L1="${LAMBDA_L1:-100}"
     ;;
   unet256)
+    PY_MODEL=pix2pix
     NETG="${NETG:-unet_256}"
     TRAIN_NAME="${TRAIN_NAME:-hemit_unet256}"
     PRETRAINED_NAME="${PRETRAINED_NAME:-hemit_unet256}"
@@ -35,6 +37,7 @@ case "${MODEL}" in
     LAMBDA_L1="${LAMBDA_L1:-100}"
     ;;
   unet128)
+    PY_MODEL=pix2pix
     NETG="${NETG:-unet_128}"
     TRAIN_NAME="${TRAIN_NAME:-hemit_unet128}"
     PRETRAINED_NAME="${PRETRAINED_NAME:-hemit_unet128}"
@@ -42,6 +45,7 @@ case "${MODEL}" in
     LAMBDA_L1="${LAMBDA_L1:-100}"
     ;;
   unet1024)
+    PY_MODEL=pix2pix
     NETG="${NETG:-unet_1024}"
     TRAIN_NAME="${TRAIN_NAME:-hemit_unet1024}"
     PRETRAINED_NAME="${PRETRAINED_NAME:-hemit_unet1024}"
@@ -49,6 +53,7 @@ case "${MODEL}" in
     LAMBDA_L1="${LAMBDA_L1:-100}"
     ;;
   swint)
+    PY_MODEL=pix2pix
     NETG="${NETG:-swinT}"
     TRAIN_NAME="${TRAIN_NAME:-hemit_swinT}"
     PRETRAINED_NAME="${PRETRAINED_NAME:-hemit_swinT}"
@@ -56,6 +61,7 @@ case "${MODEL}" in
     LAMBDA_L1="${LAMBDA_L1:-30}"
     ;;
   swint_unet)
+    PY_MODEL=pix2pix
     NETG="${NETG:-SwinTUnet}"
     TRAIN_NAME="${TRAIN_NAME:-hemit_SwinTUnet}"
     PRETRAINED_NAME="${PRETRAINED_NAME:-hemit_SwinTUnet}"
@@ -63,7 +69,7 @@ case "${MODEL}" in
     LAMBDA_L1="${LAMBDA_L1:-30}"
     ;;
   cut)
-    PY_MODEL="${PY_MODEL:-cut}"
+    PY_MODEL=cut
     NETG="${NETG:-resnet_9blocks}"
     TRAIN_NAME="${TRAIN_NAME:-hemit_cut_joint}"
     PRETRAINED_NAME="${PRETRAINED_NAME:-hemit_cut_joint}"
@@ -73,7 +79,7 @@ case "${MODEL}" in
     DATASET_MODE="${DATASET_MODE:-aligned}"
     ;;
   asp)
-    PY_MODEL="${PY_MODEL:-asp}"
+    PY_MODEL=asp
     NETG="${NETG:-resnet_9blocks}"
     TRAIN_NAME="${TRAIN_NAME:-hemit_asp_joint}"
     PRETRAINED_NAME="${PRETRAINED_NAME:-hemit_asp_joint}"
@@ -83,7 +89,7 @@ case "${MODEL}" in
     DATASET_MODE="${DATASET_MODE:-aligned}"
     ;;
   cyclegan)
-    PY_MODEL="${PY_MODEL:-cycle_gan}"
+    PY_MODEL=cycle_gan
     NETG="${NETG:-resnet_9blocks}"
     TRAIN_NAME="${TRAIN_NAME:-hemit_cyclegan_joint}"
     PRETRAINED_NAME="${PRETRAINED_NAME:-hemit_cyclegan_joint}"
@@ -94,7 +100,7 @@ case "${MODEL}" in
     DATASET_MODE="${DATASET_MODE:-aligned}"
     ;;
   vanilla_fm)
-    PY_MODEL="${PY_MODEL:-vanilla_fm}"
+    PY_MODEL=vanilla_fm
     TRAIN_NAME="${TRAIN_NAME:-hemit_vanilla_fm_joint}"
     PRETRAINED_NAME="${PRETRAINED_NAME:-hemit_vanilla_fm_joint}"
     TRAIN_LR="${TRAIN_LR:-0.0002}"

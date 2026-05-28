@@ -15,6 +15,25 @@ GPU_IDS="${GPU_IDS:-0}"
 source "${ROOT}/scripts/hemit_model_profiles.sh"
 
 die() { echo "ERROR: $*" >&2; exit 1; }
+
+# MODEL (shell) must match PY_MODEL (train.py --model). Old profiles defaulted PY_MODEL=pix2pix for everything.
+assert_py_model() {
+  local want=""
+  case "${MODEL}" in
+    cut) want=cut ;;
+    asp) want=asp ;;
+    cyclegan) want=cycle_gan ;;
+    vanilla_fm) want=vanilla_fm ;;
+    pix2pix|resnet9|dualbranch|resnet6|unet256|unet128|unet1024|swint|swint_unet) want=pix2pix ;;
+    *) return 0 ;;
+  esac
+  if [[ "${PY_MODEL}" != "${want}" ]]; then
+    die "MODEL=${MODEL} needs PY_MODEL=${want}, got PY_MODEL=${PY_MODEL}.
+Fix: git pull && unset PY_MODEL
+Old bug trained cut/asp/cyclegan as pix2pix — retrain after pull."
+  fi
+}
+assert_py_model
 need() { command -v "$1" >/dev/null 2>&1 || die "missing: $1"; }
 need python
 export CUDA_VISIBLE_DEVICES="${GPU_IDS}"
@@ -30,7 +49,8 @@ prepare() {
 
 train() {
   local netg_label="${NETG:-(none)}"
-  echo "==> [native] model=${PY_MODEL} netG=${netg_label} name=${TRAIN_NAME}"
+  assert_py_model
+  echo "==> [native] MODEL=${MODEL} PY_MODEL=${PY_MODEL} netG=${netg_label} name=${TRAIN_NAME}"
   if [[ "${PY_MODEL}" == "vanilla_fm" ]]; then
     echo "    fm_channels=${FM_CHANNELS:-32,64,96} fm_res_blocks=${FM_RESBLOCKS:-1} fm_steps=${FM_STEPS:-25}"
   fi
@@ -86,6 +106,8 @@ train() {
 
 test_one() {
   local name="$1" epoch="$2" num_test="$3"
+  assert_py_model
+  echo "==> [native test] MODEL=${MODEL} PY_MODEL=${PY_MODEL} name=${name} epoch=${epoch}"
   local extra=()
   [[ -n "${DATASET_MODE:-}" ]] && extra+=(--dataset_mode "${DATASET_MODE}")
   case "${PY_MODEL}" in

@@ -6,7 +6,9 @@ MODEL="${MODEL:-dualbranch}"
 case "${MODEL}" in
   pix2pix|resnet9)
     PY_MODEL=pix2pix
-    NETG="${NETG:-resnet_9blocks}"
+    # ResNet9 G ~11.38M @ ngf=64 (scripts/count_hemit_g_params.py)
+    NETG=resnet_9blocks
+    NGF="${NGF:-64}"
     TRAIN_NAME="${TRAIN_NAME:-hemit_pix2pix_resnet9}"
     PRETRAINED_NAME="${PRETRAINED_NAME:-hemit_pix2pix_resnet9}"
     TRAIN_LR="${TRAIN_LR:-0.0002}"
@@ -70,7 +72,8 @@ case "${MODEL}" in
     ;;
   cut)
     PY_MODEL=cut
-    NETG="${NETG:-resnet_9blocks}"
+    NETG=resnet_9blocks
+    NGF="${NGF:-64}"
     TRAIN_NAME="${TRAIN_NAME:-hemit_cut_joint}"
     PRETRAINED_NAME="${PRETRAINED_NAME:-hemit_cut_joint}"
     TRAIN_LR="${TRAIN_LR:-0.0002}"
@@ -80,7 +83,8 @@ case "${MODEL}" in
     ;;
   asp)
     PY_MODEL=asp
-    NETG="${NETG:-resnet_9blocks}"
+    NETG=resnet_9blocks
+    NGF="${NGF:-64}"
     TRAIN_NAME="${TRAIN_NAME:-hemit_asp_joint}"
     PRETRAINED_NAME="${PRETRAINED_NAME:-hemit_asp_joint}"
     TRAIN_LR="${TRAIN_LR:-0.0002}"
@@ -90,7 +94,8 @@ case "${MODEL}" in
     ;;
   cyclegan)
     PY_MODEL=cycle_gan
-    NETG="${NETG:-resnet_9blocks}"
+    NETG=resnet_9blocks
+    NGF="${NGF:-64}"
     TRAIN_NAME="${TRAIN_NAME:-hemit_cyclegan_joint}"
     PRETRAINED_NAME="${PRETRAINED_NAME:-hemit_cyclegan_joint}"
     TRAIN_LR="${TRAIN_LR:-0.0002}"

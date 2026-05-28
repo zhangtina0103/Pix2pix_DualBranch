@@ -24,7 +24,8 @@ assert_py_model() {
     asp) want=asp ;;
     cyclegan) want=cycle_gan ;;
     vanilla_fm) want=vanilla_fm ;;
-    pix2pix|resnet9|dualbranch|resnet6|unet256|unet128|unet1024|swint|swint_unet) want=pix2pix ;;
+    pix2pix|resnet9) want=pix2pix ;;
+    dualbranch|resnet6|unet256|unet128|unet1024|swint|swint_unet) want=pix2pix ;;
     *) return 0 ;;
   esac
   if [[ "${PY_MODEL}" != "${want}" ]]; then
@@ -33,7 +34,21 @@ Fix: git pull && unset PY_MODEL
 Old bug trained cut/asp/cyclegan as pix2pix — retrain after pull."
   fi
 }
+
+# Fair comparison: same ResNet9 generator width as pix2pix (~11.38M in *_net_G.pth).
+assert_resnet9_g() {
+  case "${MODEL}" in
+    pix2pix|resnet9|cut|asp|cyclegan)
+      [[ "${NETG}" == "resnet_9blocks" ]] || die \
+        "MODEL=${MODEL} requires NETG=resnet_9blocks (~11.38M G), got NETG=${NETG}"
+      [[ "${NGF:-64}" == "64" ]] || die \
+        "MODEL=${MODEL} requires NGF=64, got NGF=${NGF}"
+      ;;
+  esac
+}
+
 assert_py_model
+assert_resnet9_g
 need() { command -v "$1" >/dev/null 2>&1 || die "missing: $1"; }
 need python
 export CUDA_VISIBLE_DEVICES="${GPU_IDS}"
@@ -52,7 +67,9 @@ train() {
   assert_py_model
   echo "==> [native] MODEL=${MODEL} PY_MODEL=${PY_MODEL} netG=${netg_label} name=${TRAIN_NAME}"
   if [[ "${PY_MODEL}" == "vanilla_fm" ]]; then
-    echo "    fm_channels=${FM_CHANNELS:-32,64,96} fm_res_blocks=${FM_RESBLOCKS:-1} fm_steps=${FM_STEPS:-25}"
+    echo "    fm_channels=${FM_CHANNELS:-104,208,288} fm_res_blocks=${FM_RESBLOCKS:-2} fm_steps=${FM_STEPS:-25}"
+  elif [[ "${MODEL}" == "pix2pix" || "${MODEL}" == "resnet9" || "${MODEL}" == "cut" || "${MODEL}" == "asp" || "${MODEL}" == "cyclegan" ]]; then
+    echo "    netG=${NETG} ngf=${NGF:-64} (~11.38M generator; python scripts/count_hemit_g_params.py --model ${MODEL})"
   fi
   if ! python -c "import torch; assert torch.cuda.is_available()"; then
     die "CUDA not available (login node?). Submit a GPU job, e.g.:
@@ -81,8 +98,8 @@ train() {
       ;;
     vanilla_fm)
       extra+=(
-        --fm_channels "${FM_CHANNELS:-32,64,96}"
-        --fm_num_res_blocks "${FM_RESBLOCKS:-1}"
+        --fm_channels "${FM_CHANNELS:-104,208,288}"
+        --fm_num_res_blocks "${FM_RESBLOCKS:-2}"
         --fm_steps "${FM_STEPS:-25}"
       )
       ;;
@@ -101,7 +118,7 @@ train() {
   fi
   # vanilla_fm uses a conditional UNet (netG), not resnet_9blocks
   if [[ "${PY_MODEL}" != "vanilla_fm" ]]; then
-    train_args+=(--netG "${NETG:-resnet_9blocks}")
+    train_args+=(--netG "${NETG}" --ngf "${NGF:-64}")
   fi
   python train.py "${train_args[@]}"
 }
@@ -114,7 +131,7 @@ test_one() {
   [[ -n "${DATASET_MODE:-}" ]] && extra+=(--dataset_mode "${DATASET_MODE}")
   case "${PY_MODEL}" in
     vanilla_fm)
-      extra+=(--fm_channels "${FM_CHANNELS:-32,64,96}" --fm_num_res_blocks "${FM_RESBLOCKS:-1}" --fm_steps "${FM_STEPS:-25}")
+      extra+=(--fm_channels "${FM_CHANNELS:-104,208,288}" --fm_num_res_blocks "${FM_RESBLOCKS:-2}" --fm_steps "${FM_STEPS:-25}")
       ;;
   esac
   local test_args=(
@@ -124,7 +141,7 @@ test_one() {
     "${extra[@]}"
   )
   if [[ "${PY_MODEL}" != "vanilla_fm" ]]; then
-    test_args+=(--netG "${NETG:-resnet_9blocks}")
+    test_args+=(--netG "${NETG}" --ngf "${NGF:-64}")
   fi
   python test.py "${test_args[@]}"
 }

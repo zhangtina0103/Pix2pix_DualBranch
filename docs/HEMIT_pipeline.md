@@ -37,7 +37,14 @@ MODEL=comparison MODE=metrics bash scripts/run_hemit_all.sh
 
 Outputs: `eval/hemit/baselines/*.csv`, `eval/hemit/unified/by_marker.csv`
 
-**Extra deps:** `pip install -r requirements-hemit-extra.txt` (lightning, monai, lpips, …)
+**Env:** separate `hemit_compare` (do not install into `pix2pix_cuda`):
+
+```bash
+sbatch bash_scripts/setup_hemit_compare_env.sbatch
+# or: bash scripts/setup_hemit_compare_env.sh   # on GPU node
+```
+
+Default SLURM for GAN/FM arrays: `CONDA_ENV=hemit_compare`.
 
 ## SLURM
 

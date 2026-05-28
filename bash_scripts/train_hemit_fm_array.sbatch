@@ -15,7 +15,7 @@ source "${SLURM_SUBMIT_DIR:-$PWD}/bash_scripts/_common.sh"
 mkdir -p logs
 
 source /home/zhangtin/miniforge3/etc/profile.d/conda.sh
-conda activate "${CONDA_ENV:-pix2pix_cuda}"
+conda activate "${CONDA_ENV:-hemit_compare}"
 
 MARKERS=(DAPI panCK CD3)
 export MODEL=fm

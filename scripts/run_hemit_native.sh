@@ -15,6 +15,7 @@ GPU_IDS="${GPU_IDS:-0}"
 source "${ROOT}/scripts/hemit_model_profiles.sh"
 
 die() { echo "ERROR: $*" >&2; exit 1; }
+need() { command -v "$1" >/dev/null 2>&1 || die "missing: $1"; }
 need python
 export CUDA_VISIBLE_DEVICES="${GPU_IDS}"
 
@@ -29,6 +30,12 @@ prepare() {
 
 train() {
   echo "==> [native pix2pix] netG=${NETG} name=${TRAIN_NAME}"
+  if ! python -c "import torch; assert torch.cuda.is_available()"; then
+    die "CUDA not available (login node?). Submit a GPU job, e.g.:
+  MODEL=pix2pix MODE=train sbatch bash_scripts/run_hemit_all.sbatch
+  # or: srun --partition=mit_normal_gpu --gres=gpu:1 --mem=64G --time=06:00:00 --pty bash"
+  fi
+  python -c "import torch; print('GPU:', torch.cuda.get_device_name(0))"
   python train.py \
     --dataroot "${DATAROOT}" --name "${TRAIN_NAME}" \
     --model pix2pix --direction AtoB --display_id 0 \

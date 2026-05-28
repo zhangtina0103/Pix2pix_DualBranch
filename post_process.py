@@ -12,14 +12,17 @@ import math
 
 # this function is for read image,the input is directory name
 def process_directory(directory_name, subdirname):
-    for filename in os.listdir(r"./"+directory_name):
-        if filename.endswith('B.tif'):
-            img = imread(directory_name + "/" + filename)
-            composite = tif_composite(img)
-            outimgdir = './composite_rgb'
-            if not os.path.exists(outimgdir + '/' + subdirname):
-                os.mkdir(outimgdir + '/' + subdirname)
-            composite.save(os.path.join(outimgdir, subdirname, filename))
+    directory_name = os.path.abspath(directory_name)
+    if not os.path.isdir(directory_name):
+        raise FileNotFoundError(f"image dir not found: {directory_name}")
+    out_root = os.path.join(os.getcwd(), "composite_rgb", subdirname)
+    os.makedirs(out_root, exist_ok=True)
+    for filename in os.listdir(directory_name):
+        if not filename.endswith("B.tif"):
+            continue
+        img = imread(os.path.join(directory_name, filename))
+        composite = tif_composite(img)
+        composite.save(os.path.join(out_root, filename))
 
 
 def tif_composite(img):

@@ -155,7 +155,7 @@ cython_debug/
 checkpoints/
 results/
 logs/
-models/
+#models/
 eval/
 composite_rgb/
 datasets/hemit/

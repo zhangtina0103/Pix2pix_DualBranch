@@ -29,7 +29,11 @@ prepare() {
 }
 
 train() {
-  echo "==> [native] model=${PY_MODEL} netG=${NETG} name=${TRAIN_NAME}"
+  local netg_label="${NETG:-(none)}"
+  echo "==> [native] model=${PY_MODEL} netG=${netg_label} name=${TRAIN_NAME}"
+  if [[ "${PY_MODEL}" == "vanilla_fm" ]]; then
+    echo "    fm_channels=${FM_CHANNELS:-32,64,96} fm_res_blocks=${FM_RESBLOCKS:-1} fm_steps=${FM_STEPS:-25}"
+  fi
   if ! python -c "import torch; assert torch.cuda.is_available()"; then
     die "CUDA not available (login node?). Submit a GPU job, e.g.:
   MODEL=cut MODE=train sbatch bash_scripts/run_hemit_all.sbatch
@@ -63,15 +67,21 @@ train() {
       )
       ;;
   esac
-  python train.py \
-    --dataroot "${DATAROOT}" --name "${TRAIN_NAME}" \
-    --model "${PY_MODEL}" --direction AtoB --display_id 0 \
-    --lr "${TRAIN_LR}" --no_flip --netG "${NETG}" \
-    --n_epochs "${N_EPOCHS}" --n_epochs_decay "${N_EPOCHS_DECAY}" \
-    --lr_policy step --batch_size "${BATCH_SIZE}" \
-    --val_freq 5 \
-    --lambda_L1 "${LAMBDA_L1:-100}" \
+  local train_args=(
+    --dataroot "${DATAROOT}" --name "${TRAIN_NAME}"
+    --model "${PY_MODEL}" --direction AtoB --display_id 0
+    --lr "${TRAIN_LR}" --no_flip --verbose
+    --n_epochs "${N_EPOCHS}" --n_epochs_decay "${N_EPOCHS_DECAY}"
+    --lr_policy step --batch_size "${BATCH_SIZE}"
+    --val_freq 5
+    --lambda_L1 "${LAMBDA_L1:-100}"
     "${extra[@]}"
+  )
+  # vanilla_fm uses a conditional UNet (netG), not resnet_9blocks
+  if [[ "${PY_MODEL}" != "vanilla_fm" ]]; then
+    train_args+=(--netG "${NETG:-resnet_9blocks}")
+  fi
+  python train.py "${train_args[@]}"
 }
 
 test_one() {
@@ -83,11 +93,16 @@ test_one() {
       extra+=(--fm_channels "${FM_CHANNELS:-32,64,96}" --fm_num_res_blocks "${FM_RESBLOCKS:-1}" --fm_steps "${FM_STEPS:-25}")
       ;;
   esac
-  python test.py \
-    --dataroot "${DATAROOT}" --name "${name}" \
-    --model "${PY_MODEL}" --direction AtoB \
-    --epoch "${epoch}" --num_test "${num_test}" --eval --netG "${NETG}" \
+  local test_args=(
+    --dataroot "${DATAROOT}" --name "${name}"
+    --model "${PY_MODEL}" --direction AtoB
+    --epoch "${epoch}" --num_test "${num_test}" --eval
     "${extra[@]}"
+  )
+  if [[ "${PY_MODEL}" != "vanilla_fm" ]]; then
+    test_args+=(--netG "${NETG:-resnet_9blocks}")
+  fi
+  python test.py "${test_args[@]}"
 }
 
 metrics_one() {

@@ -121,13 +121,16 @@ if __name__ == '__main__':
                     imgs = data_val['A']
                     truemasks = data_val['B']
                     imgs = imgs.to(device='cuda',dtype=torch.float)
-                    if hasattr(model, 'netG'):
+                    if getattr(opt, 'model', None) == 'vanilla_fm':
+                        maskpred = model.sample(imgs, steps=int(getattr(opt, 'fm_steps', 25)))
+                    elif hasattr(model, 'netG'):
                         net = model.netG
+                        maskpred = net(imgs)
                     elif hasattr(model, 'netG_A'):
                         net = model.netG_A
+                        maskpred = net(imgs)
                     else:
                         raise AttributeError('No generator on model for validation')
-                    maskpred = net(imgs)
                     #maskpred = maskpred.cpu().numpy()
                     #truemasks = truemasks.cpu().numpy()
                     dapi_score, cd3_score, panck_score, average_score = validation_train(truemasks, maskpred)

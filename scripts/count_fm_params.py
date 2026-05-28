@@ -1,6 +1,13 @@
 #!/usr/bin/env python3
 """Print parameter count for vanilla FM UNet (match ResNet9 ~11.38M for fair comparison)."""
 import argparse
+import sys
+from pathlib import Path
+
+# Allow: python scripts/count_fm_params.py (repo root on sys.path)
+_REPO = Path(__file__).resolve().parents[1]
+if str(_REPO) not in sys.path:
+    sys.path.insert(0, str(_REPO))
 
 from models.vanilla_fm_model import _CondUNet
 

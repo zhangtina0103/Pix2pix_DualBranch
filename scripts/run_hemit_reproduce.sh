@@ -94,7 +94,7 @@ test_one() {
 metrics_one() {
   local name="$1"
   local epoch="$2"
-  local srcdir="results/${name}/test_${epoch}/"
+  local srcdir="results/${name}/test_${epoch}/images"
   echo "==> metrics srcdir=${srcdir}"
   [[ -d "${srcdir}" ]] || die "missing results dir: ${srcdir} (run MODE=test first)"
   python post_process.py --srcdir "${srcdir}"

@@ -23,7 +23,11 @@ def process_directory(directory_name, subdirname):
 
 
 def tif_composite(img):
-    img = ((img + 1.0) / 2.0) * 255
+    img = np.asarray(img, dtype=np.float64)
+    if img.max() <= 1.0:
+        img = ((img + 1.0) / 2.0) * 255.0
+    else:
+        img = np.clip(img, 0, 255)
 
     a = img[:, :, 0] #dapi
     b = img[:, :, 1] #CD3
@@ -205,10 +209,26 @@ def validation_train(real_mihc, fake_mihc):
     average_score = np.average([dapi_score, cd3_score, panck_score])
     return dapi_score, cd3_score, panck_score, average_score
 
+def resolve_image_dir(srcdir):
+    """test.py saves TIFFs under <test_epoch>/images/; README may pass parent dir."""
+    srcdir = os.path.abspath(srcdir)
+    images = os.path.join(srcdir, "images")
+    if os.path.isdir(images) and any(f.endswith("_fake_B.tif") for f in os.listdir(images)):
+        return images
+    return srcdir
+
+
 if __name__=='__main__':
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--srcdir", type=str, help="process this directory.")
+    parser.add_argument("--srcdir", type=str, help="test output dir or .../test_XX/images/")
+    parser.add_argument("--composite", action="store_true",
+                        help="also write RGB composites under ./composite_rgb/")
     args = parser.parse_args()
-    directory_name = args.srcdir
+    directory_name = resolve_image_dir(args.srcdir)
+    print(f"Metrics on: {directory_name}")
     compute_metrics(directory_name)
+    if args.composite:
+        subdirname = os.path.basename(os.path.dirname(directory_name)) or "test"
+        process_directory(directory_name, subdirname)
+        print(f"Composites under: ./composite_rgb/{subdirname}/")

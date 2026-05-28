@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
-# Official HEMIT Dual-Branch (MODEL=dualbranch). Multi-model: scripts/run_hemit_all.sh
+# Shortcut: paper dual-branch (same as MODEL=dualbranch).
 export MODEL="${MODEL:-dualbranch}"
 exec "$(dirname "$0")/run_hemit_all.sh"

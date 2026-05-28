@@ -1,0 +1,15 @@
+# Extra deps for hemit/ comparison models (GAN baselines + flow matching).
+# Install in pix2pix_cuda or a dedicated env after base requirements.txt / setup script.
+#
+#   pip install -r requirements-hemit-extra.txt
+
+lightning>=2.0
+monai>=1.3
+torchmetrics>=1.0
+lpips>=0.1.4
+huggingface_hub>=0.20
+scikit-image>=0.19
+scipy>=1.7
+
+# Optional: StarDist cell-masked metrics in eval_baseline.py
+# stardist>=0.8.5

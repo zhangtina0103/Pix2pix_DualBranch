@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Metrics for CUT / ASP / CycleGAN / vanilla FM (hemit/eval).
+# Pix2pix baselines: use MODEL=pix2pix|dualbranch + MODE=metrics (post_process.py).
 set -euo pipefail
 source "$(dirname "$0")/common.sh"
 cd "${REPO_ROOT}"
@@ -12,22 +14,25 @@ FM_STRIDE="${FM_STRIDE:-256}"
 FM_STEPS="${FM_STEPS:-25}"
 FM_METHOD="${FM_METHOD:-heun}"
 
+# No hemit pix2pix — native repo pix2pix uses post_process.py instead.
+GAN_MODELS="${GAN_MODELS:-cyclegan cut asp}"
+
 mkdir -p eval/hemit/baselines eval/hemit/unified
 
-echo "==> eval GAN baselines → eval/hemit/baselines/"
+echo "==> eval GAN (${GAN_MODELS}) → eval/hemit/baselines/"
 python hemit/eval/eval_baseline.py \
   --data-root "${DATA_ROOT}" \
   --checkpoint-dir "${BASELINE_CKPT}" \
   --output-dir eval/hemit/baselines \
-  --models pix2pix cyclegan cut asp \
+  --models ${GAN_MODELS} \
   --patch-size "${EVAL_PATCH_SIZE}"
 
-echo "==> eval unified → eval/hemit/unified/"
+echo "==> eval FM + GAN → eval/hemit/unified/"
 python hemit/eval/eval_all.py \
   --data_root "$(dirname "${DATA_ROOT}")" \
   --output_dir eval/hemit/unified \
   --datasets hemit \
-  --models pix2pix cyclegan cut asp vanilla_fm \
+  --models ${GAN_MODELS} vanilla_fm \
   --baseline_ckpt_dir "${BASELINE_CKPT}" \
   --fm_ckpt_dir "${FM_CKPT}" \
   --patch_size "${EVAL_PATCH_SIZE}" \
@@ -38,5 +43,5 @@ python hemit/eval/eval_all.py \
   --device cuda
 
 echo "Done:"
-echo "  ${REPO_ROOT}/eval/hemit/baselines/baseline_metrics_summary.csv"
-echo "  ${REPO_ROOT}/eval/hemit/unified/by_marker.csv"
+echo "  eval/hemit/baselines/baseline_metrics_summary.csv"
+echo "  eval/hemit/unified/by_marker.csv"

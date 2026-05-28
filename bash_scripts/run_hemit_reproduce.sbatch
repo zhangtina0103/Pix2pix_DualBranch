@@ -20,7 +20,7 @@ set -euo pipefail
 source "${SLURM_SUBMIT_DIR:-$PWD}/bash_scripts/_common.sh"
 
 source /home/zhangtin/miniforge3/etc/profile.d/conda.sh
-conda activate pix2pix
+conda activate pix2pix_cuda
 # shellcheck source=/dev/null
 source "${REPO_ROOT}/bash_scripts/_cuda.sh"
 
@@ -47,6 +47,7 @@ if ! python -c "import torch; assert torch.cuda.is_available()"; then
 fi
 python -c "import torch; print('torch', torch.__version__, 'cuda', torch.version.cuda)"
 
-bash scripts/run_hemit_reproduce.sh
+export MODEL="${MODEL:-dualbranch}"
+bash scripts/run_hemit_all.sh
 
 echo "Finished: $(date)"

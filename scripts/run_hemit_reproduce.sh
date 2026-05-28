@@ -45,10 +45,13 @@ export CUDA_VISIBLE_DEVICES="${GPU_IDS}"
 prepare() {
   echo "==> prepare (symlink) dataset at ${DATAROOT}"
   [[ -d "${HEMIT_SRC}/train" ]] || die "HEMIT_SRC not found: ${HEMIT_SRC} (set HEMIT_SRC=...)"
+  # Symlinks by default; pass PREPARE_COPY=1 to copy instead.
+  local copy_flag=()
+  [[ "${PREPARE_COPY:-0}" == "1" ]] && copy_flag=(--copy)
   python scripts/prepare_hemit_data.py \
     --src "${HEMIT_SRC}" \
     --dst "${DATAROOT}" \
-    --use_symlinks
+    "${copy_flag[@]}"
 }
 
 train() {
@@ -84,8 +87,8 @@ test_one() {
     --epoch "${epoch}" \
     --num_test "${num_test}" \
     --eval \
-    --netG SwinTResnet \
-    --display_id 0
+    --netG SwinTResnet
+    # test.py sets display_id=-1 internally (no visdom)
 }
 
 metrics_one() {

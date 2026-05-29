@@ -110,10 +110,13 @@ case "${MODEL}" in
     PRETRAINED_NAME="${PRETRAINED_NAME:-hemit_vanilla_fm_joint}"
     TRAIN_LR="${TRAIN_LR:-0.0002}"
     DATASET_MODE="${DATASET_MODE:-aligned}"
-    # U-Net with skips; ~11.26M @ 96,192,272 res=2 (ResNet9 G ~11.38M)
-    FM_CHANNELS="${FM_CHANNELS:-96,192,272}"
+    # MONAI UNet (mentor flow_matching.py); ~11M @ 64,128,192 attn 0,0,1 res=2
+    FM_BACKBONE="${FM_BACKBONE:-monai}"
+    FM_LOSS="${FM_LOSS:-x1}"
+    FM_CHANNELS="${FM_CHANNELS:-64,128,192}"
+    FM_ATTN="${FM_ATTN:-0,0,1}"
     FM_RESBLOCKS="${FM_RESBLOCKS:-2}"
-    # Standard FM train: 1 UNet forward (velocity MSE). ODE only at val/test.
+    FM_LAMBDA_PERC="${FM_LAMBDA_PERC:-0.1}"
     FM_STEPS="${FM_STEPS:-25}"
     FM_VAL_STEPS="${FM_VAL_STEPS:-8}"
     FM_SAMPLE_METHOD="${FM_SAMPLE_METHOD:-heun}"

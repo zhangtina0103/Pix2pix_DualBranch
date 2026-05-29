@@ -1,12 +1,21 @@
 # shellcheck shell=bash
 # Pin vanilla_fm training env. Source from run_hemit_vanilla_fm.sh / train sbatch.
 #
-# Standard FM (default): velocity MSE only — one UNet forward per step.
-# Slow path: FM_USE_ODE_TRAIN=1  →  ODE sample-L1 in the train loop (OOM risk @ 1024²).
+# Mentor integration (flow_matching.py + flow_matching_v.py via MONAI UNet):
+#   FM_LOSS=x1     → L1 + perceptual, logit-normal t, tanh, x1→v Heun ODE
+#   FM_LOSS=velocity → velocity MSE, uniform t, raw-v Heun ODE
+# Param match ResNet9 (~11.38M): FM_CHANNELS=64,128,192 FM_ATTN=0,0,1 FM_RESBLOCKS=2
+# Tune on login node: python scripts/count_fm_params.py --search
 
 vanilla_fm_apply_train_env() {
-  export FM_CHANNELS="${FM_CHANNELS:-96,192,272}"
+  export FM_BACKBONE="${FM_BACKBONE:-monai}"
+  export FM_LOSS="${FM_LOSS:-x1}"
+  export FM_CHANNELS="${FM_CHANNELS:-64,128,192}"
+  export FM_ATTN="${FM_ATTN:-0,0,1}"
   export FM_RESBLOCKS="${FM_RESBLOCKS:-2}"
+  export FM_NUM_HEAD_CHANNELS="${FM_NUM_HEAD_CHANNELS:-32}"
+  export FM_LAMBDA_PERC="${FM_LAMBDA_PERC:-0.1}"
+  export FM_TIME_DIST="${FM_TIME_DIST:-logit_normal}"
   export FM_STEPS="${FM_STEPS:-25}"
   export FM_VAL_STEPS="${FM_VAL_STEPS:-8}"
   export FM_SAMPLE_METHOD="${FM_SAMPLE_METHOD:-heun}"
@@ -26,7 +35,8 @@ vanilla_fm_apply_train_env() {
 
 vanilla_fm_print_train_env() {
   echo "vanilla_fm config:"
-  echo "  FM_CHANNELS=${FM_CHANNELS}  FM_RESBLOCKS=${FM_RESBLOCKS}  BATCH_SIZE=${BATCH_SIZE:-?}"
-  echo "  train: FM_LAMBDA_L1=${FM_LAMBDA_L1}  FM_LAMBDA_SAMPLE_L1=${FM_LAMBDA_SAMPLE_L1}  (0/0 = standard FM)"
-  echo "  infer: FM_STEPS=${FM_STEPS}  FM_SAMPLE_METHOD=${FM_SAMPLE_METHOD}  val_steps=${FM_VAL_STEPS}"
+  echo "  backbone=${FM_BACKBONE}  loss=${FM_LOSS}  channels=${FM_CHANNELS}  attn=${FM_ATTN}  res=${FM_RESBLOCKS}"
+  echo "  perc=${FM_LAMBDA_PERC}  time=${FM_TIME_DIST}  BATCH_SIZE=${BATCH_SIZE:-?}"
+  echo "  FM_LAMBDA_L1=${FM_LAMBDA_L1}  FM_LAMBDA_SAMPLE_L1=${FM_LAMBDA_SAMPLE_L1}"
+  echo "  infer: steps=${FM_STEPS}  ${FM_SAMPLE_METHOD}  val_steps=${FM_VAL_STEPS}"
 }

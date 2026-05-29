@@ -10,6 +10,7 @@ if str(_REPO) not in sys.path:
 
 from models import networks
 from models.nce_losses import EncoderFeatureExtractor, generator_module
+from models.mentor_flow_net import MentorFlowNet
 from models.vanilla_fm_model import _CondUNet
 
 TARGET = 11_378_179
@@ -36,9 +37,14 @@ def cut_nce_projectors(ngf: int = 64, norm: str = "instance") -> int:
     return count_module(f.projectors)
 
 
-def fm_g(channels: str, num_res_blocks: int) -> int:
+def fm_g(channels: str, num_res_blocks: int, backbone: str = "monai", attn: str = "0,0,1") -> int:
     ch = tuple(int(x) for x in channels.split(","))
-    return count_module(_CondUNet(channels=ch, num_res_blocks=num_res_blocks))
+    if backbone == "custom":
+        return count_module(_CondUNet(channels=ch, num_res_blocks=num_res_blocks))  # type: ignore[arg-type]
+    attn_t = tuple(bool(int(a)) for a in attn.split(","))
+    return count_module(
+        MentorFlowNet(channels=ch, attention_levels=attn_t, num_res_blocks=num_res_blocks)
+    )
 
 
 def main():
@@ -49,7 +55,9 @@ def main():
         default="all",
     )
     p.add_argument("--ngf", type=int, default=64)
-    p.add_argument("--fm_channels", type=str, default="96,192,272")
+    p.add_argument("--fm_backbone", type=str, default="monai", choices=["monai", "custom"])
+    p.add_argument("--fm_channels", type=str, default="64,128,192")
+    p.add_argument("--fm_attn_levels", type=str, default="0,0,1")
     p.add_argument("--fm_num_res_blocks", type=int, default=2)
     args = p.parse_args()
 
@@ -72,9 +80,9 @@ def main():
         add("cyclegan netG_A or netG_B (each)", n, "H&E→multiplex uses G_A at test")
         add("cyclegan both generators", 2 * n, "training only")
     if args.model in ("vanilla_fm", "all"):
-        n = fm_g(args.fm_channels, args.fm_num_res_blocks)
+        n = fm_g(args.fm_channels, args.fm_num_res_blocks, args.fm_backbone, args.fm_attn_levels)
         add(
-            f"vanilla_fm UNet ({args.fm_channels}, res={args.fm_num_res_blocks})",
+            f"vanilla_fm {args.fm_backbone} ({args.fm_channels}, attn={args.fm_attn_levels}, res={args.fm_num_res_blocks})",
             n,
             "MODEL=vanilla_fm",
         )

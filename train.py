@@ -115,6 +115,7 @@ if __name__ == '__main__':
             cd3 = 0
             panck = 0
             average = 0
+            model.eval()
             with torch.no_grad():
                 for i, data_val in tqdm(enumerate(dataset_val), total=len(dataset_val), desc="Validating Epoch %d" % epoch):
                     print('VALIDATION')
@@ -141,5 +142,6 @@ if __name__ == '__main__':
                     panck += panck_score
                     average += average_score
                 csv_writer.writerow([epoch, dapi/n_val, cd3/n_val, panck/n_val, average/n_val])
+            model.train()
         print('End of epoch %d / %d \t Time Taken: %d sec' % (epoch, opt.n_epochs + opt.n_epochs_decay, time.time() - epoch_start_time))
     f.close()

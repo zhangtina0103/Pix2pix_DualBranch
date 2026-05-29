@@ -67,8 +67,8 @@ train() {
   assert_py_model
   echo "==> [native] MODEL=${MODEL} PY_MODEL=${PY_MODEL} netG=${netg_label} name=${TRAIN_NAME}"
   if [[ "${PY_MODEL}" == "vanilla_fm" ]]; then
-    echo "    fm_channels=${FM_CHANNELS} fm_res_blocks=${FM_RESBLOCKS} (U-Net + skips)"
-    echo "    train: FM_LAMBDA_L1=${FM_LAMBDA_L1} FM_LAMBDA_SAMPLE_L1=${FM_LAMBDA_SAMPLE_L1} (need 0/0 for standard FM)"
+    echo "    backbone=${FM_BACKBONE:-monai} loss=${FM_LOSS:-x1} channels=${FM_CHANNELS} attn=${FM_ATTN:-0,0,1}"
+    echo "    perc=${FM_LAMBDA_PERC:-0.1} FM_LAMBDA_L1=${FM_LAMBDA_L1} FM_LAMBDA_SAMPLE_L1=${FM_LAMBDA_SAMPLE_L1}"
     echo "    test ODE: ${FM_STEPS} ${FM_SAMPLE_METHOD} | val: ${FM_VAL_STEPS} steps"
     echo "    batch_size=${BATCH_SIZE} (set BATCH_SIZE=1 if OOM)"
   elif [[ "${MODEL}" == "pix2pix" || "${MODEL}" == "resnet9" || "${MODEL}" == "cut" || "${MODEL}" == "asp" || "${MODEL}" == "cyclegan" ]]; then
@@ -104,14 +104,23 @@ train() {
       ;;
     vanilla_fm)
       extra+=(
-        --fm_channels "${FM_CHANNELS:-96,192,272}"
+        --fm_backbone "${FM_BACKBONE:-monai}"
+        --fm_loss "${FM_LOSS:-x1}"
+        --fm_channels "${FM_CHANNELS:-64,128,192}"
+        --fm_attn_levels "${FM_ATTN:-0,0,1}"
+        --fm_num_head_channels "${FM_NUM_HEAD_CHANNELS:-32}"
         --fm_num_res_blocks "${FM_RESBLOCKS:-2}"
+        --fm_time_dist "${FM_TIME_DIST:-logit_normal}"
+        --fm_lambda_perc "${FM_LAMBDA_PERC:-0.1}"
         --fm_steps "${FM_STEPS:-25}"
         --fm_sample_method "${FM_SAMPLE_METHOD:-heun}"
         --fm_lambda_l1 "${FM_LAMBDA_L1}"
         --fm_lambda_sample_l1 "${FM_LAMBDA_SAMPLE_L1}"
         --fm_val_steps "${FM_VAL_STEPS:-8}"
       )
+      if [[ "${FM_LOSS:-x1}" == "x1" ]]; then
+        extra+=(--fm_use_tanh)
+      fi
       if [[ "${FM_LAMBDA_SAMPLE_L1:-0}" != "0" && "${FM_LAMBDA_SAMPLE_L1:-0}" != "0.0" ]]; then
         extra+=(
           --fm_sample_l1_prob "${FM_SAMPLE_L1_PROB:-1.0}"
@@ -156,13 +165,20 @@ test_one() {
   [[ -n "${DATASET_MODE:-}" ]] && extra+=(--dataset_mode "${DATASET_MODE}")
   case "${PY_MODEL}" in
     vanilla_fm)
-      echo "    fm_test: steps=${FM_STEPS:-25} method=${FM_SAMPLE_METHOD:-heun} (same as train)"
+      echo "    fm_test: backbone=${FM_BACKBONE:-monai} loss=${FM_LOSS:-x1} steps=${FM_STEPS:-25}"
       extra+=(
-        --fm_channels "${FM_CHANNELS:-96,192,272}"
+        --fm_backbone "${FM_BACKBONE:-monai}"
+        --fm_loss "${FM_LOSS:-x1}"
+        --fm_channels "${FM_CHANNELS:-64,128,192}"
+        --fm_attn_levels "${FM_ATTN:-0,0,1}"
+        --fm_num_head_channels "${FM_NUM_HEAD_CHANNELS:-32}"
         --fm_num_res_blocks "${FM_RESBLOCKS:-2}"
         --fm_steps "${FM_STEPS:-25}"
         --fm_sample_method "${FM_SAMPLE_METHOD:-heun}"
       )
+      if [[ "${FM_LOSS:-x1}" == "x1" ]]; then
+        extra+=(--fm_use_tanh)
+      fi
       ;;
   esac
   local test_args=(

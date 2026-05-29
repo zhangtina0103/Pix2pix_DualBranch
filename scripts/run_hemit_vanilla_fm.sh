@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Vanilla flow matching (standard FM): train.py → test.py → post_process.py (joint 3ch).
+# Vanilla flow matching: train.py → test.py → post_process.py (joint 3ch).
 #
-# Train: one UNet forward / step (velocity MSE). Test: ODE with FM_STEPS (default 25 Heun).
+# Train: mentor flow_matching.py (x1+perc) or flow_matching_v.py (velocity). MONAI UNet ~11M params.
 # Fresh train after recipe/arch change:
 #   rm -rf checkpoints/hemit_vanilla_fm_joint
 #   sbatch bash_scripts/train_hemit_vanilla_fm.sbatch

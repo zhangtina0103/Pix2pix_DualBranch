@@ -1,11 +1,22 @@
+"""
+Vanilla conditional flow matching in the pix2pix framework.
+
+Integrates mentor reference scripts:
+  - flow_matching.py:     MONAI UNet, x1 L1 + perceptual, logit-normal t, tanh, Heun ODE via x1->v
+  - flow_matching_v.py:   MONAI UNet, velocity MSE, uniform t, Heun ODE on raw v
+
+Default backbone: MONAI DiffusionModelUNet (~11M params with 64,128,192 + res=2 + attn 0,0,1).
+Legacy: --fm_backbone custom (skip U-Net, spatial t channel).
+"""
 import random
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 from .base_model import BaseModel
+from .mentor_flow_net import MentorFlowNet
 
 
 class _ResBlock(nn.Module):
@@ -34,8 +45,6 @@ class _Down(nn.Module):
 
 
 class _UpSkip(nn.Module):
-    """Upsample, concat encoder skip, fuse, then ResBlocks."""
-
     def __init__(self, in_ch: int, out_ch: int, skip_ch: int, n_res: int):
         super().__init__()
         self.up = nn.ConvTranspose2d(in_ch, out_ch, 4, stride=2, padding=1)
@@ -52,12 +61,7 @@ class _UpSkip(nn.Module):
 
 
 class _CondUNet(nn.Module):
-    """
-    Conditional U-Net for (vanilla) flow matching (encoder skips on decode).
-
-    Input: concat([x_t (B,3,H,W), cond_A (B,3,H,W), t_channel (B,1,H,W)]) => 7ch
-    Output: velocity field v_theta (B,3,H,W)
-    """
+    """Legacy custom U-Net (spatial t channel). Use --fm_backbone monai for mentor parity."""
 
     def __init__(self, in_ch: int = 7, out_ch: int = 3,
                  channels: Tuple[int, int, int] = (32, 64, 96),
@@ -84,59 +88,111 @@ class _CondUNet(nn.Module):
 
 
 class VanillaFMModel(BaseModel):
-    """
-    Vanilla conditional rectified flow matching (pix2pix framework).
-
-    Training: one UNet forward — MSE(v_theta(x_t,t|A), x_1 - x_0) at random t.
-    Inference / val: ODE integrate dx/dt = v_theta from noise (fm_steps, no grad).
-    """
-
     @staticmethod
     def modify_commandline_options(parser, is_train=True):
         parser.set_defaults(dataset_mode="aligned", no_dropout=True)
-        parser.add_argument("--fm_channels", type=str, default="32,64,96",
-                            help="UNet channels e.g. 32,64,96 (tune params)")
-        parser.add_argument("--fm_num_res_blocks", type=int, default=1,
-                            help="ResBlocks per level (tune params)")
+        parser.add_argument("--fm_backbone", type=str, default="monai",
+                            choices=["monai", "custom"],
+                            help="monai=mentor DiffusionModelUNet; custom=legacy skip U-Net")
+        parser.add_argument("--fm_loss", type=str, default="x1",
+                            choices=["x1", "velocity"],
+                            help="x1=flow_matching.py; velocity=flow_matching_v.py")
+        parser.add_argument("--fm_channels", type=str, default="64,128,192",
+                            help="UNet channels (monai or custom)")
+        parser.add_argument("--fm_attn_levels", type=str, default="0,0,1",
+                            help="MONAI attention per level, e.g. 0,0,1 (monai only)")
+        parser.add_argument("--fm_num_head_channels", type=int, default=32,
+                            help="MONAI attention head channels (monai only)")
+        parser.add_argument("--fm_num_res_blocks", type=int, default=2,
+                            help="ResBlocks per UNet level")
+        parser.add_argument("--fm_use_tanh", action="store_true",
+                            help="tanh on net output (flow_matching.py; x1 + monai)")
+        parser.add_argument("--fm_time_dist", type=str, default="logit_normal",
+                            choices=["uniform", "logit_normal"],
+                            help="t sampling: logit_normal (x1 mentor) or uniform (velocity)")
+        parser.add_argument("--fm_P_mean", type=float, default=-0.8,
+                            help="Logit-normal t: mean (flow_matching.py)")
+        parser.add_argument("--fm_P_std", type=float, default=0.8,
+                            help="Logit-normal t: std")
         parser.add_argument("--fm_steps", type=int, default=25,
-                            help="ODE steps at test (and val if fm_val_steps unset)")
+                            help="ODE steps at test")
         parser.add_argument("--fm_val_steps", type=int, default=8,
-                            help="ODE steps during training-time validation only")
+                            help="ODE steps during training validation")
         parser.add_argument("--fm_sample_method", type=str, default="heun",
                             choices=["euler", "heun"],
-                            help="ODE solver at val / test (not used in standard train)")
+                            help="ODE solver at val / test")
         if is_train:
+            parser.add_argument("--fm_lambda_perc", type=float, default=0.1,
+                                help="Perceptual weight (x1 mode; flow_matching.py; 0=off)")
+            parser.add_argument("--fm_lambda_vel", type=float, default=0.0,
+                                help="Aux velocity MSE in x1 mode (0=off)")
             parser.add_argument("--fm_lambda_l1", type=float, default=0.0,
-                                help="Optional path L1 on x1_hat (0 = off; not standard FM)")
+                                help="Extra L1 on x1_hat (usually 0)")
             parser.add_argument("--fm_lambda_sample_l1", type=float, default=0.0,
-                                help="Optional ODE sample L1 in train loop (0 = standard FM)")
+                                help="Optional ODE sample L1 in train loop")
             parser.add_argument("--fm_train_sample_steps", type=int, default=0,
-                                help="If fm_lambda_sample_l1>0: ODE steps (0 = use fm_steps)")
+                                help="ODE steps when fm_lambda_sample_l1>0 (0=fm_steps)")
             parser.add_argument("--fm_sample_l1_prob", type=float, default=1.0,
-                                help="With sample L1: fraction of iters that run ODE loss")
+                                help="Fraction of iters with ODE sample L1")
             parser.add_argument("--fm_train_sample_method", type=str, default="euler",
                                 choices=["euler", "heun"],
-                                help="ODE solver when fm_lambda_sample_l1>0 only")
+                                help="ODE solver for train sample L1")
         return parser
 
     def __init__(self, opt):
         BaseModel.__init__(self, opt)
+        self.fm_loss_mode = str(getattr(opt, "fm_loss", "x1"))
+        self.use_monai = str(getattr(opt, "fm_backbone", "monai")) == "monai"
+
         self.loss_names = ["FM"]
         if self.isTrain:
+            if float(getattr(opt, "fm_lambda_perc", 0.0)) > 0 and self.fm_loss_mode == "x1":
+                self.loss_names.append("Perc")
+            if float(getattr(opt, "fm_lambda_vel", 0.0)) > 0:
+                self.loss_names.append("Vel")
             if float(getattr(opt, "fm_lambda_l1", 0.0)) > 0:
                 self.loss_names.append("L1")
             if float(getattr(opt, "fm_lambda_sample_l1", 0.0)) > 0:
                 self.loss_names.append("L1s")
+
         self.visual_names = ["real_A", "fake_B", "real_B"]
         self.model_names = ["G"]
 
         ch = tuple(int(x) for x in opt.fm_channels.split(","))
-        self.netG = _CondUNet(
-            in_ch=opt.input_nc + opt.output_nc + 1,
-            out_ch=opt.output_nc,
-            channels=ch,
-            num_res_blocks=int(opt.fm_num_res_blocks),
-        )
+        n_res = int(opt.fm_num_res_blocks)
+        use_tanh = bool(getattr(opt, "fm_use_tanh", False)) and self.fm_loss_mode == "x1"
+
+        if self.use_monai:
+            attn = tuple(bool(int(a)) for a in opt.fm_attn_levels.split(","))
+            self.netG: Union[MentorFlowNet, _CondUNet] = MentorFlowNet(
+                in_ch=opt.input_nc,
+                out_ch=opt.output_nc,
+                channels=ch,
+                attention_levels=attn,
+                num_res_blocks=n_res,
+                num_head_channels=int(opt.fm_num_head_channels),
+                use_tanh=use_tanh,
+            )
+        else:
+            self.netG = _CondUNet(
+                in_ch=opt.input_nc + opt.output_nc + 1,
+                out_ch=opt.output_nc,
+                channels=ch,  # type: ignore[arg-type]
+                num_res_blocks=n_res,
+            )
+
+        self.perceptual_loss_fn = None
+        if self.isTrain and self.fm_loss_mode == "x1":
+            lam_perc = float(getattr(opt, "fm_lambda_perc", 0.0))
+            if lam_perc > 0:
+                try:
+                    from monai.losses import PerceptualLoss
+                    self.perceptual_loss_fn = PerceptualLoss(
+                        spatial_dims=2, network_type="vgg", is_fake_3d=False,
+                    )
+                except ImportError:
+                    print("Warning: MONAI not installed; --fm_lambda_perc ignored")
+
         if len(self.gpu_ids) > 0 and torch.cuda.is_available():
             self.netG.to(self.device)
             if len(self.gpu_ids) > 1:
@@ -153,22 +209,58 @@ class VanillaFMModel(BaseModel):
         self.real_B = input["B" if AtoB else "A"].to(self.device)
         self.image_paths = input["A_paths" if AtoB else "B_paths"]
 
-    def _ode_config_test(self):
-        return int(self.opt.fm_steps), str(getattr(self.opt, "fm_sample_method", "heun"))
+    def _sample_t(self, batch_size: int, device: torch.device) -> torch.Tensor:
+        dist = str(getattr(self.opt, "fm_time_dist", "logit_normal"))
+        if self.fm_loss_mode == "velocity":
+            return torch.rand(batch_size, device=device)
+        if dist == "logit_normal":
+            p_mean = float(getattr(self.opt, "fm_P_mean", -0.8))
+            p_std = float(getattr(self.opt, "fm_P_std", 0.8))
+            return torch.sigmoid(p_mean + p_std * torch.randn(batch_size, device=device))
+        return torch.rand(batch_size, device=device)
 
-    def _ode_config_val(self):
-        return int(getattr(self.opt, "fm_val_steps", 8)), str(
-            getattr(self.opt, "fm_sample_method", "heun"))
-
-    def _v(self, x_t: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+    def _net_forward(self, x_t: torch.Tensor, t: torch.Tensor, cond: torch.Tensor) -> torch.Tensor:
+        if self.use_monai:
+            return self.netG(x_t, t, cond)
         B, _, H, W = x_t.shape
         t_ch = t.view(B, 1, 1, 1).expand(B, 1, H, W)
-        inp = torch.cat([x_t, self.real_A, t_ch], dim=1)
+        inp = torch.cat([x_t, cond, t_ch], dim=1)
         return self.netG(inp)
+
+    def _pred_x1(self, x_t: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+        return self._net_forward(x_t, t, self.real_A)
+
+    def _velocity_from_x1(self, x_t: torch.Tensor, t: torch.Tensor,
+                          x1_hat: Optional[torch.Tensor] = None) -> torch.Tensor:
+        x1_hat = x1_hat if x1_hat is not None else self._pred_x1(x_t, t)
+        denom = (1.0 - t).view(-1, 1, 1, 1).clamp(min=1e-5)
+        return (x1_hat - x_t) / denom
+
+    def _velocity_raw(self, x_t: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+        return self._net_forward(x_t, t, self.real_A)
+
+    def _ode_step_update(self, x: torch.Tensor, t0: torch.Tensor, t1: torch.Tensor,
+                         dt: torch.Tensor, method: str, is_last: bool) -> torch.Tensor:
+        B = x.shape[0]
+        if self.fm_loss_mode == "velocity":
+            v0 = self._velocity_raw(x, t0)
+            if method == "euler" or is_last:
+                return x + dt * v0
+            x_mid = x + dt * v0
+            v1 = self._velocity_raw(x_mid, t1)
+            return x + dt * (v0 + v1) * 0.5
+
+        x1_0 = self._pred_x1(x, t0)
+        v0 = self._velocity_from_x1(x, t0, x1_0)
+        if method == "euler" or is_last:
+            return x + dt * v0
+        x_mid = x + dt * v0
+        x1_1 = self._pred_x1(x_mid, t1)
+        v1 = self._velocity_from_x1(x_mid, t1, x1_1)
+        return x + dt * (v0 + v1) * 0.5
 
     def _integrate(self, cond_A: torch.Tensor, x: torch.Tensor, steps: int,
                    method: str) -> torch.Tensor:
-        """ODE solve dx/dt = v(x,t|A). Inference / val only (no grad)."""
         real_A_prev = getattr(self, "real_A", None)
         self.real_A = cond_A
         B = cond_A.shape[0]
@@ -178,19 +270,43 @@ class VanillaFMModel(BaseModel):
             t0 = ts[i].expand(B)
             t1 = ts[i + 1].expand(B)
             dt = ts[i + 1] - ts[i]
-            v0 = self._v(x, t0)
-            if method == "euler" or i == steps - 1:
-                x = x + dt * v0
-            else:
-                x_mid = x + dt * v0
-                v1 = self._v(x_mid, t1)
-                x = x + dt * (v0 + v1) * 0.5
+            x = self._ode_step_update(x, t0, t1, dt, method, is_last=(i == steps - 1))
 
         if real_A_prev is None:
             delattr(self, "real_A")
         else:
             self.real_A = real_A_prev
         return x.clamp(-1, 1)
+
+    def _integrate_train_ode(self, cond_A, x, steps, method):
+        from torch.utils.checkpoint import checkpoint
+
+        real_A_prev = getattr(self, "real_A", None)
+        self.real_A = cond_A
+        B = cond_A.shape[0]
+        ts = torch.linspace(0.0, 1.0, steps + 1, device=cond_A.device, dtype=cond_A.dtype)
+
+        def step_ckpt(x_in, t0, t1, dt, is_last):
+            return self._ode_step_update(x_in, t0, t1, dt, method, is_last)
+
+        for i in range(steps):
+            t0 = ts[i].expand(B)
+            t1 = ts[i + 1].expand(B)
+            dt = ts[i + 1] - ts[i]
+            is_last = i == steps - 1
+            if x.requires_grad:
+                x = checkpoint(step_ckpt, x, t0, t1, dt, is_last, use_reentrant=False)
+            else:
+                x = step_ckpt(x, t0, t1, dt, is_last)
+
+        if real_A_prev is None:
+            delattr(self, "real_A")
+        else:
+            self.real_A = real_A_prev
+        return x.clamp(-1, 1)
+
+    def _ode_config_test(self):
+        return int(self.opt.fm_steps), str(getattr(self.opt, "fm_sample_method", "heun"))
 
     def forward(self):
         steps, method = self._ode_config_test()
@@ -201,84 +317,67 @@ class VanillaFMModel(BaseModel):
             steps, method = self._ode_config_test()
             self.fake_B = self.sample(self.real_A, steps=steps, method=method)
 
-    def _loss_fm_velocity(self):
-        """Standard FM: one forward, ||v_theta - (x1 - x0)||^2."""
+    def _loss_fm(self):
         x1 = self.real_B
         x0 = torch.randn_like(x1)
-        t = torch.rand(x1.shape[0], device=x1.device)
-        xt = (1.0 - t).view(-1, 1, 1, 1) * x0 + t.view(-1, 1, 1, 1) * x1
-        v_star = x1 - x0
-        v_pred = self._v(xt, t)
-        self.loss_FM = F.mse_loss(v_pred, v_star)
-        loss = self.loss_FM
+        t = self._sample_t(x1.shape[0], x1.device)
+        t_bc = t.view(-1, 1, 1, 1)
+        xt = (1.0 - t_bc) * x0 + t_bc * x1
+
+        if self.fm_loss_mode == "velocity":
+            v_tgt = x1 - x0
+            v_pred = self._velocity_raw(xt, t)
+            self.loss_FM = F.mse_loss(v_pred, v_tgt)
+            loss = self.loss_FM
+            lam_perc = float(getattr(self.opt, "fm_lambda_perc", 0.0))
+            if lam_perc > 0 and self.perceptual_loss_fn is not None:
+                x1_hat = xt + (1.0 - t_bc) * v_pred
+                self.loss_Perc = self.perceptual_loss_fn(x1_hat, x1) * lam_perc
+                loss = loss + self.loss_Perc
+        else:
+            x1_hat = self._pred_x1(xt, t)
+            self.loss_FM = F.l1_loss(x1_hat, x1)
+            loss = self.loss_FM
+            lam_perc = float(getattr(self.opt, "fm_lambda_perc", 0.0))
+            if lam_perc > 0 and self.perceptual_loss_fn is not None:
+                self.loss_Perc = self.perceptual_loss_fn(x1_hat, x1) * lam_perc
+                loss = loss + self.loss_Perc
+
+        lam_vel = float(getattr(self.opt, "fm_lambda_vel", 0.0))
+        if lam_vel > 0 and self.fm_loss_mode == "x1":
+            v_star = x1 - x0
+            v_pred = self._velocity_from_x1(xt, t)
+            self.loss_Vel = F.mse_loss(v_pred, v_star) * lam_vel
+            loss = loss + self.loss_Vel
 
         lam_path = float(getattr(self.opt, "fm_lambda_l1", 0.0))
-        if lam_path > 0:
-            t_bc = t.view(-1, 1, 1, 1)
-            x1_hat = xt + (1.0 - t_bc) * v_pred
+        if lam_path > 0 and self.fm_loss_mode == "x1":
             self.loss_L1 = F.l1_loss(x1_hat, x1) * lam_path
             loss = loss + self.loss_L1
         return loss
 
     def _loss_ode_sample_l1(self):
-        """Non-standard: differentiable ODE + L1 (opt-in via fm_lambda_sample_l1)."""
         x1 = self.real_B
         override = int(getattr(self.opt, "fm_train_sample_steps", 0))
         steps = override if override > 0 else int(self.opt.fm_steps)
         method = str(getattr(self.opt, "fm_train_sample_method", "euler"))
-        x_init = torch.randn_like(x1)
-        # Requires grad through ODE — only used when explicitly enabled.
-        fake = self._integrate_train_ode(self.real_A, x_init, steps, method)
+        fake = self._integrate_train_ode(self.real_A, torch.randn_like(x1), steps, method)
         lam = float(getattr(self.opt, "fm_lambda_sample_l1", 0.0))
         self.loss_L1s = F.l1_loss(fake, x1) * lam
         return self.loss_L1s
 
-    def _integrate_train_ode(self, cond_A, x, steps, method):
-        """Grad-enabled ODE for optional fm_lambda_sample_l1 > 0."""
-        from torch.utils.checkpoint import checkpoint
-
-        real_A_prev = getattr(self, "real_A", None)
-        self.real_A = cond_A
-        B = cond_A.shape[0]
-        ts = torch.linspace(0.0, 1.0, steps + 1, device=cond_A.device, dtype=cond_A.dtype)
-
-        def v_ckpt(x_t, t):
-            return self._v(x_t, t)
-
-        for i in range(steps):
-            t0 = ts[i].expand(B)
-            t1 = ts[i + 1].expand(B)
-            dt = ts[i + 1] - ts[i]
-            v0 = checkpoint(v_ckpt, x, t0, use_reentrant=False) if x.requires_grad else self._v(x, t0)
-            if method == "euler" or i == steps - 1:
-                x = x + dt * v0
-            else:
-                x_mid = x + dt * v0
-                v1 = checkpoint(v_ckpt, x_mid, t1, use_reentrant=False) if x.requires_grad else self._v(x_mid, t1)
-                x = x + dt * (v0 + v1) * 0.5
-
-        if real_A_prev is None:
-            delattr(self, "real_A")
-        else:
-            self.real_A = real_A_prev
-        return x.clamp(-1, 1)
-
     def backward_G(self):
-        self._loss_fm_velocity().backward()
+        self._loss_fm().backward()
         lam_sample = float(getattr(self.opt, "fm_lambda_sample_l1", 0.0))
-        prob = float(getattr(self.opt, "fm_sample_l1_prob", 1.0))
-        if lam_sample > 0 and random.random() < prob:
+        if lam_sample > 0 and random.random() < float(getattr(self.opt, "fm_sample_l1_prob", 1.0)):
             self._loss_ode_sample_l1().backward()
 
     def optimize_parameters(self):
         self.optimizer_G.zero_grad(set_to_none=True)
-        self._loss_fm_velocity().backward()
-
+        self._loss_fm().backward()
         lam_sample = float(getattr(self.opt, "fm_lambda_sample_l1", 0.0))
-        prob = float(getattr(self.opt, "fm_sample_l1_prob", 1.0))
-        if lam_sample > 0 and random.random() < prob:
+        if lam_sample > 0 and random.random() < float(getattr(self.opt, "fm_sample_l1_prob", 1.0)):
             self._loss_ode_sample_l1().backward()
-
         self.optimizer_G.step()
 
     @torch.no_grad()

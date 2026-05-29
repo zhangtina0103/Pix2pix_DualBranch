@@ -1,10 +1,9 @@
 import random
-from typing import List, Optional, Tuple
+from typing import Optional, Tuple
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.utils.checkpoint import checkpoint
 
 from .base_model import BaseModel
 
@@ -34,20 +33,27 @@ class _Down(nn.Module):
         return self.res(x)
 
 
-class _Up(nn.Module):
-    def __init__(self, in_ch: int, out_ch: int, n_res: int):
+class _UpSkip(nn.Module):
+    """Upsample, concat encoder skip, fuse, then ResBlocks."""
+
+    def __init__(self, in_ch: int, out_ch: int, skip_ch: int, n_res: int):
         super().__init__()
-        self.conv = nn.ConvTranspose2d(in_ch, out_ch, 4, stride=2, padding=1)
+        self.up = nn.ConvTranspose2d(in_ch, out_ch, 4, stride=2, padding=1)
+        self.fuse = nn.Conv2d(out_ch + skip_ch, out_ch, 3, padding=1)
         self.res = nn.Sequential(*[_ResBlock(out_ch) for _ in range(n_res)])
 
-    def forward(self, x):
-        x = self.conv(x)
+    def forward(self, x: torch.Tensor, skip: torch.Tensor) -> torch.Tensor:
+        x = self.up(x)
+        if x.shape[2:] != skip.shape[2:]:
+            x = F.interpolate(x, size=skip.shape[2:], mode="bilinear", align_corners=False)
+        x = torch.cat([x, skip], dim=1)
+        x = self.fuse(x)
         return self.res(x)
 
 
 class _CondUNet(nn.Module):
     """
-    Minimal conditional UNet for (vanilla) flow matching.
+    Conditional U-Net for (vanilla) flow matching (encoder skips on decode).
 
     Input: concat([x_t (B,3,H,W), cond_A (B,3,H,W), t_channel (B,1,H,W)]) => 7ch
     Output: velocity field v_theta (B,3,H,W)
@@ -63,8 +69,8 @@ class _CondUNet(nn.Module):
         self.down1 = _Down(c1, c2, num_res_blocks)
         self.down2 = _Down(c2, c3, num_res_blocks)
         self.mid = nn.Sequential(*[_ResBlock(c3) for _ in range(max(1, num_res_blocks))])
-        self.up2 = _Up(c3, c2, num_res_blocks)
-        self.up1 = _Up(c2, c1, num_res_blocks)
+        self.up2 = _UpSkip(c3, c2, c2, num_res_blocks)
+        self.up1 = _UpSkip(c2, c1, c1, num_res_blocks)
         self.head = nn.Conv2d(c1, out_ch, 3, padding=1)
 
     def forward(self, x):
@@ -72,16 +78,17 @@ class _CondUNet(nn.Module):
         h2 = self.down1(h1)
         h3 = self.down2(h2)
         h = self.mid(h3)
-        h = self.up2(h)
-        h = self.up1(h)
+        h = self.up2(h, h2)
+        h = self.up1(h, h1)
         return self.head(h)
 
 
 class VanillaFMModel(BaseModel):
     """
-    Vanilla conditional flow matching (rectified flow) in the pix2pix framework.
+    Vanilla conditional rectified flow matching (pix2pix framework).
 
-    Trains v(x,t|A) with FM loss plus L1 on the actual ODE sample (same path as test).
+    Training: one UNet forward — MSE(v_theta(x_t,t|A), x_1 - x_0) at random t.
+    Inference / val: ODE integrate dx/dt = v_theta from noise (fm_steps, no grad).
     """
 
     @staticmethod
@@ -92,21 +99,24 @@ class VanillaFMModel(BaseModel):
         parser.add_argument("--fm_num_res_blocks", type=int, default=1,
                             help="ResBlocks per level (tune params)")
         parser.add_argument("--fm_steps", type=int, default=25,
-                            help="ODE steps for train sample-L1 and final test")
+                            help="ODE steps at test (and val if fm_val_steps unset)")
         parser.add_argument("--fm_val_steps", type=int, default=8,
-                            help="ODE steps for training-time validation only (faster)")
+                            help="ODE steps during training-time validation only")
         parser.add_argument("--fm_sample_method", type=str, default="heun",
                             choices=["euler", "heun"],
-                            help="ODE solver for train / val / test")
+                            help="ODE solver at val / test (not used in standard train)")
         if is_train:
-            parser.add_argument("--fm_lambda_l1", type=float, default=10.0,
-                                help="Weight for path L1 on x1_hat=xt+(1-t)*v (auxiliary)")
-            parser.add_argument("--fm_lambda_sample_l1", type=float, default=100.0,
-                                help="Weight for L1 on ODE sample (fm_steps, same as test)")
+            parser.add_argument("--fm_lambda_l1", type=float, default=0.0,
+                                help="Optional path L1 on x1_hat (0 = off; not standard FM)")
+            parser.add_argument("--fm_lambda_sample_l1", type=float, default=0.0,
+                                help="Optional ODE sample L1 in train loop (0 = standard FM)")
             parser.add_argument("--fm_train_sample_steps", type=int, default=0,
-                                help="Deprecated: use --fm_steps. If >0, overrides train sample-L1 steps only")
+                                help="If fm_lambda_sample_l1>0: ODE steps (0 = use fm_steps)")
             parser.add_argument("--fm_sample_l1_prob", type=float, default=1.0,
-                                help="Fraction of iterations that apply sample-L1 (1.0 = every iter)")
+                                help="With sample L1: fraction of iters that run ODE loss")
+            parser.add_argument("--fm_train_sample_method", type=str, default="euler",
+                                choices=["euler", "heun"],
+                                help="ODE solver when fm_lambda_sample_l1>0 only")
         return parser
 
     def __init__(self, opt):
@@ -129,7 +139,8 @@ class VanillaFMModel(BaseModel):
         )
         if len(self.gpu_ids) > 0 and torch.cuda.is_available():
             self.netG.to(self.device)
-            self.netG = torch.nn.DataParallel(self.netG, self.gpu_ids)
+            if len(self.gpu_ids) > 1:
+                self.netG = torch.nn.DataParallel(self.netG, self.gpu_ids)
 
         if self.isTrain:
             self.optimizer_G = torch.optim.Adam(
@@ -143,19 +154,11 @@ class VanillaFMModel(BaseModel):
         self.image_paths = input["A_paths" if AtoB else "B_paths"]
 
     def _ode_config_test(self):
-        """Final test + training sample-L1 — full fm_steps."""
         return int(self.opt.fm_steps), str(getattr(self.opt, "fm_sample_method", "heun"))
 
     def _ode_config_val(self):
-        """Cheap validation while training (fewer steps is fine)."""
         return int(getattr(self.opt, "fm_val_steps", 8)), str(
             getattr(self.opt, "fm_sample_method", "heun"))
-
-    def _ode_config_train_sample(self):
-        """Train sample-L1 — match test (fm_steps)."""
-        override = int(getattr(self.opt, "fm_train_sample_steps", 0))
-        steps = override if override > 0 else int(self.opt.fm_steps)
-        return steps, str(getattr(self.opt, "fm_sample_method", "heun"))
 
     def _v(self, x_t: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
         B, _, H, W = x_t.shape
@@ -163,35 +166,24 @@ class VanillaFMModel(BaseModel):
         inp = torch.cat([x_t, self.real_A, t_ch], dim=1)
         return self.netG(inp)
 
-    def _v_ckpt(self, x_t: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
-        """Checkpoint wrapper so Heun ODE backprop fits in GPU memory."""
-        return self._v(x_t, t)
-
     def _integrate(self, cond_A: torch.Tensor, x: torch.Tensor, steps: int,
-                   method: str, use_checkpoint: bool = False) -> torch.Tensor:
-        """ODE solve dx/dt = v(x,t|A). Differentiable when used for train sample-L1."""
+                   method: str) -> torch.Tensor:
+        """ODE solve dx/dt = v(x,t|A). Inference / val only (no grad)."""
         real_A_prev = getattr(self, "real_A", None)
         self.real_A = cond_A
         B = cond_A.shape[0]
         ts = torch.linspace(0.0, 1.0, steps + 1, device=cond_A.device, dtype=cond_A.dtype)
-        ckpt = use_checkpoint and x.requires_grad and self.isTrain
 
         for i in range(steps):
             t0 = ts[i].expand(B)
             t1 = ts[i + 1].expand(B)
             dt = ts[i + 1] - ts[i]
-            if ckpt:
-                v0 = checkpoint(self._v_ckpt, x, t0, use_reentrant=False)
-            else:
-                v0 = self._v(x, t0)
+            v0 = self._v(x, t0)
             if method == "euler" or i == steps - 1:
                 x = x + dt * v0
             else:
                 x_mid = x + dt * v0
-                if ckpt:
-                    v1 = checkpoint(self._v_ckpt, x_mid, t1, use_reentrant=False)
-                else:
-                    v1 = self._v(x_mid, t1)
+                v1 = self._v(x_mid, t1)
                 x = x + dt * (v0 + v1) * 0.5
 
         if real_A_prev is None:
@@ -209,7 +201,8 @@ class VanillaFMModel(BaseModel):
             steps, method = self._ode_config_test()
             self.fake_B = self.sample(self.real_A, steps=steps, method=method)
 
-    def backward_G(self):
+    def _loss_fm_velocity(self):
+        """Standard FM: one forward, ||v_theta - (x1 - x0)||^2."""
         x1 = self.real_B
         x0 = torch.randn_like(x1)
         t = torch.rand(x1.shape[0], device=x1.device)
@@ -225,22 +218,67 @@ class VanillaFMModel(BaseModel):
             x1_hat = xt + (1.0 - t_bc) * v_pred
             self.loss_L1 = F.l1_loss(x1_hat, x1) * lam_path
             loss = loss + self.loss_L1
+        return loss
+
+    def _loss_ode_sample_l1(self):
+        """Non-standard: differentiable ODE + L1 (opt-in via fm_lambda_sample_l1)."""
+        x1 = self.real_B
+        override = int(getattr(self.opt, "fm_train_sample_steps", 0))
+        steps = override if override > 0 else int(self.opt.fm_steps)
+        method = str(getattr(self.opt, "fm_train_sample_method", "euler"))
+        x_init = torch.randn_like(x1)
+        # Requires grad through ODE — only used when explicitly enabled.
+        fake = self._integrate_train_ode(self.real_A, x_init, steps, method)
+        lam = float(getattr(self.opt, "fm_lambda_sample_l1", 0.0))
+        self.loss_L1s = F.l1_loss(fake, x1) * lam
+        return self.loss_L1s
+
+    def _integrate_train_ode(self, cond_A, x, steps, method):
+        """Grad-enabled ODE for optional fm_lambda_sample_l1 > 0."""
+        from torch.utils.checkpoint import checkpoint
+
+        real_A_prev = getattr(self, "real_A", None)
+        self.real_A = cond_A
+        B = cond_A.shape[0]
+        ts = torch.linspace(0.0, 1.0, steps + 1, device=cond_A.device, dtype=cond_A.dtype)
+
+        def v_ckpt(x_t, t):
+            return self._v(x_t, t)
+
+        for i in range(steps):
+            t0 = ts[i].expand(B)
+            t1 = ts[i + 1].expand(B)
+            dt = ts[i + 1] - ts[i]
+            v0 = checkpoint(v_ckpt, x, t0, use_reentrant=False) if x.requires_grad else self._v(x, t0)
+            if method == "euler" or i == steps - 1:
+                x = x + dt * v0
+            else:
+                x_mid = x + dt * v0
+                v1 = checkpoint(v_ckpt, x_mid, t1, use_reentrant=False) if x.requires_grad else self._v(x_mid, t1)
+                x = x + dt * (v0 + v1) * 0.5
+
+        if real_A_prev is None:
+            delattr(self, "real_A")
+        else:
+            self.real_A = real_A_prev
+        return x.clamp(-1, 1)
+
+    def backward_G(self):
+        self._loss_fm_velocity().backward()
+        lam_sample = float(getattr(self.opt, "fm_lambda_sample_l1", 0.0))
+        prob = float(getattr(self.opt, "fm_sample_l1_prob", 1.0))
+        if lam_sample > 0 and random.random() < prob:
+            self._loss_ode_sample_l1().backward()
+
+    def optimize_parameters(self):
+        self.optimizer_G.zero_grad(set_to_none=True)
+        self._loss_fm_velocity().backward()
 
         lam_sample = float(getattr(self.opt, "fm_lambda_sample_l1", 0.0))
         prob = float(getattr(self.opt, "fm_sample_l1_prob", 1.0))
         if lam_sample > 0 and random.random() < prob:
-            steps, method = self._ode_config_train_sample()
-            x_init = torch.randn_like(x1)
-            fake = self._integrate(
-                self.real_A, x_init, steps, method, use_checkpoint=True)
-            self.loss_L1s = F.l1_loss(fake, x1) * lam_sample
-            loss = loss + self.loss_L1s
+            self._loss_ode_sample_l1().backward()
 
-        loss.backward()
-
-    def optimize_parameters(self):
-        self.optimizer_G.zero_grad()
-        self.backward_G()
         self.optimizer_G.step()
 
     @torch.no_grad()
@@ -253,4 +291,4 @@ class VanillaFMModel(BaseModel):
             cond_A.shape[0], self.opt.output_nc, cond_A.shape[2], cond_A.shape[3],
             device=cond_A.device, dtype=cond_A.dtype,
         )
-        return self._integrate(cond_A, x_init, steps, method, use_checkpoint=False)
+        return self._integrate(cond_A, x_init, steps, method)

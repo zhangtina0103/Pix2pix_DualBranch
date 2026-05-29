@@ -49,7 +49,7 @@ def main():
         default="all",
     )
     p.add_argument("--ngf", type=int, default=64)
-    p.add_argument("--fm_channels", type=str, default="104,208,288")
+    p.add_argument("--fm_channels", type=str, default="96,192,272")
     p.add_argument("--fm_num_res_blocks", type=int, default=2)
     args = p.parse_args()
 

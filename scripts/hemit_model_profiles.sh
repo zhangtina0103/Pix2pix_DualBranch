@@ -110,16 +110,17 @@ case "${MODEL}" in
     PRETRAINED_NAME="${PRETRAINED_NAME:-hemit_vanilla_fm_joint}"
     TRAIN_LR="${TRAIN_LR:-0.0002}"
     DATASET_MODE="${DATASET_MODE:-aligned}"
-    # ~11.93M params, res=2 (ResNet9 G ~11.38M); verify: scripts/count_fm_params.py
-    FM_CHANNELS="${FM_CHANNELS:-104,208,288}"
+    # U-Net with skips; ~11.26M @ 96,192,272 res=2 (ResNet9 G ~11.38M)
+    FM_CHANNELS="${FM_CHANNELS:-96,192,272}"
     FM_RESBLOCKS="${FM_RESBLOCKS:-2}"
-    # Train sample-L1 + test: fm_steps (25). Mid-training val: fm_val_steps (8, fast).
+    # Standard FM train: 1 UNet forward (velocity MSE). ODE only at val/test.
     FM_STEPS="${FM_STEPS:-25}"
     FM_VAL_STEPS="${FM_VAL_STEPS:-8}"
     FM_SAMPLE_METHOD="${FM_SAMPLE_METHOD:-heun}"
-    FM_LAMBDA_L1="${FM_LAMBDA_L1:-10}"
-    FM_LAMBDA_SAMPLE_L1="${FM_LAMBDA_SAMPLE_L1:-100}"
+    FM_LAMBDA_L1="${FM_LAMBDA_L1:-0}"
+    FM_LAMBDA_SAMPLE_L1="${FM_LAMBDA_SAMPLE_L1:-0}"
     FM_SAMPLE_L1_PROB="${FM_SAMPLE_L1_PROB:-1.0}"
+    FM_TRAIN_SAMPLE_METHOD="${FM_TRAIN_SAMPLE_METHOD:-euler}"
     DISPLAY_ID="${DISPLAY_ID:--1}"
     VAL_FREQ="${VAL_FREQ:-10}"
     ;;
@@ -134,9 +135,11 @@ esac
 
 N_EPOCHS="${N_EPOCHS:-50}"
 N_EPOCHS_DECAY="${N_EPOCHS_DECAY:-30}"
-# CycleGAN + vanilla_fm: heavy VRAM @ 1024².
-if [[ "${MODEL}" == "cyclegan" || "${MODEL}" == "vanilla_fm" ]]; then
+# CycleGAN: 2×G+2×D @ 1024². vanilla_fm: 1 forward/step — match pix2pix batch unless OOM.
+if [[ "${MODEL}" == "cyclegan" ]]; then
   BATCH_SIZE="${BATCH_SIZE:-1}"
+elif [[ "${MODEL}" == "vanilla_fm" ]]; then
+  BATCH_SIZE="${BATCH_SIZE:-2}"
 else
   BATCH_SIZE="${BATCH_SIZE:-2}"
 fi

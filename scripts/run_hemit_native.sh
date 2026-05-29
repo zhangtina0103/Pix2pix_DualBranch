@@ -67,9 +67,9 @@ train() {
   assert_py_model
   echo "==> [native] MODEL=${MODEL} PY_MODEL=${PY_MODEL} netG=${netg_label} name=${TRAIN_NAME}"
   if [[ "${PY_MODEL}" == "vanilla_fm" ]]; then
-    echo "    fm_channels=${FM_CHANNELS:-104,208,288} fm_res_blocks=${FM_RESBLOCKS:-2}"
-    echo "    fm train_L1s + test: steps=${FM_STEPS:-25}  val_only: ${FM_VAL_STEPS:-8}  method=${FM_SAMPLE_METHOD:-heun}"
-    echo "    batch_size=${BATCH_SIZE:-1} fm_lambda_sample_l1=${FM_LAMBDA_SAMPLE_L1:-100}"
+    echo "    fm_channels=${FM_CHANNELS:-96,192,272} fm_res_blocks=${FM_RESBLOCKS:-2} (U-Net + skips)"
+    echo "    train: standard FM (1 forward) | test ODE: ${FM_STEPS:-25} ${FM_SAMPLE_METHOD:-heun} | val: ${FM_VAL_STEPS:-8}"
+    echo "    batch_size=${BATCH_SIZE:-2} (set BATCH_SIZE=1 if OOM)"
   elif [[ "${MODEL}" == "pix2pix" || "${MODEL}" == "resnet9" || "${MODEL}" == "cut" || "${MODEL}" == "asp" || "${MODEL}" == "cyclegan" ]]; then
     echo "    netG=${NETG} ngf=${NGF:-64} (~11.38M generator; python scripts/count_hemit_g_params.py --model ${MODEL})"
     if [[ "${MODEL}" == "cyclegan" ]]; then
@@ -103,15 +103,20 @@ train() {
       ;;
     vanilla_fm)
       extra+=(
-        --fm_channels "${FM_CHANNELS:-104,208,288}"
+        --fm_channels "${FM_CHANNELS:-96,192,272}"
         --fm_num_res_blocks "${FM_RESBLOCKS:-2}"
         --fm_steps "${FM_STEPS:-25}"
         --fm_sample_method "${FM_SAMPLE_METHOD:-heun}"
-        --fm_lambda_l1 "${FM_LAMBDA_L1:-10}"
-        --fm_lambda_sample_l1 "${FM_LAMBDA_SAMPLE_L1:-100}"
-        --fm_sample_l1_prob "${FM_SAMPLE_L1_PROB:-1.0}"
+        --fm_lambda_l1 "${FM_LAMBDA_L1:-0}"
+        --fm_lambda_sample_l1 "${FM_LAMBDA_SAMPLE_L1:-0}"
         --fm_val_steps "${FM_VAL_STEPS:-8}"
       )
+      if [[ "${FM_LAMBDA_SAMPLE_L1:-0}" != "0" && "${FM_LAMBDA_SAMPLE_L1:-0}" != "0.0" ]]; then
+        extra+=(
+          --fm_sample_l1_prob "${FM_SAMPLE_L1_PROB:-1.0}"
+          --fm_train_sample_method "${FM_TRAIN_SAMPLE_METHOD:-euler}"
+        )
+      fi
       ;;
   esac
   local train_args=(
@@ -152,7 +157,7 @@ test_one() {
     vanilla_fm)
       echo "    fm_test: steps=${FM_STEPS:-25} method=${FM_SAMPLE_METHOD:-heun} (same as train)"
       extra+=(
-        --fm_channels "${FM_CHANNELS:-104,208,288}"
+        --fm_channels "${FM_CHANNELS:-96,192,272}"
         --fm_num_res_blocks "${FM_RESBLOCKS:-2}"
         --fm_steps "${FM_STEPS:-25}"
         --fm_sample_method "${FM_SAMPLE_METHOD:-heun}"

@@ -34,7 +34,7 @@ fi
 # Step LR already decayed once by epoch 50; fresh resume must not restart at 2e-4.
 export TRAIN_LR="${TRAIN_LR:-0.00002}"
 export DISPLAY_ID="${DISPLAY_ID:--1}"
-export FM_CHANNELS="${FM_CHANNELS:-104,208,288}"
+export FM_CHANNELS="${FM_CHANNELS:-96,192,272}"
 export FM_RESBLOCKS="${FM_RESBLOCKS:-2}"
 export FM_STEPS="${FM_STEPS:-25}"
 export TRAIN_NAME="${TRAIN_NAME:-hemit_vanilla_fm_joint}"

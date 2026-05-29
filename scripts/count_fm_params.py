@@ -58,7 +58,7 @@ def search_near_target(top_k: int = 8) -> None:
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--fm_channels", type=str, default="104,208,288")
+    p.add_argument("--fm_channels", type=str, default="96,192,272")
     p.add_argument("--fm_num_res_blocks", type=int, default=2)
     p.add_argument(
         "--search",

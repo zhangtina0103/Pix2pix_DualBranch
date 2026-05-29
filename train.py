@@ -122,7 +122,8 @@ if __name__ == '__main__':
                     truemasks = data_val['B']
                     imgs = imgs.to(device='cuda',dtype=torch.float)
                     if getattr(opt, 'model', None) == 'vanilla_fm':
-                        maskpred = model.sample(imgs, steps=int(getattr(opt, 'fm_steps', 25)))
+                        # same integrator as test (fm_steps + fm_sample_method via model.sample)
+                        maskpred = model.sample(imgs)
                     elif hasattr(model, 'netG'):
                         net = model.netG
                         maskpred = net(imgs)

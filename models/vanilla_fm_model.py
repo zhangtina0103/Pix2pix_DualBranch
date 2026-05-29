@@ -1,4 +1,4 @@
-import math
+import random
 from typing import List, Optional, Tuple
 
 import torch
@@ -80,8 +80,7 @@ class VanillaFMModel(BaseModel):
     """
     Vanilla conditional flow matching (rectified flow) in the pix2pix framework.
 
-    Uses aligned paired data (A,B) and trains a conditional vector field v(x,t,A)
-    that transports x0~N(0,1) to B.
+    Trains v(x,t|A) with FM loss plus L1 on the actual ODE sample (same path as test).
     """
 
     @staticmethod
@@ -92,22 +91,31 @@ class VanillaFMModel(BaseModel):
         parser.add_argument("--fm_num_res_blocks", type=int, default=1,
                             help="ResBlocks per level (tune params)")
         parser.add_argument("--fm_steps", type=int, default=25,
-                            help="ODE steps for sampling (train val / test)")
+                            help="ODE steps: train sample-L1, val, test (must match across phases)")
         parser.add_argument("--fm_sample_method", type=str, default="heun",
                             choices=["euler", "heun"],
-                            help="ODE solver for sample()")
+                            help="ODE solver: train sample-L1, val, test")
         if is_train:
-            parser.add_argument("--fm_lambda_l1", type=float, default=0.0,
-                                help="Weight for L1(x1_hat, B) with x1_hat=xt+(1-t)*v_pred (pix2pix-like; try 100)")
+            parser.add_argument("--fm_lambda_l1", type=float, default=10.0,
+                                help="Weight for path L1 on x1_hat=xt+(1-t)*v (auxiliary)")
+            parser.add_argument("--fm_lambda_sample_l1", type=float, default=100.0,
+                                help="Weight for L1 on full ODE sample (same integrator as test)")
+            parser.add_argument("--fm_train_sample_steps", type=int, default=0,
+                                help="Override ODE steps for sample-L1 only (0 = use --fm_steps)")
+            parser.add_argument("--fm_sample_l1_prob", type=float, default=1.0,
+                                help="Fraction of iterations that apply sample-L1 (1.0 = every iter)")
         return parser
 
     def __init__(self, opt):
         BaseModel.__init__(self, opt)
         self.loss_names = ["FM"]
-        if self.isTrain and float(getattr(opt, "fm_lambda_l1", 0.0)) > 0:
-            self.loss_names.append("L1")
+        if self.isTrain:
+            if float(getattr(opt, "fm_lambda_l1", 0.0)) > 0:
+                self.loss_names.append("L1")
+            if float(getattr(opt, "fm_lambda_sample_l1", 0.0)) > 0:
+                self.loss_names.append("L1s")
         self.visual_names = ["real_A", "fake_B", "real_B"]
-        self.model_names = ["G"]  # we will save netG as 'G'
+        self.model_names = ["G"]
 
         ch = tuple(int(x) for x in opt.fm_channels.split(","))
         self.netG = _CondUNet(
@@ -121,7 +129,8 @@ class VanillaFMModel(BaseModel):
             self.netG = torch.nn.DataParallel(self.netG, self.gpu_ids)
 
         if self.isTrain:
-            self.optimizer_G = torch.optim.Adam(self.netG.parameters(), lr=opt.lr, betas=(opt.beta1, 0.999))
+            self.optimizer_G = torch.optim.Adam(
+                self.netG.parameters(), lr=opt.lr, betas=(opt.beta1, 0.999))
             self.optimizers.append(self.optimizer_G)
 
     def set_input(self, input):
@@ -130,68 +139,24 @@ class VanillaFMModel(BaseModel):
         self.real_B = input["B" if AtoB else "A"].to(self.device)
         self.image_paths = input["A_paths" if AtoB else "B_paths"]
 
+    def _ode_config(self):
+        """Steps + solver shared by train (sample-L1), val, and test."""
+        steps = int(getattr(self.opt, "fm_train_sample_steps", 0) or self.opt.fm_steps)
+        method = str(getattr(self.opt, "fm_sample_method", "heun"))
+        return steps, method
+
     def _v(self, x_t: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
-        # t: [B] in [0,1]
         B, _, H, W = x_t.shape
         t_ch = t.view(B, 1, 1, 1).expand(B, 1, H, W)
         inp = torch.cat([x_t, self.real_A, t_ch], dim=1)
         return self.netG(inp)
 
-    def forward(self):
-        # for visualization/test we sample from noise -> x1
-        self.fake_B = self.sample(self.real_A, steps=int(self.opt.fm_steps))
-
-    def compute_visuals(self):
-        """Training skips forward(); create fake_B for visdom/HTML when display_freq fires."""
-        with torch.no_grad():
-            steps = int(getattr(self.opt, "fm_steps", 25))
-            self.fake_B = self.sample(self.real_A, steps=steps)
-
-    def backward_G(self):
-        """
-        Rectified flow matching:
-          x0 ~ N(0,1)
-          xt = (1-t)*x0 + t*x1
-          v* = x1 - x0
-          loss = || v_theta(xt,t,A) - v* ||^2
-        """
-        x1 = self.real_B
-        x0 = torch.randn_like(x1)
-        t = torch.rand(x1.shape[0], device=x1.device)
-        xt = (1.0 - t).view(-1, 1, 1, 1) * x0 + t.view(-1, 1, 1, 1) * x1
-        v_star = x1 - x0
-        v_pred = self._v(xt, t)
-        self.loss_FM = F.mse_loss(v_pred, v_star)
-        loss = self.loss_FM
-        lam_l1 = float(getattr(self.opt, "fm_lambda_l1", 0.0))
-        if lam_l1 > 0:
-            # Differentiable endpoint estimate (exact when v = v*); aligns train with pix2pix L1 target.
-            t_bc = t.view(-1, 1, 1, 1)
-            x1_hat = xt + (1.0 - t_bc) * v_pred
-            self.loss_L1 = F.l1_loss(x1_hat, x1) * lam_l1
-            loss = loss + self.loss_L1
-        loss.backward()
-
-    def optimize_parameters(self):
-        self.optimizer_G.zero_grad()
-        self.backward_G()
-        self.optimizer_G.step()
-
-    @torch.no_grad()
-    def sample(self, cond_A: torch.Tensor, steps: int = 25,
-               method: Optional[str] = None) -> torch.Tensor:
-        """
-        Integrate dx/dt = v_theta(x,t,A) from t=0 to 1 (noise -> multiplex).
-        Uses Heun by default; 25 steps at 1024² is often too few (blurry output).
-        """
-        method = method or getattr(self.opt, "fm_sample_method", "heun")
+    def _integrate(self, cond_A: torch.Tensor, x: torch.Tensor, steps: int,
+                   method: str) -> torch.Tensor:
+        """ODE solve dx/dt = v(x,t|A). Differentiable (used in training sample-L1)."""
         real_A_prev = getattr(self, "real_A", None)
         self.real_A = cond_A
         B = cond_A.shape[0]
-        x = torch.randn(
-            B, self.opt.output_nc, cond_A.shape[2], cond_A.shape[3],
-            device=cond_A.device, dtype=cond_A.dtype,
-        )
         ts = torch.linspace(0.0, 1.0, steps + 1, device=cond_A.device, dtype=cond_A.dtype)
 
         for i in range(steps):
@@ -212,3 +177,56 @@ class VanillaFMModel(BaseModel):
             self.real_A = real_A_prev
         return x.clamp(-1, 1)
 
+    def forward(self):
+        steps, method = self._ode_config()
+        self.fake_B = self.sample(self.real_A, steps=steps, method=method)
+
+    def compute_visuals(self):
+        with torch.no_grad():
+            steps, method = self._ode_config()
+            self.fake_B = self.sample(self.real_A, steps=steps, method=method)
+
+    def backward_G(self):
+        x1 = self.real_B
+        x0 = torch.randn_like(x1)
+        t = torch.rand(x1.shape[0], device=x1.device)
+        xt = (1.0 - t).view(-1, 1, 1, 1) * x0 + t.view(-1, 1, 1, 1) * x1
+        v_star = x1 - x0
+        v_pred = self._v(xt, t)
+        self.loss_FM = F.mse_loss(v_pred, v_star)
+        loss = self.loss_FM
+
+        lam_path = float(getattr(self.opt, "fm_lambda_l1", 0.0))
+        if lam_path > 0:
+            t_bc = t.view(-1, 1, 1, 1)
+            x1_hat = xt + (1.0 - t_bc) * v_pred
+            self.loss_L1 = F.l1_loss(x1_hat, x1) * lam_path
+            loss = loss + self.loss_L1
+
+        lam_sample = float(getattr(self.opt, "fm_lambda_sample_l1", 0.0))
+        prob = float(getattr(self.opt, "fm_sample_l1_prob", 1.0))
+        if lam_sample > 0 and random.random() < prob:
+            steps, method = self._ode_config()
+            x_init = torch.randn_like(x1)
+            fake = self._integrate(self.real_A, x_init, steps, method)
+            self.loss_L1s = F.l1_loss(fake, x1) * lam_sample
+            loss = loss + self.loss_L1s
+
+        loss.backward()
+
+    def optimize_parameters(self):
+        self.optimizer_G.zero_grad()
+        self.backward_G()
+        self.optimizer_G.step()
+
+    @torch.no_grad()
+    def sample(self, cond_A: torch.Tensor, steps: Optional[int] = None,
+               method: Optional[str] = None) -> torch.Tensor:
+        default_steps, default_method = self._ode_config()
+        steps = int(steps if steps is not None else default_steps)
+        method = method or default_method
+        x_init = torch.randn(
+            cond_A.shape[0], self.opt.output_nc, cond_A.shape[2], cond_A.shape[3],
+            device=cond_A.device, dtype=cond_A.dtype,
+        )
+        return self._integrate(cond_A, x_init, steps, method)

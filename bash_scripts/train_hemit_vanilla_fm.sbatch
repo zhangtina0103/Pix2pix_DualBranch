@@ -30,8 +30,11 @@ export HEMIT_SRC="${HEMIT_SRC:-/home/zhangtin/virtual-staining/data/hemit}"
 export DATAROOT="${DATAROOT:-./datasets/hemit}"
 export FM_CHANNELS="${FM_CHANNELS:-104,208,288}"
 export FM_RESBLOCKS="${FM_RESBLOCKS:-2}"
-export FM_STEPS="${FM_STEPS:-50}"
-export FM_LAMBDA_L1="${FM_LAMBDA_L1:-100}"
+export FM_STEPS="${FM_STEPS:-25}"
+export FM_LAMBDA_L1="${FM_LAMBDA_L1:-10}"
+export FM_LAMBDA_SAMPLE_L1="${FM_LAMBDA_SAMPLE_L1:-100}"
+export FM_SAMPLE_METHOD="${FM_SAMPLE_METHOD:-heun}"
+export FM_SAMPLE_L1_PROB="${FM_SAMPLE_L1_PROB:-1.0}"
 export DISPLAY_ID="${DISPLAY_ID:--1}"
 
 bash scripts/run_hemit_vanilla_fm.sh

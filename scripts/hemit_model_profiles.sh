@@ -113,11 +113,13 @@ case "${MODEL}" in
     # ~11.93M params, res=2 (ResNet9 G ~11.38M); verify: scripts/count_fm_params.py
     FM_CHANNELS="${FM_CHANNELS:-104,208,288}"
     FM_RESBLOCKS="${FM_RESBLOCKS:-2}"
-    FM_STEPS="${FM_STEPS:-50}"
-    FM_LAMBDA_L1="${FM_LAMBDA_L1:-100}"
-    # Full-res 1024²: more ODE steps at test; Heun sampler (see vanilla_fm_model.sample).
-    FM_TEST_STEPS="${FM_TEST_STEPS:-50}"
+    # One ODE config for train sample-L1, val, and test (fm_steps + fm_sample_method).
+    FM_STEPS="${FM_STEPS:-25}"
     FM_SAMPLE_METHOD="${FM_SAMPLE_METHOD:-heun}"
+    FM_LAMBDA_L1="${FM_LAMBDA_L1:-10}"
+    FM_LAMBDA_SAMPLE_L1="${FM_LAMBDA_SAMPLE_L1:-100}"
+    FM_SAMPLE_L1_PROB="${FM_SAMPLE_L1_PROB:-1.0}"
+    # Optional: FM_TRAIN_SAMPLE_STEPS>0 overrides train sample-L1 steps only (val/test still fm_steps).
     DISPLAY_ID="${DISPLAY_ID:--1}"
     VAL_FREQ="${VAL_FREQ:-10}"
     ;;

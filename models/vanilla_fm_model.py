@@ -145,16 +145,6 @@ class VanillaFMModel(BaseModel):
         self.use_monai = str(getattr(opt, "fm_backbone", "monai")) == "monai"
 
         self.loss_names = ["FM"]
-        if self.isTrain:
-            if float(getattr(opt, "fm_lambda_perc", 0.0)) > 0 and self.fm_loss_mode == "x1":
-                self.loss_names.append("Perc")
-            if float(getattr(opt, "fm_lambda_vel", 0.0)) > 0:
-                self.loss_names.append("Vel")
-            if float(getattr(opt, "fm_lambda_l1", 0.0)) > 0:
-                self.loss_names.append("L1")
-            if float(getattr(opt, "fm_lambda_sample_l1", 0.0)) > 0:
-                self.loss_names.append("L1s")
-
         self.visual_names = ["real_A", "fake_B", "real_B"]
         self.model_names = ["G"]
 
@@ -182,16 +172,25 @@ class VanillaFMModel(BaseModel):
             )
 
         self.perceptual_loss_fn = None
-        if self.isTrain and self.fm_loss_mode == "x1":
-            lam_perc = float(getattr(opt, "fm_lambda_perc", 0.0))
-            if lam_perc > 0:
-                try:
-                    from monai.losses import PerceptualLoss
-                    self.perceptual_loss_fn = PerceptualLoss(
-                        spatial_dims=2, network_type="vgg", is_fake_3d=False,
-                    )
-                except ImportError:
-                    print("Warning: MONAI not installed; --fm_lambda_perc ignored")
+        lam_perc = float(getattr(opt, "fm_lambda_perc", 0.0)) if self.isTrain else 0.0
+        if self.isTrain and self.fm_loss_mode == "x1" and lam_perc > 0:
+            try:
+                from monai.losses import PerceptualLoss
+                self.perceptual_loss_fn = PerceptualLoss(
+                    spatial_dims=2, network_type="vgg", is_fake_3d=False,
+                )
+            except ImportError:
+                print("Warning: MONAI PerceptualLoss unavailable; fm_lambda_perc ignored")
+
+        if self.isTrain:
+            if self.perceptual_loss_fn is not None and lam_perc > 0:
+                self.loss_names.append("Perc")
+            if float(getattr(opt, "fm_lambda_vel", 0.0)) > 0:
+                self.loss_names.append("Vel")
+            if float(getattr(opt, "fm_lambda_l1", 0.0)) > 0:
+                self.loss_names.append("L1")
+            if float(getattr(opt, "fm_lambda_sample_l1", 0.0)) > 0:
+                self.loss_names.append("L1s")
 
         if len(self.gpu_ids) > 0 and torch.cuda.is_available():
             self.netG.to(self.device)
@@ -354,6 +353,12 @@ class VanillaFMModel(BaseModel):
         if lam_path > 0 and self.fm_loss_mode == "x1":
             self.loss_L1 = F.l1_loss(x1_hat, x1) * lam_path
             loss = loss + self.loss_L1
+
+        # Ensure loggable scalars exist for every registered loss name.
+        for name in self.loss_names:
+            attr = "loss_" + name
+            if not hasattr(self, attr):
+                setattr(self, attr, loss.new_tensor(0.0))
         return loss
 
     def _loss_ode_sample_l1(self):

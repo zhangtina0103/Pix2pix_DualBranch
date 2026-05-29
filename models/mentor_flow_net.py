@@ -3,23 +3,44 @@ MONAI DiffusionModelUNet wrapper matching mentor flow_matching.py / flow_matchin
 
   - concat([x_t, cond]) -> UNet(x, timesteps=t)
   - optional tanh on output (flow_matching.py)
+
+Requires monai>=1.4 (DiffusionModelUNet) or monai-generative as fallback.
 """
 from __future__ import annotations
 
-from typing import Optional, Tuple
+import importlib
+from typing import Tuple, Type
 
 import torch
 import torch.nn as nn
 
 
-def require_monai():
+def _load_diffusion_model_unet() -> Type[nn.Module]:
+    """Import DiffusionModelUNet from core MONAI (>=1.4) or monai-generative."""
+    errors = []
+    for mod_path, attr in (
+        ("monai.networks.nets", "DiffusionModelUNet"),
+        ("generative.networks.nets", "DiffusionModelUNet"),
+    ):
+        try:
+            mod = importlib.import_module(mod_path)
+            return getattr(mod, attr)
+        except (ImportError, AttributeError) as e:
+            errors.append(f"{mod_path}: {e}")
+
     try:
-        from monai.networks.nets import DiffusionModelUNet  # noqa: F401
-    except ImportError as e:
-        raise ImportError(
-            "vanilla_fm with --fm_backbone monai requires MONAI. "
-            "Install: pip install -r requirements-hemit-extra.txt"
-        ) from e
+        import monai
+        ver = getattr(monai, "__version__", "unknown")
+    except ImportError:
+        ver = "not installed"
+
+    raise ImportError(
+        "DiffusionModelUNet is not available. "
+        f"Detected monai {ver}. "
+        "Install with: pip install -c scripts/constraints_pix2pix.txt 'monai>=1.4,<2' "
+        "(or: pip install monai-generative). "
+        f"Import errors: {' | '.join(errors)}"
+    )
 
 
 class MentorFlowNet(nn.Module):
@@ -41,8 +62,7 @@ class MentorFlowNet(nn.Module):
         use_tanh: bool = False,
     ):
         super().__init__()
-        require_monai()
-        from monai.networks.nets import DiffusionModelUNet
+        DiffusionModelUNet = _load_diffusion_model_unet()
 
         self.in_ch = in_ch
         self.out_ch = out_ch

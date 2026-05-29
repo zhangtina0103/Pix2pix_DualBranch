@@ -66,7 +66,7 @@ done
 
 # lightning + monai (FM); install without deps then missing pieces manually if needed
 echo "==> pip install lightning monai"
-"${PIP}" install --no-cache-dir -c "${CONSTRAINTS}" "lightning>=2.0,<3" "monai>=1.3,<2"
+"${PIP}" install --no-cache-dir -c "${CONSTRAINTS}" "lightning>=2.0,<3" "monai>=1.4,<2"
 
 conda install -y -c conda-forge "libstdcxx-ng>=12" "libgcc-ng>=12" || true
 

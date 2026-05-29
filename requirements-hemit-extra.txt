@@ -4,7 +4,8 @@
 #   pip install -r requirements-hemit-extra.txt
 
 lightning>=2.0
-monai>=1.3
+# DiffusionModelUNet needs monai>=1.4 (not in 1.3.x)
+monai>=1.4,<2
 torchmetrics>=1.0
 lpips>=0.1.4
 huggingface_hub>=0.20

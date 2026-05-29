@@ -28,15 +28,13 @@ source "${REPO_ROOT}/bash_scripts/_cuda.sh"
 export MODE=train
 export HEMIT_SRC="${HEMIT_SRC:-/home/zhangtin/virtual-staining/data/hemit}"
 export DATAROOT="${DATAROOT:-./datasets/hemit}"
-export FM_CHANNELS="${FM_CHANNELS:-96,192,272}"
-export FM_RESBLOCKS="${FM_RESBLOCKS:-2}"
-export FM_STEPS="${FM_STEPS:-25}"
-export FM_LAMBDA_L1="${FM_LAMBDA_L1:-10}"
-export FM_LAMBDA_SAMPLE_L1="${FM_LAMBDA_SAMPLE_L1:-100}"
-export FM_VAL_STEPS="${FM_VAL_STEPS:-8}"
-export FM_SAMPLE_METHOD="${FM_SAMPLE_METHOD:-heun}"
-export FM_TRAIN_SAMPLE_METHOD="${FM_TRAIN_SAMPLE_METHOD:-euler}"
-export FM_SAMPLE_L1_PROB="${FM_SAMPLE_L1_PROB:-1.0}"
+export BATCH_SIZE="${BATCH_SIZE:-2}"
 export DISPLAY_ID="${DISPLAY_ID:--1}"
+
+# Pin FM_* (do not use ${FM_LAMBDA_SAMPLE_L1:-0} — stale --export=ALL keeps old 100)
+# shellcheck source=/dev/null
+source "${REPO_ROOT}/scripts/vanilla_fm_env.sh"
+vanilla_fm_apply_train_env
+vanilla_fm_print_train_env
 
 bash scripts/run_hemit_vanilla_fm.sh

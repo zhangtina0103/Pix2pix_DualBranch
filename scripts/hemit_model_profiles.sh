@@ -117,8 +117,7 @@ case "${MODEL}" in
     FM_STEPS="${FM_STEPS:-25}"
     FM_VAL_STEPS="${FM_VAL_STEPS:-8}"
     FM_SAMPLE_METHOD="${FM_SAMPLE_METHOD:-heun}"
-    FM_LAMBDA_L1="${FM_LAMBDA_L1:-0}"
-    FM_LAMBDA_SAMPLE_L1="${FM_LAMBDA_SAMPLE_L1:-0}"
+    # Lambdas pinned in scripts/vanilla_fm_env.sh (vanilla_fm_apply_train_env)
     FM_SAMPLE_L1_PROB="${FM_SAMPLE_L1_PROB:-1.0}"
     FM_TRAIN_SAMPLE_METHOD="${FM_TRAIN_SAMPLE_METHOD:-euler}"
     DISPLAY_ID="${DISPLAY_ID:--1}"

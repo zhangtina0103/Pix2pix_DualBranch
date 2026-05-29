@@ -66,7 +66,14 @@ echo "===== HEMIT  MODEL=${MODEL}  MODE=${MODE} ====="
 if is_native; then
   # shellcheck source=/dev/null
   source "${ROOT}/scripts/hemit_model_profiles.sh"
-  echo "Profile: PY_MODEL=${PY_MODEL} TRAIN_NAME=${TRAIN_NAME}"
+  if [[ "${MODEL}" == "vanilla_fm" ]]; then
+    # shellcheck source=/dev/null
+    source "${ROOT}/scripts/vanilla_fm_env.sh"
+    vanilla_fm_apply_train_env
+    vanilla_fm_print_train_env
+  else
+    echo "Profile: PY_MODEL=${PY_MODEL} TRAIN_NAME=${TRAIN_NAME}"
+  fi
 fi
 
 if [[ "${MODEL}" == "comparison" ]]; then

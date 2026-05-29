@@ -67,9 +67,10 @@ train() {
   assert_py_model
   echo "==> [native] MODEL=${MODEL} PY_MODEL=${PY_MODEL} netG=${netg_label} name=${TRAIN_NAME}"
   if [[ "${PY_MODEL}" == "vanilla_fm" ]]; then
-    echo "    fm_channels=${FM_CHANNELS:-96,192,272} fm_res_blocks=${FM_RESBLOCKS:-2} (U-Net + skips)"
-    echo "    train: standard FM (1 forward) | test ODE: ${FM_STEPS:-25} ${FM_SAMPLE_METHOD:-heun} | val: ${FM_VAL_STEPS:-8}"
-    echo "    batch_size=${BATCH_SIZE:-2} (set BATCH_SIZE=1 if OOM)"
+    echo "    fm_channels=${FM_CHANNELS} fm_res_blocks=${FM_RESBLOCKS} (U-Net + skips)"
+    echo "    train: FM_LAMBDA_L1=${FM_LAMBDA_L1} FM_LAMBDA_SAMPLE_L1=${FM_LAMBDA_SAMPLE_L1} (need 0/0 for standard FM)"
+    echo "    test ODE: ${FM_STEPS} ${FM_SAMPLE_METHOD} | val: ${FM_VAL_STEPS} steps"
+    echo "    batch_size=${BATCH_SIZE} (set BATCH_SIZE=1 if OOM)"
   elif [[ "${MODEL}" == "pix2pix" || "${MODEL}" == "resnet9" || "${MODEL}" == "cut" || "${MODEL}" == "asp" || "${MODEL}" == "cyclegan" ]]; then
     echo "    netG=${NETG} ngf=${NGF:-64} (~11.38M generator; python scripts/count_hemit_g_params.py --model ${MODEL})"
     if [[ "${MODEL}" == "cyclegan" ]]; then
@@ -107,8 +108,8 @@ train() {
         --fm_num_res_blocks "${FM_RESBLOCKS:-2}"
         --fm_steps "${FM_STEPS:-25}"
         --fm_sample_method "${FM_SAMPLE_METHOD:-heun}"
-        --fm_lambda_l1 "${FM_LAMBDA_L1:-0}"
-        --fm_lambda_sample_l1 "${FM_LAMBDA_SAMPLE_L1:-0}"
+        --fm_lambda_l1 "${FM_LAMBDA_L1}"
+        --fm_lambda_sample_l1 "${FM_LAMBDA_SAMPLE_L1}"
         --fm_val_steps "${FM_VAL_STEPS:-8}"
       )
       if [[ "${FM_LAMBDA_SAMPLE_L1:-0}" != "0" && "${FM_LAMBDA_SAMPLE_L1:-0}" != "0.0" ]]; then

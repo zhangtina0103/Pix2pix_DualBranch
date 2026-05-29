@@ -4,15 +4,18 @@
 # Mentor integration (flow_matching.py + flow_matching_v.py via MONAI UNet):
 #   FM_LOSS=x1     → L1 + perceptual, logit-normal t, tanh, x1→v Heun ODE
 #   FM_LOSS=velocity → velocity MSE, uniform t, raw-v Heun ODE
-# Param match ResNet9 (~11.38M): FM_CHANNELS=64,128,192 FM_ATTN=0,0,1 FM_RESBLOCKS=2
-# MONAI UNet: each channel width must be divisible by 32 (not 272 — use 256 or 288).
+# Param match ResNet9 (~11.38M): FM_CHANNELS=64,128,192 FM_RESBLOCKS=2
+# 1024² train: FM_ATTN=0,0,0 (attention OOMs on L40S; mentor used 128² crops)
+# MONAI UNet: each channel width must be divisible by 32 (not 272 — use 256)
 # Tune on login node: python scripts/count_fm_params.py --search
 
 vanilla_fm_apply_train_env() {
   export FM_BACKBONE="${FM_BACKBONE:-monai}"
   export FM_LOSS="${FM_LOSS:-x1}"
   export FM_CHANNELS="${FM_CHANNELS:-64,128,192}"
-  export FM_ATTN="${FM_ATTN:-0,0,1}"
+  # Attention at 1024² can request 100+ GiB; default off for HEMIT native train.
+  export FM_ATTN="${FM_ATTN:-0,0,0}"
+  export BATCH_SIZE="${BATCH_SIZE:-1}"
   export FM_RESBLOCKS="${FM_RESBLOCKS:-2}"
   export FM_NUM_HEAD_CHANNELS="${FM_NUM_HEAD_CHANNELS:-32}"
   export FM_LAMBDA_PERC="${FM_LAMBDA_PERC:-0.1}"

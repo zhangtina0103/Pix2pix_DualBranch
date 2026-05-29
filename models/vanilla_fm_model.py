@@ -99,8 +99,8 @@ class VanillaFMModel(BaseModel):
                             help="x1=flow_matching.py; velocity=flow_matching_v.py")
         parser.add_argument("--fm_channels", type=str, default="64,128,192",
                             help="UNet channels (monai or custom)")
-        parser.add_argument("--fm_attn_levels", type=str, default="0,0,1",
-                            help="MONAI attention per level, e.g. 0,0,1 (monai only)")
+        parser.add_argument("--fm_attn_levels", type=str, default="0,0,0",
+                            help="MONAI attention per level; use 0,0,0 at 1024² (OOM if 0,0,1)")
         parser.add_argument("--fm_num_head_channels", type=int, default=32,
                             help="MONAI attention head channels (monai only)")
         parser.add_argument("--fm_num_res_blocks", type=int, default=2,

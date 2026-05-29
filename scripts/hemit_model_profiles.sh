@@ -114,7 +114,7 @@ case "${MODEL}" in
     FM_BACKBONE="${FM_BACKBONE:-monai}"
     FM_LOSS="${FM_LOSS:-x1}"
     FM_CHANNELS="${FM_CHANNELS:-64,128,192}"
-    FM_ATTN="${FM_ATTN:-0,0,1}"
+    FM_ATTN="${FM_ATTN:-0,0,0}"
     FM_RESBLOCKS="${FM_RESBLOCKS:-2}"
     FM_LAMBDA_PERC="${FM_LAMBDA_PERC:-0.1}"
     FM_STEPS="${FM_STEPS:-25}"
@@ -141,7 +141,7 @@ N_EPOCHS_DECAY="${N_EPOCHS_DECAY:-30}"
 if [[ "${MODEL}" == "cyclegan" ]]; then
   BATCH_SIZE="${BATCH_SIZE:-1}"
 elif [[ "${MODEL}" == "vanilla_fm" ]]; then
-  BATCH_SIZE="${BATCH_SIZE:-2}"
+  BATCH_SIZE="${BATCH_SIZE:-1}"
 else
   BATCH_SIZE="${BATCH_SIZE:-2}"
 fi

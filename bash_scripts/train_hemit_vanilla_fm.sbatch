@@ -28,7 +28,8 @@ source "${REPO_ROOT}/bash_scripts/_cuda.sh"
 export MODE=train
 export HEMIT_SRC="${HEMIT_SRC:-/home/zhangtin/virtual-staining/data/hemit}"
 export DATAROOT="${DATAROOT:-./datasets/hemit}"
-export BATCH_SIZE="${BATCH_SIZE:-2}"
+# MONAI UNet @ 1024² + perceptual: batch 1 on L40S; use FM_ATTN=0,0,0
+export BATCH_SIZE="${BATCH_SIZE:-1}"
 export DISPLAY_ID="${DISPLAY_ID:--1}"
 
 # Pin FM_* (do not use ${FM_LAMBDA_SAMPLE_L1:-0} — stale --export=ALL keeps old 100)

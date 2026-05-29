@@ -112,6 +112,7 @@ train() {
         --fm_num_res_blocks "${FM_RESBLOCKS:-2}"
         --fm_time_dist "${FM_TIME_DIST:-logit_normal}"
         --fm_lambda_perc "${FM_LAMBDA_PERC:-0.1}"
+        --fm_perc_size "${FM_PERC_SIZE:-256}"
         --fm_steps "${FM_STEPS:-25}"
         --fm_sample_method "${FM_SAMPLE_METHOD:-heun}"
         --fm_lambda_l1 "${FM_LAMBDA_L1}"

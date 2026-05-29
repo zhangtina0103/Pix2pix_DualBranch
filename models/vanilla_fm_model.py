@@ -16,6 +16,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from .base_model import BaseModel
+from .fm_perceptual import build_fm_perceptual
 from .mentor_flow_net import MentorFlowNet
 
 
@@ -124,6 +125,8 @@ class VanillaFMModel(BaseModel):
         if is_train:
             parser.add_argument("--fm_lambda_perc", type=float, default=0.1,
                                 help="Perceptual weight (x1 mode; flow_matching.py; 0=off)")
+            parser.add_argument("--fm_perc_size", type=int, default=256,
+                                help="Downsample for perceptual at 1024² (0=full res; 256 saves VRAM)")
             parser.add_argument("--fm_lambda_vel", type=float, default=0.0,
                                 help="Aux velocity MSE in x1 mode (0=off)")
             parser.add_argument("--fm_lambda_l1", type=float, default=0.0,
@@ -171,19 +174,27 @@ class VanillaFMModel(BaseModel):
                 num_res_blocks=n_res,
             )
 
-        self.perceptual_loss_fn = None
         lam_perc = float(getattr(opt, "fm_lambda_perc", 0.0)) if self.isTrain else 0.0
+        perc_size = int(getattr(opt, "fm_perc_size", 256))
+        self.perceptual_loss_fn = None
+        self._perc_backend = "off"
         if self.isTrain and self.fm_loss_mode == "x1" and lam_perc > 0:
-            try:
-                from monai.losses import PerceptualLoss
-                self.perceptual_loss_fn = PerceptualLoss(
-                    spatial_dims=2, network_type="vgg", is_fake_3d=False,
+            self.perceptual_loss_fn, self._perc_backend = build_fm_perceptual(
+                self.device, lam_perc, perc_size=perc_size,
+            )
+            if self.perceptual_loss_fn is None:
+                print(
+                    "Warning: no perceptual backend (monai/lpips/torchvision); "
+                    "install lpips or fix monai — fm_lambda_perc ignored"
                 )
-            except ImportError:
-                print("Warning: MONAI PerceptualLoss unavailable; fm_lambda_perc ignored")
+            else:
+                print(
+                    f"FM perceptual: backend={self._perc_backend} "
+                    f"lambda={lam_perc} downsample={perc_size if perc_size > 0 else 'full'}"
+                )
 
         if self.isTrain:
-            if self.perceptual_loss_fn is not None and lam_perc > 0:
+            if self.perceptual_loss_fn is not None:
                 self.loss_names.append("Perc")
             if float(getattr(opt, "fm_lambda_vel", 0.0)) > 0:
                 self.loss_names.append("Vel")
@@ -329,7 +340,7 @@ class VanillaFMModel(BaseModel):
             self.loss_FM = F.mse_loss(v_pred, v_tgt)
             loss = self.loss_FM
             lam_perc = float(getattr(self.opt, "fm_lambda_perc", 0.0))
-            if lam_perc > 0 and self.perceptual_loss_fn is not None:
+            if self.perceptual_loss_fn is not None:
                 x1_hat = xt + (1.0 - t_bc) * v_pred
                 self.loss_Perc = self.perceptual_loss_fn(x1_hat, x1) * lam_perc
                 loss = loss + self.loss_Perc
@@ -338,7 +349,7 @@ class VanillaFMModel(BaseModel):
             self.loss_FM = F.l1_loss(x1_hat, x1)
             loss = self.loss_FM
             lam_perc = float(getattr(self.opt, "fm_lambda_perc", 0.0))
-            if lam_perc > 0 and self.perceptual_loss_fn is not None:
+            if self.perceptual_loss_fn is not None:
                 self.loss_Perc = self.perceptual_loss_fn(x1_hat, x1) * lam_perc
                 loss = loss + self.loss_Perc
 

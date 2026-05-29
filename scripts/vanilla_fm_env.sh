@@ -21,6 +21,7 @@ vanilla_fm_apply_train_env() {
   export FM_RESBLOCKS="${FM_RESBLOCKS:-2}"
   export FM_NUM_HEAD_CHANNELS="${FM_NUM_HEAD_CHANNELS:-32}"
   export FM_LAMBDA_PERC="${FM_LAMBDA_PERC:-0.1}"
+  export FM_PERC_SIZE="${FM_PERC_SIZE:-256}"
   export FM_TIME_DIST="${FM_TIME_DIST:-logit_normal}"
   export FM_STEPS="${FM_STEPS:-25}"
   export FM_VAL_STEPS="${FM_VAL_STEPS:-8}"

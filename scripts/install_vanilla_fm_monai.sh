@@ -30,6 +30,9 @@ from monai.losses import PerceptualLoss
 print('OK: generative DiffusionModelUNet + monai PerceptualLoss')
 "
 
+echo "==> optional: LPIPS perceptual (if monai PerceptualLoss missing)"
+pip install --no-cache-dir "lpips>=0.1.4" || true
+
 echo ""
 echo "Done. Train with: sbatch bash_scripts/train_hemit_vanilla_fm.sbatch"
-echo "If import still fails: git pull (mentor_flow_net.py generative fallback)"
+echo "Log should show: FM perceptual: backend=monai|lpips|vgg ..."

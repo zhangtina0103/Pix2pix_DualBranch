@@ -68,8 +68,8 @@ train() {
   echo "==> [native] MODEL=${MODEL} PY_MODEL=${PY_MODEL} netG=${netg_label} name=${TRAIN_NAME}"
   if [[ "${PY_MODEL}" == "vanilla_fm" ]]; then
     echo "    fm_channels=${FM_CHANNELS:-104,208,288} fm_res_blocks=${FM_RESBLOCKS:-2}"
-    echo "    fm_ode: steps=${FM_STEPS:-25} method=${FM_SAMPLE_METHOD:-heun} (train L1s + val + test)"
-    echo "    fm_lambda_sample_l1=${FM_LAMBDA_SAMPLE_L1:-100}"
+    echo "    fm train_L1s + test: steps=${FM_STEPS:-25}  val_only: ${FM_VAL_STEPS:-8}  method=${FM_SAMPLE_METHOD:-heun}"
+    echo "    batch_size=${BATCH_SIZE:-1} fm_lambda_sample_l1=${FM_LAMBDA_SAMPLE_L1:-100}"
   elif [[ "${MODEL}" == "pix2pix" || "${MODEL}" == "resnet9" || "${MODEL}" == "cut" || "${MODEL}" == "asp" || "${MODEL}" == "cyclegan" ]]; then
     echo "    netG=${NETG} ngf=${NGF:-64} (~11.38M generator; python scripts/count_hemit_g_params.py --model ${MODEL})"
     if [[ "${MODEL}" == "cyclegan" ]]; then
@@ -110,9 +110,8 @@ train() {
         --fm_lambda_l1 "${FM_LAMBDA_L1:-10}"
         --fm_lambda_sample_l1 "${FM_LAMBDA_SAMPLE_L1:-100}"
         --fm_sample_l1_prob "${FM_SAMPLE_L1_PROB:-1.0}"
+        --fm_val_steps "${FM_VAL_STEPS:-8}"
       )
-      [[ -n "${FM_TRAIN_SAMPLE_STEPS:-}" && "${FM_TRAIN_SAMPLE_STEPS}" != "0" ]] && \
-        extra+=(--fm_train_sample_steps "${FM_TRAIN_SAMPLE_STEPS}")
       ;;
   esac
   local train_args=(

@@ -21,6 +21,7 @@ export FM_RESBLOCKS="${FM_RESBLOCKS:-2}"
 export FM_STEPS="${FM_STEPS:-25}"
 export FM_LAMBDA_L1="${FM_LAMBDA_L1:-10}"
 export FM_LAMBDA_SAMPLE_L1="${FM_LAMBDA_SAMPLE_L1:-100}"
+export FM_VAL_STEPS="${FM_VAL_STEPS:-8}"
 export FM_SAMPLE_L1_PROB="${FM_SAMPLE_L1_PROB:-1.0}"
 
 # shellcheck source=/dev/null
@@ -31,6 +32,6 @@ if [[ "${PY_MODEL}" != "vanilla_fm" ]]; then
 fi
 echo "vanilla_fm profile: PY_MODEL=${PY_MODEL} TRAIN_NAME=${TRAIN_NAME}"
 echo "  FM_CHANNELS=${FM_CHANNELS} FM_RESBLOCKS=${FM_RESBLOCKS} FM_STEPS=${FM_STEPS}"
-echo "  FM_STEPS=${FM_STEPS} FM_SAMPLE_METHOD=${FM_SAMPLE_METHOD:-heun} FM_LAMBDA_SAMPLE_L1=${FM_LAMBDA_SAMPLE_L1}"
+echo "  FM_STEPS=${FM_STEPS} (train L1s + test)  FM_VAL_STEPS=${FM_VAL_STEPS}  method=${FM_SAMPLE_METHOD:-heun}"
 
 exec bash "${ROOT}/scripts/run_hemit_all.sh"

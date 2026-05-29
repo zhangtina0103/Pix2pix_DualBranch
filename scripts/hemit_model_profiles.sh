@@ -113,13 +113,13 @@ case "${MODEL}" in
     # ~11.93M params, res=2 (ResNet9 G ~11.38M); verify: scripts/count_fm_params.py
     FM_CHANNELS="${FM_CHANNELS:-104,208,288}"
     FM_RESBLOCKS="${FM_RESBLOCKS:-2}"
-    # One ODE config for train sample-L1, val, and test (fm_steps + fm_sample_method).
+    # Train sample-L1 + test: fm_steps (25). Mid-training val: fm_val_steps (8, fast).
     FM_STEPS="${FM_STEPS:-25}"
+    FM_VAL_STEPS="${FM_VAL_STEPS:-8}"
     FM_SAMPLE_METHOD="${FM_SAMPLE_METHOD:-heun}"
     FM_LAMBDA_L1="${FM_LAMBDA_L1:-10}"
     FM_LAMBDA_SAMPLE_L1="${FM_LAMBDA_SAMPLE_L1:-100}"
     FM_SAMPLE_L1_PROB="${FM_SAMPLE_L1_PROB:-1.0}"
-    # Optional: FM_TRAIN_SAMPLE_STEPS>0 overrides train sample-L1 steps only (val/test still fm_steps).
     DISPLAY_ID="${DISPLAY_ID:--1}"
     VAL_FREQ="${VAL_FREQ:-10}"
     ;;
@@ -134,8 +134,8 @@ esac
 
 N_EPOCHS="${N_EPOCHS:-50}"
 N_EPOCHS_DECAY="${N_EPOCHS_DECAY:-30}"
-# CycleGAN: 2 generators + 2 discriminators @ 1024²; batch 2 OOMs on ~44GB GPUs.
-if [[ "${MODEL}" == "cyclegan" ]]; then
+# CycleGAN + vanilla_fm: heavy VRAM @ 1024².
+if [[ "${MODEL}" == "cyclegan" || "${MODEL}" == "vanilla_fm" ]]; then
   BATCH_SIZE="${BATCH_SIZE:-1}"
 else
   BATCH_SIZE="${BATCH_SIZE:-2}"

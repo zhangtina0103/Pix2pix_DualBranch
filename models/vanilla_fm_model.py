@@ -4,6 +4,7 @@ from typing import List, Optional, Tuple
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.utils.checkpoint import checkpoint
 
 from .base_model import BaseModel
 
@@ -91,17 +92,19 @@ class VanillaFMModel(BaseModel):
         parser.add_argument("--fm_num_res_blocks", type=int, default=1,
                             help="ResBlocks per level (tune params)")
         parser.add_argument("--fm_steps", type=int, default=25,
-                            help="ODE steps: train sample-L1, val, test (must match across phases)")
+                            help="ODE steps for train sample-L1 and final test")
+        parser.add_argument("--fm_val_steps", type=int, default=8,
+                            help="ODE steps for training-time validation only (faster)")
         parser.add_argument("--fm_sample_method", type=str, default="heun",
                             choices=["euler", "heun"],
-                            help="ODE solver: train sample-L1, val, test")
+                            help="ODE solver for train / val / test")
         if is_train:
             parser.add_argument("--fm_lambda_l1", type=float, default=10.0,
                                 help="Weight for path L1 on x1_hat=xt+(1-t)*v (auxiliary)")
             parser.add_argument("--fm_lambda_sample_l1", type=float, default=100.0,
-                                help="Weight for L1 on full ODE sample (same integrator as test)")
+                                help="Weight for L1 on ODE sample (fm_steps, same as test)")
             parser.add_argument("--fm_train_sample_steps", type=int, default=0,
-                                help="Override ODE steps for sample-L1 only (0 = use --fm_steps)")
+                                help="Deprecated: use --fm_steps. If >0, overrides train sample-L1 steps only")
             parser.add_argument("--fm_sample_l1_prob", type=float, default=1.0,
                                 help="Fraction of iterations that apply sample-L1 (1.0 = every iter)")
         return parser
@@ -139,11 +142,20 @@ class VanillaFMModel(BaseModel):
         self.real_B = input["B" if AtoB else "A"].to(self.device)
         self.image_paths = input["A_paths" if AtoB else "B_paths"]
 
-    def _ode_config(self):
-        """Steps + solver shared by train (sample-L1), val, and test."""
-        steps = int(getattr(self.opt, "fm_train_sample_steps", 0) or self.opt.fm_steps)
-        method = str(getattr(self.opt, "fm_sample_method", "heun"))
-        return steps, method
+    def _ode_config_test(self):
+        """Final test + training sample-L1 — full fm_steps."""
+        return int(self.opt.fm_steps), str(getattr(self.opt, "fm_sample_method", "heun"))
+
+    def _ode_config_val(self):
+        """Cheap validation while training (fewer steps is fine)."""
+        return int(getattr(self.opt, "fm_val_steps", 8)), str(
+            getattr(self.opt, "fm_sample_method", "heun"))
+
+    def _ode_config_train_sample(self):
+        """Train sample-L1 — match test (fm_steps)."""
+        override = int(getattr(self.opt, "fm_train_sample_steps", 0))
+        steps = override if override > 0 else int(self.opt.fm_steps)
+        return steps, str(getattr(self.opt, "fm_sample_method", "heun"))
 
     def _v(self, x_t: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
         B, _, H, W = x_t.shape
@@ -151,24 +163,35 @@ class VanillaFMModel(BaseModel):
         inp = torch.cat([x_t, self.real_A, t_ch], dim=1)
         return self.netG(inp)
 
+    def _v_ckpt(self, x_t: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+        """Checkpoint wrapper so Heun ODE backprop fits in GPU memory."""
+        return self._v(x_t, t)
+
     def _integrate(self, cond_A: torch.Tensor, x: torch.Tensor, steps: int,
-                   method: str) -> torch.Tensor:
-        """ODE solve dx/dt = v(x,t|A). Differentiable (used in training sample-L1)."""
+                   method: str, use_checkpoint: bool = False) -> torch.Tensor:
+        """ODE solve dx/dt = v(x,t|A). Differentiable when used for train sample-L1."""
         real_A_prev = getattr(self, "real_A", None)
         self.real_A = cond_A
         B = cond_A.shape[0]
         ts = torch.linspace(0.0, 1.0, steps + 1, device=cond_A.device, dtype=cond_A.dtype)
+        ckpt = use_checkpoint and x.requires_grad and self.isTrain
 
         for i in range(steps):
             t0 = ts[i].expand(B)
             t1 = ts[i + 1].expand(B)
             dt = ts[i + 1] - ts[i]
-            v0 = self._v(x, t0)
+            if ckpt:
+                v0 = checkpoint(self._v_ckpt, x, t0, use_reentrant=False)
+            else:
+                v0 = self._v(x, t0)
             if method == "euler" or i == steps - 1:
                 x = x + dt * v0
             else:
                 x_mid = x + dt * v0
-                v1 = self._v(x_mid, t1)
+                if ckpt:
+                    v1 = checkpoint(self._v_ckpt, x_mid, t1, use_reentrant=False)
+                else:
+                    v1 = self._v(x_mid, t1)
                 x = x + dt * (v0 + v1) * 0.5
 
         if real_A_prev is None:
@@ -178,12 +201,12 @@ class VanillaFMModel(BaseModel):
         return x.clamp(-1, 1)
 
     def forward(self):
-        steps, method = self._ode_config()
+        steps, method = self._ode_config_test()
         self.fake_B = self.sample(self.real_A, steps=steps, method=method)
 
     def compute_visuals(self):
         with torch.no_grad():
-            steps, method = self._ode_config()
+            steps, method = self._ode_config_test()
             self.fake_B = self.sample(self.real_A, steps=steps, method=method)
 
     def backward_G(self):
@@ -206,9 +229,10 @@ class VanillaFMModel(BaseModel):
         lam_sample = float(getattr(self.opt, "fm_lambda_sample_l1", 0.0))
         prob = float(getattr(self.opt, "fm_sample_l1_prob", 1.0))
         if lam_sample > 0 and random.random() < prob:
-            steps, method = self._ode_config()
+            steps, method = self._ode_config_train_sample()
             x_init = torch.randn_like(x1)
-            fake = self._integrate(self.real_A, x_init, steps, method)
+            fake = self._integrate(
+                self.real_A, x_init, steps, method, use_checkpoint=True)
             self.loss_L1s = F.l1_loss(fake, x1) * lam_sample
             loss = loss + self.loss_L1s
 
@@ -222,11 +246,11 @@ class VanillaFMModel(BaseModel):
     @torch.no_grad()
     def sample(self, cond_A: torch.Tensor, steps: Optional[int] = None,
                method: Optional[str] = None) -> torch.Tensor:
-        default_steps, default_method = self._ode_config()
+        default_steps, default_method = self._ode_config_test()
         steps = int(steps if steps is not None else default_steps)
         method = method or default_method
         x_init = torch.randn(
             cond_A.shape[0], self.opt.output_nc, cond_A.shape[2], cond_A.shape[3],
             device=cond_A.device, dtype=cond_A.dtype,
         )
-        return self._integrate(cond_A, x_init, steps, method)
+        return self._integrate(cond_A, x_init, steps, method, use_checkpoint=False)

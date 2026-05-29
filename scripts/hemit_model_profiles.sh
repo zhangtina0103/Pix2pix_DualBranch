@@ -111,7 +111,7 @@ case "${MODEL}" in
     TRAIN_LR="${TRAIN_LR:-0.0002}"
     DATASET_MODE="${DATASET_MODE:-aligned}"
     # MONAI UNet (mentor flow_matching.py); ~11M @ 64,128,192 attn 0,0,1 res=2
-    FM_BACKBONE="${FM_BACKBONE:-monai}"
+    FM_BACKBONE="${FM_BACKBONE:-custom}"
     FM_LOSS="${FM_LOSS:-x1}"
     FM_CHANNELS="${FM_CHANNELS:-64,128,192}"
     FM_ATTN="${FM_ATTN:-0,0,0}"

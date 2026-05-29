@@ -4,7 +4,8 @@ MONAI DiffusionModelUNet wrapper matching mentor flow_matching.py / flow_matchin
   - concat([x_t, cond]) -> UNet(x, timesteps=t)
   - optional tanh on output (flow_matching.py)
 
-Requires monai>=1.4 (DiffusionModelUNet) or monai-generative as fallback.
+Requires monai>=1.4 or monai-generative. Note: generative UNet always has a
+middle-block attention layer — use FM_CROP_SIZE=512 or FM_BACKBONE=custom at 1024².
 """
 from __future__ import annotations
 

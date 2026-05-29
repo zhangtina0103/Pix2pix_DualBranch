@@ -10,7 +10,9 @@
 # Tune on login node: python scripts/count_fm_params.py --search
 
 vanilla_fm_apply_train_env() {
-  export FM_BACKBONE="${FM_BACKBONE:-monai}"
+  # monai-generative: middle block ALWAYS has attention → OOM at 1024² on L40S.
+  # HEMIT fair compare @ 1024: use custom (skip U-Net). monai: set FM_CROP_SIZE=512.
+  export FM_BACKBONE="${FM_BACKBONE:-custom}"
   export FM_LOSS="${FM_LOSS:-x1}"
   export FM_CHANNELS="${FM_CHANNELS:-64,128,192}"
   # Attention at 1024² can request 100+ GiB; default off for HEMIT native train.
@@ -43,4 +45,7 @@ vanilla_fm_print_train_env() {
   echo "  perc=${FM_LAMBDA_PERC}  time=${FM_TIME_DIST}  BATCH_SIZE=${BATCH_SIZE:-?}"
   echo "  FM_LAMBDA_L1=${FM_LAMBDA_L1}  FM_LAMBDA_SAMPLE_L1=${FM_LAMBDA_SAMPLE_L1}"
   echo "  infer: steps=${FM_STEPS}  ${FM_SAMPLE_METHOD}  val_steps=${FM_VAL_STEPS}"
+  if [[ "${FM_BACKBONE}" == "monai" && -z "${FM_CROP_SIZE:-}" ]]; then
+    echo "  WARNING: monai UNet at 1024² OOMs (mid-block attention). Use FM_BACKBONE=custom or FM_CROP_SIZE=512" >&2
+  fi
 }

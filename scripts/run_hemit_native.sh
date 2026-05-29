@@ -104,9 +104,9 @@ train() {
       ;;
     vanilla_fm)
       extra+=(
-        --fm_backbone "${FM_BACKBONE:-monai}"
+        --fm_backbone "${FM_BACKBONE:-custom}"
         --fm_loss "${FM_LOSS:-x1}"
-        --fm_channels "${FM_CHANNELS:-64,128,192}"
+        --fm_channels "${FM_CHANNELS:-96,192,256}"
         --fm_attn_levels "${FM_ATTN:-0,0,0}"
         --fm_num_head_channels "${FM_NUM_HEAD_CHANNELS:-32}"
         --fm_num_res_blocks "${FM_RESBLOCKS:-2}"
@@ -118,8 +118,12 @@ train() {
         --fm_lambda_sample_l1 "${FM_LAMBDA_SAMPLE_L1}"
         --fm_val_steps "${FM_VAL_STEPS:-8}"
       )
-      if [[ "${FM_LOSS:-x1}" == "x1" ]]; then
+      if [[ "${FM_LOSS:-x1}" == "x1" && "${FM_BACKBONE:-custom}" == "monai" ]]; then
         extra+=(--fm_use_tanh)
+      fi
+      if [[ "${FM_BACKBONE:-custom}" == "monai" && -n "${FM_CROP_SIZE:-}" ]]; then
+        echo "    fm_train_crop=${FM_CROP_SIZE} (monai mid-attn needs patches)"
+        extra+=(--load_size "${FM_CROP_SIZE}" --crop_size "${FM_CROP_SIZE}")
       fi
       if [[ "${FM_LAMBDA_SAMPLE_L1:-0}" != "0" && "${FM_LAMBDA_SAMPLE_L1:-0}" != "0.0" ]]; then
         extra+=(

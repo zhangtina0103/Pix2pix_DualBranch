@@ -43,6 +43,22 @@ def _load_diffusion_model_unet() -> Type[nn.Module]:
     )
 
 
+def _validate_unet_channels(channels: Tuple[int, ...], norm_num_groups: int = 32) -> None:
+    """MONAI / generative DiffusionModelUNet requires each width % norm_num_groups == 0."""
+    bad = [c for c in channels if c % norm_num_groups != 0]
+    if not bad:
+        return
+    fixed = tuple(
+        max(norm_num_groups, round(c / norm_num_groups) * norm_num_groups) for c in channels
+    )
+    raise ValueError(
+        f"fm_channels {channels} invalid for MONAI UNet: {bad} not divisible by "
+        f"norm_num_groups={norm_num_groups}. "
+        f"Use e.g. FM_CHANNELS={','.join(map(str, fixed))} "
+        f"(272→256 or 288)."
+    )
+
+
 def _diffusion_unet_kwargs(
     unet_cls: Type[nn.Module],
     *,
@@ -54,6 +70,7 @@ def _diffusion_unet_kwargs(
     num_head_channels: int,
 ) -> Dict[str, Any]:
     """Core MONAI (>=1.4) uses channels=; monai-generative uses num_channels=."""
+    _validate_unet_channels(channels)
     params = inspect.signature(unet_cls.__init__).parameters
     kw: Dict[str, Any] = dict(
         spatial_dims=2,

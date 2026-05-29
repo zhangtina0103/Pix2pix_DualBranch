@@ -67,7 +67,7 @@ train() {
   assert_py_model
   echo "==> [native] MODEL=${MODEL} PY_MODEL=${PY_MODEL} netG=${netg_label} name=${TRAIN_NAME}"
   if [[ "${PY_MODEL}" == "vanilla_fm" ]]; then
-    echo "    backbone=${FM_BACKBONE:-monai} loss=${FM_LOSS:-x1} channels=${FM_CHANNELS} attn=${FM_ATTN:-0,0,1}"
+    echo "    backbone=${FM_BACKBONE:-monai} loss=${FM_LOSS:-x1} channels=${FM_CHANNELS} attn=${FM_ATTN:-0,0,1} (monai: widths multiple of 32)"
     echo "    perc=${FM_LAMBDA_PERC:-0.1} FM_LAMBDA_L1=${FM_LAMBDA_L1} FM_LAMBDA_SAMPLE_L1=${FM_LAMBDA_SAMPLE_L1}"
     echo "    test ODE: ${FM_STEPS} ${FM_SAMPLE_METHOD} | val: ${FM_VAL_STEPS} steps"
     echo "    batch_size=${BATCH_SIZE} (set BATCH_SIZE=1 if OOM)"

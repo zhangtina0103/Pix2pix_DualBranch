@@ -5,6 +5,7 @@
 #   FM_LOSS=x1     → L1 + perceptual, logit-normal t, tanh, x1→v Heun ODE
 #   FM_LOSS=velocity → velocity MSE, uniform t, raw-v Heun ODE
 # Param match ResNet9 (~11.38M): FM_CHANNELS=64,128,192 FM_ATTN=0,0,1 FM_RESBLOCKS=2
+# MONAI UNet: each channel width must be divisible by 32 (not 272 — use 256 or 288).
 # Tune on login node: python scripts/count_fm_params.py --search
 
 vanilla_fm_apply_train_env() {

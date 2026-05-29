@@ -9,7 +9,8 @@ Requires monai>=1.4 (DiffusionModelUNet) or monai-generative as fallback.
 from __future__ import annotations
 
 import importlib
-from typing import Tuple, Type
+import inspect
+from typing import Any, Dict, Tuple, Type
 
 import torch
 import torch.nn as nn
@@ -37,10 +38,40 @@ def _load_diffusion_model_unet() -> Type[nn.Module]:
     raise ImportError(
         "DiffusionModelUNet is not available. "
         f"Detected monai {ver}. "
-        "Install with: pip install -c scripts/constraints_pix2pix.txt 'monai>=1.4,<2' "
-        "(or: pip install monai-generative). "
+        "Install: pip install monai-generative  (pix2pix_cuda: bash scripts/install_vanilla_fm_monai.sh). "
         f"Import errors: {' | '.join(errors)}"
     )
+
+
+def _diffusion_unet_kwargs(
+    unet_cls: Type[nn.Module],
+    *,
+    in_ch: int,
+    out_ch: int,
+    channels: Tuple[int, ...],
+    attention_levels: Tuple[bool, ...],
+    num_res_blocks: int,
+    num_head_channels: int,
+) -> Dict[str, Any]:
+    """Core MONAI (>=1.4) uses channels=; monai-generative uses num_channels=."""
+    params = inspect.signature(unet_cls.__init__).parameters
+    kw: Dict[str, Any] = dict(
+        spatial_dims=2,
+        in_channels=in_ch + out_ch,
+        out_channels=out_ch,
+        attention_levels=attention_levels,
+        num_res_blocks=num_res_blocks,
+        num_head_channels=num_head_channels,
+    )
+    if "channels" in params:
+        kw["channels"] = channels
+    elif "num_channels" in params:
+        kw["num_channels"] = channels
+    else:
+        raise TypeError(
+            f"{unet_cls.__module__}.{unet_cls.__name__} has no channels/num_channels argument"
+        )
+    return kw
 
 
 class MentorFlowNet(nn.Module):
@@ -62,19 +93,21 @@ class MentorFlowNet(nn.Module):
         use_tanh: bool = False,
     ):
         super().__init__()
-        DiffusionModelUNet = _load_diffusion_model_unet()
+        unet_cls = _load_diffusion_model_unet()
 
         self.in_ch = in_ch
         self.out_ch = out_ch
         self.use_tanh = use_tanh
-        self.unet = DiffusionModelUNet(
-            spatial_dims=2,
-            in_channels=in_ch + out_ch,
-            out_channels=out_ch,
-            channels=channels,
-            attention_levels=attention_levels,
-            num_res_blocks=num_res_blocks,
-            num_head_channels=num_head_channels,
+        self.unet = unet_cls(
+            **_diffusion_unet_kwargs(
+                unet_cls,
+                in_ch=in_ch,
+                out_ch=out_ch,
+                channels=channels,
+                attention_levels=attention_levels,
+                num_res_blocks=num_res_blocks,
+                num_head_channels=num_head_channels,
+            )
         )
 
     def forward(self, x_t: torch.Tensor, t: torch.Tensor, cond: torch.Tensor) -> torch.Tensor:

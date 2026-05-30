@@ -268,7 +268,7 @@ vanilla_fm_apply_joint_film_v2_env() {
   export FM_FILM_WHERE=head
   export FM_FILM_HIDDEN="${FM_FILM_HIDDEN:-128}"
   export FM_FILM_REG=0.01
-  export FM_CHANNEL_WEIGHTS=1,2,1
+  export FM_CHANNEL_WEIGHTS=1,1,1
   echo "phase4 joint_film_v2: head FiLM reg=${FM_FILM_REG} ch_weights=${FM_CHANNEL_WEIGHTS}" >&2
 }
 

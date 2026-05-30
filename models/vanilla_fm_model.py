@@ -445,6 +445,14 @@ class VanillaFMModel(BaseModel):
             net = getattr(self, "net" + name)
             if isinstance(net, torch.nn.DataParallel):
                 net = net.module
+            if not os.path.isfile(load_path):
+                if name == "D" and self.fm_use_gan:
+                    print(
+                        "no checkpoint for %s — init PatchGAN D from scratch "
+                        "(expected when finetuning G from joint_perc)" % load_path
+                    )
+                    continue
+                raise FileNotFoundError(load_path)
             print("loading the model from %s" % load_path)
             state_dict = torch.load(load_path, map_location=str(self.device))
             if hasattr(state_dict, "_metadata"):

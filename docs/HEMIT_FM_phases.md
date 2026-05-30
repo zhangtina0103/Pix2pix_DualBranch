@@ -27,28 +27,24 @@ If you see `locked=0`, `steps=50`, or wrong `TRAIN_NAME`, stop the job and fix e
 |-------|------|-------|------|
 | **0** | Baseline | (done) `joint_perc` | epoch 80 |
 | **1** | FM + PatchGAN on ODE | `sbatch bash_scripts/train_hemit_vanilla_fm_joint_gan.sbatch` | `sbatch bash_scripts/test_hemit_vanilla_fm_joint_gan.sbatch` |
-| **2** | CD3-weighted L1 (1,2,1) | `sbatch bash_scripts/train_hemit_vanilla_fm_cd3_weight.sbatch` | `sbatch bash_scripts/test_hemit_vanilla_fm_cd3_weight.sbatch` |
+| ~~**2**~~ | ~~CD3-weighted L1~~ | **skipped** (unfair vs `joint_perc` 1,1,1 average SSIM) | — |
 | **3** | CFG v2 (learned null, w≈1.1) | `sbatch bash_scripts/train_hemit_vanilla_fm_joint_cfg_v2.sbatch` | `sbatch bash_scripts/test_hemit_vanilla_fm_joint_cfg_v2.sbatch` |
 | **3b** | CFG `w` sweep | — | `bash scripts/sweep_fm_cfg_scale.sh` (after phase 3 train) |
-| **4** | FiLM v2 (head, reg, 1,2,1) | `sbatch bash_scripts/train_hemit_vanilla_fm_joint_film_v2.sbatch` | `sbatch bash_scripts/test_hemit_vanilla_fm_joint_film_v2.sbatch` |
+| **4** | FiLM v2 (head, reg, 1,1,1) | `sbatch bash_scripts/train_hemit_vanilla_fm_joint_film_v2.sbatch` | `sbatch bash_scripts/test_hemit_vanilla_fm_joint_film_v2.sbatch` |
 
 ## Phase details
 
 ### Phase 1 — `joint_gan`
-- Finetune from `joint_perc/80` → epochs 81–100
+- Finetune from `joint_perc/80` → epochs 81–100 (copies **G only**; **D** init random — expected)
 - `FM_USE_GAN=1`, ODE sample steps=12, prob=0.35
 - No CFG / FiLM
-
-### Phase 2 — `cd3_weight`
-- Full train (not finetune); `FM_CHANNEL_WEIGHTS=1,2,1`
-- Test @ epoch **80** (default) unless you train to 100
 
 ### Phase 3 — `joint_cfg_v2`
 - `FM_NULL_MODE=learned`, dropout **0.18**, default test **w=1.1**
 - Finetune 81–100 from `joint_perc/80`
 
 ### Phase 4 — `joint_film_v2`
-- `FM_FILM_WHERE=head`, `FM_FILM_REG=0.01`, `FM_CHANNEL_WEIGHTS=1,2,1`
+- `FM_FILM_WHERE=head`, `FM_FILM_REG=0.01`, `FM_CHANNEL_WEIGHTS=1,1,1`
 - LR **5e-5**, 15+5 epochs → 100 total from 80
 
 ## Success criteria

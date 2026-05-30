@@ -31,9 +31,12 @@ Creates `trainSeg/`, `valSeg/`, `testSeg/` (1ch, Otsu on H&E nuclei-ish signal).
 - Train: `sbatch bash_scripts/train_hemit_vanilla_fm_joint_bridge.sbatch`
 - Test: `sbatch bash_scripts/test_hemit_vanilla_fm_joint_bridge.sbatch`
 
-## 3. `joint_init_cond` — informed noise start
+## 3. `joint_init_cond_v2` — informed noise start
 
-- Still Gaussian flow training; ODE init: `z0 = σ·noise + (1-σ)·proj(H&E)` with **σ=0.3**.
+- **Train** = same as `joint_perc` (Gaussian `x₀`). **Test/val only** change ODE start.
+- **v1 bug:** `he_proj` identity copied H&E green → CD3 channel → green soup at inference (train loss never saw that start).
+- **v2:** `he_proj=gray`, **σ=0.55** → `z0 = 0.55·noise + 0.45·gray(H&E)`.
+- Checkpoint: `hemit_vanilla_fm_joint_init_cond_v2` (do not trust `joint_init_cond` @ 88 visuals).
 - Train: `sbatch bash_scripts/train_hemit_vanilla_fm_joint_init_cond.sbatch`
 - Test: `sbatch bash_scripts/test_hemit_vanilla_fm_joint_init_cond.sbatch`
 

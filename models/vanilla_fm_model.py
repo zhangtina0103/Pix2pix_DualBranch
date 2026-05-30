@@ -353,7 +353,12 @@ class VanillaFMModel(BaseModel):
         self.fm_init_noise_sigma = float(getattr(opt, "fm_init_noise_sigma", 0.3))
         he_init = str(getattr(opt, "fm_he_proj_init", "") or "")
         if not he_init:
-            he_init = "gray" if self.fm_flow_path == "bridge" else "identity"
+            # identity copies H&E RGB into DAPI/CD3/panCK and blows up ch1 (green) at ODE start
+            he_init = (
+                "gray"
+                if self.fm_flow_path == "bridge" or self.fm_init_from_cond
+                else "identity"
+            )
         self.fm_he_proj_init = he_init
         self.fm_bridge_x0_sigma = float(getattr(opt, "fm_bridge_x0_sigma", 0.0))
         self.fm_bridge_noise_prob = float(getattr(opt, "fm_bridge_noise_prob", 0.0))
@@ -577,6 +582,30 @@ class VanillaFMModel(BaseModel):
             return net(inp, cond_img=self._film_cond_img(cond))
         return self.netG(inp)
 
+    @staticmethod
+    def _patch_stem_seg_channels(state_dict: dict, net: nn.Module) -> dict:
+        """joint_perc stem is 7ch [x_t|H&E|t]; seg model is 8ch [x_t|H&E|seg|t]."""
+        key = "stem.weight"
+        if key not in state_dict or not hasattr(net, "stem"):
+            return state_dict
+        old_w = state_dict[key]
+        new_w = net.stem.weight
+        if old_w.shape == new_w.shape:
+            return state_dict
+        if old_w.shape[0] != new_w.shape[0] or old_w.shape[1] != 7 or new_w.shape[1] != 8:
+            return state_dict
+        patched = new_w.data.new_zeros(new_w.shape)
+        patched[:, 0:3].copy_(old_w[:, 0:3])
+        patched[:, 3:6].copy_(old_w[:, 3:6])
+        patched[:, 7].copy_(old_w[:, 6])
+        out = dict(state_dict)
+        out[key] = patched
+        print(
+            "  patched stem.weight: in_ch 7->8 "
+            "(copied x_t+H&E+t; seg input ch6 zero-init)"
+        )
+        return out
+
     def load_networks(self, epoch):
         """Load G; strict=False when FiLM layers are new (finetune from joint_perc)."""
         for name in self.model_names:
@@ -600,6 +629,8 @@ class VanillaFMModel(BaseModel):
                 del state_dict._metadata
             for key in list(state_dict.keys()):
                 self._patch_instance_norm_state_dict(state_dict, net, key.split("."))
+            if getattr(self.opt, "fm_use_seg", False) and name == "G":
+                state_dict = self._patch_stem_seg_channels(state_dict, net)
             loose = bool(getattr(self.opt, "fm_use_film", False))
             if getattr(self.opt, "fm_use_cfg", False) and getattr(
                 self.opt, "fm_null_mode", "zero"

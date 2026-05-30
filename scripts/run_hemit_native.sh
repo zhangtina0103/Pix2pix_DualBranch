@@ -172,8 +172,9 @@ train() {
       if [[ "${FM_INIT_FROM_COND:-0}" == "1" ]]; then
         extra+=(
           --fm_init_from_cond
-          --fm_init_noise_sigma "${FM_INIT_NOISE_SIGMA:-0.3}"
+          --fm_init_noise_sigma "${FM_INIT_NOISE_SIGMA:-0.55}"
         )
+        [[ -n "${FM_HE_PROJ_INIT:-}" ]] && extra+=(--fm_he_proj_init "${FM_HE_PROJ_INIT}")
       fi
       echo "    FM conditioning CLI: dataset_mode=${DATASET_MODE:-aligned} seg=${FM_USE_SEG:-0} flow=${FM_FLOW_PATH:-noise} init_cond=${FM_INIT_FROM_COND:-0}"
       ;;
@@ -250,8 +251,9 @@ test_one() {
       if [[ "${FM_INIT_FROM_COND:-0}" == "1" ]]; then
         extra+=(
           --fm_init_from_cond
-          --fm_init_noise_sigma "${FM_INIT_NOISE_SIGMA:-0.3}"
+          --fm_init_noise_sigma "${FM_INIT_NOISE_SIGMA:-0.55}"
         )
+        [[ -n "${FM_HE_PROJ_INIT:-}" ]] && extra+=(--fm_he_proj_init "${FM_HE_PROJ_INIT}")
       fi
       echo "    FM conditioning CLI: dataset_mode=${DATASET_MODE:-aligned} seg=${FM_USE_SEG:-0} flow=${FM_FLOW_PATH:-noise} init_cond=${FM_INIT_FROM_COND:-0}"
       if [[ "${FM_LOSS:-x1}" == "x1" && "${FM_BACKBONE:-custom}" == "monai" ]]; then

@@ -56,6 +56,7 @@ vanilla_fm_verify_cond_profile() {
       [[ "${FM_FLOW_PATH:-noise}" == "noise" ]] || _fm_cond_fail "FM_FLOW_PATH must be noise"
       [[ "${FM_INIT_FROM_COND:-0}" == "1" ]] || _fm_cond_fail "FM_INIT_FROM_COND=1 required"
       [[ "${DATASET_MODE:-aligned}" == "aligned" ]] || _fm_cond_fail "DATASET_MODE must be aligned (or unset)"
+      [[ "${FM_HE_PROJ_INIT:-gray}" == "gray" ]] || _fm_cond_fail "FM_HE_PROJ_INIT must be gray (v2)"
       ;;
     *)
       _fm_cond_fail "unknown VANILLA_FM_COND_PROFILE=${profile}"
@@ -353,15 +354,16 @@ vanilla_fm_apply_joint_bridge_env() {
 
 vanilla_fm_apply_joint_init_cond_env() {
   vanilla_fm_apply_joint_perc_pins
-  export TRAIN_NAME=hemit_vanilla_fm_joint_init_cond
+  export TRAIN_NAME=hemit_vanilla_fm_joint_init_cond_v2
   export VANILLA_FM_EXPECTED_TRAIN_NAME="${TRAIN_NAME}"
   export VANILLA_FM_COND_PROFILE=init_cond
   export FM_USE_SEG=0
   unset DATASET_MODE
   export FM_FLOW_PATH=noise
   export FM_INIT_FROM_COND=1
-  export FM_INIT_NOISE_SIGMA="${FM_INIT_NOISE_SIGMA:-0.3}"
-  echo "joint_init_cond: ODE start sigma*noise+(1-sigma)*proj(H&E), sigma=${FM_INIT_NOISE_SIGMA}" >&2
+  export FM_HE_PROJ_INIT=gray
+  export FM_INIT_NOISE_SIGMA="${FM_INIT_NOISE_SIGMA:-0.55}"
+  echo "joint_init_cond_v2: gray he_proj, ODE z0=${FM_INIT_NOISE_SIGMA}*noise+(1-sigma)*proj(gray HE)" >&2
 }
 
 vanilla_fm_print_train_env() {

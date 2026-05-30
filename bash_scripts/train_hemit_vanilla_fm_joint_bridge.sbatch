@@ -1,5 +1,5 @@
 #!/bin/bash
-# Bridge FM: x0 = proj(H&E), integrate from g(H&E) not noise. Finetune joint_perc/80.
+# Bridge FM v2: gray he_proj + 35% noise x0 mix (fixes missing CD3). Finetune joint_perc/80.
 #   sbatch bash_scripts/train_hemit_vanilla_fm_joint_bridge.sbatch
 #SBATCH --job-name=hemit_vfm_bridge
 #SBATCH --output=logs/hemit_vfm_joint_bridge_%j.out

@@ -49,6 +49,7 @@ vanilla_fm_verify_cond_profile() {
       [[ "${FM_FLOW_PATH:-}" == "bridge" ]] || _fm_cond_fail "FM_FLOW_PATH=bridge required"
       [[ "${FM_INIT_FROM_COND:-0}" == "0" ]] || _fm_cond_fail "FM_INIT_FROM_COND must be 0"
       [[ "${DATASET_MODE:-aligned}" == "aligned" ]] || _fm_cond_fail "DATASET_MODE must be aligned (or unset)"
+      [[ "${FM_HE_PROJ_INIT:-gray}" == "gray" ]] || _fm_cond_fail "FM_HE_PROJ_INIT must be gray (v2)"
       ;;
     init_cond)
       [[ "${FM_USE_SEG:-0}" == "0" ]] || _fm_cond_fail "FM_USE_SEG must be 0"
@@ -335,7 +336,7 @@ vanilla_fm_apply_joint_seg_env() {
 
 vanilla_fm_apply_joint_bridge_env() {
   vanilla_fm_apply_joint_perc_pins
-  export TRAIN_NAME=hemit_vanilla_fm_joint_bridge
+  export TRAIN_NAME=hemit_vanilla_fm_joint_bridge_v2
   export VANILLA_FM_EXPECTED_TRAIN_NAME="${TRAIN_NAME}"
   export VANILLA_FM_COND_PROFILE=bridge
   export FM_USE_SEG=0
@@ -343,7 +344,11 @@ vanilla_fm_apply_joint_bridge_env() {
   export FM_FLOW_PATH=bridge
   export FM_INIT_FROM_COND=0
   unset FM_INIT_NOISE_SIGMA
-  echo "joint_bridge: x0=proj(H&E), straight-line FM path" >&2
+  # v2: gray he_proj (no H&E green -> fake CD3), mix noise paths so CD3 is not forgotten
+  export FM_HE_PROJ_INIT=gray
+  export FM_BRIDGE_X0_SIGMA=0.05
+  export FM_BRIDGE_NOISE_PROB=0.35
+  echo "joint_bridge_v2: gray he_proj + bridge_noise_prob=${FM_BRIDGE_NOISE_PROB}" >&2
 }
 
 vanilla_fm_apply_joint_init_cond_env() {
@@ -379,7 +384,7 @@ vanilla_fm_print_train_env() {
     echo "  cond: seg concat  dataset=${DATASET_MODE:-aligned_cond}"
   fi
   if [[ "${FM_FLOW_PATH:-noise}" != "noise" ]]; then
-    echo "  flow_path=${FM_FLOW_PATH}"
+    echo "  flow_path=${FM_FLOW_PATH} he_proj_init=${FM_HE_PROJ_INIT:-gray} bridge_noise_prob=${FM_BRIDGE_NOISE_PROB:-0}"
   fi
   if [[ "${FM_INIT_FROM_COND:-0}" == "1" ]]; then
     echo "  init_from_cond: sigma=${FM_INIT_NOISE_SIGMA:-0.3}"

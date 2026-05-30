@@ -22,10 +22,12 @@ Creates `trainSeg/`, `valSeg/`, `testSeg/` (1ch, Otsu on H&E nuclei-ish signal).
 - Train: `sbatch bash_scripts/train_hemit_vanilla_fm_joint_seg.sbatch`
 - Test: `sbatch bash_scripts/test_hemit_vanilla_fm_joint_seg.sbatch`
 
-## 2. `joint_bridge` — image-to-image bridge path
+## 2. `joint_bridge_v2` — image-to-image bridge path
 
-- Train path: `x_t = (1-t)·proj(H&E) + t·x1` (not Gaussian `x0`).
-- Test: ODE starts at `proj(H&E)` (learnable 1×1 conv, identity init).
+- Train path: `x_t = (1-t)·proj(H&E) + t·x1` (not pure Gaussian `x0`).
+- Test: ODE starts at `proj(H&E)` (learnable 1×1 conv).
+- **v2 fix (CD3 / green):** `he_proj` = **gray** (mean RGB → all markers), not identity (which copied H&E colors and washed out CD3). Train mixes **35%** Gaussian `x0` like `joint_perc`.
+- Checkpoint name: `hemit_vanilla_fm_joint_bridge_v2` (do not reuse old `joint_bridge` ckpt from identity init).
 - Train: `sbatch bash_scripts/train_hemit_vanilla_fm_joint_bridge.sbatch`
 - Test: `sbatch bash_scripts/test_hemit_vanilla_fm_joint_bridge.sbatch`
 

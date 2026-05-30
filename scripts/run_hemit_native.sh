@@ -165,6 +165,9 @@ train() {
       fi
       if [[ "${FM_FLOW_PATH:-noise}" == "bridge" ]]; then
         extra+=(--fm_flow_path bridge)
+        [[ -n "${FM_HE_PROJ_INIT:-}" ]] && extra+=(--fm_he_proj_init "${FM_HE_PROJ_INIT}")
+        [[ "${FM_BRIDGE_X0_SIGMA:-0}" != "0" ]] && extra+=(--fm_bridge_x0_sigma "${FM_BRIDGE_X0_SIGMA}")
+        [[ "${FM_BRIDGE_NOISE_PROB:-0}" != "0" ]] && extra+=(--fm_bridge_noise_prob "${FM_BRIDGE_NOISE_PROB}")
       fi
       if [[ "${FM_INIT_FROM_COND:-0}" == "1" ]]; then
         extra+=(
@@ -240,6 +243,9 @@ test_one() {
       fi
       if [[ "${FM_FLOW_PATH:-noise}" == "bridge" ]]; then
         extra+=(--fm_flow_path bridge)
+        [[ -n "${FM_HE_PROJ_INIT:-}" ]] && extra+=(--fm_he_proj_init "${FM_HE_PROJ_INIT}")
+        [[ "${FM_BRIDGE_X0_SIGMA:-0}" != "0" ]] && extra+=(--fm_bridge_x0_sigma "${FM_BRIDGE_X0_SIGMA}")
+        [[ "${FM_BRIDGE_NOISE_PROB:-0}" != "0" ]] && extra+=(--fm_bridge_noise_prob "${FM_BRIDGE_NOISE_PROB}")
       fi
       if [[ "${FM_INIT_FROM_COND:-0}" == "1" ]]; then
         extra+=(

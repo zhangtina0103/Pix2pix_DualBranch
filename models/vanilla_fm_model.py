@@ -86,6 +86,23 @@ class _UpSkipConvTranspose(nn.Module):
         return self.res(x)
 
 
+def _init_he_proj_conv(conv: nn.Conv2d, mode: str = "gray") -> None:
+    """Map H&E RGB to multiplex-shaped x0. gray=mean(R,G,B) per marker (avoids stain color leak)."""
+    with torch.no_grad():
+        conv.weight.zero_()
+        conv.bias.zero_()
+        if mode == "identity":
+            for c in range(min(conv.in_channels, conv.out_channels)):
+                conv.weight[c, c, 0, 0] = 1.0
+        elif mode == "gray":
+            n_in = conv.in_channels
+            for oc in range(conv.out_channels):
+                for ic in range(n_in):
+                    conv.weight[oc, ic, 0, 0] = 1.0 / n_in
+        else:
+            raise ValueError(f"unknown fm_he_proj_init={mode!r}")
+
+
 def _make_up_skip(up_mode: str, in_ch: int, out_ch: int, skip_ch: int, n_res: int) -> nn.Module:
     if up_mode == "conv_transpose":
         return _UpSkipConvTranspose(in_ch, out_ch, skip_ch, n_res)
@@ -164,15 +181,13 @@ class _CondUNet(nn.Module):
                  use_learned_null: bool = False,
                  cond_nc: int = 3,
                  film_hidden: int = 128,
-                 use_he_proj: bool = False):
+                 use_he_proj: bool = False,
+                 he_proj_init: str = "gray"):
         super().__init__()
         self.he_proj = None
         if use_he_proj:
             self.he_proj = nn.Conv2d(3, 3, 1)
-            with torch.no_grad():
-                for c in range(3):
-                    self.he_proj.weight[c, c, 0, 0] = 1.0
-                nn.init.zeros_(self.he_proj.bias)
+            _init_he_proj_conv(self.he_proj, he_proj_init)
         c1, c2, c3 = channels
         self.use_film = use_film
         self.film_where = film_where if use_film else ""
@@ -286,6 +301,13 @@ class VanillaFMModel(BaseModel):
                             help="ODE start: sigma*noise + (1-sigma)*proj(H&E) (noise path only)")
         parser.add_argument("--fm_init_noise_sigma", type=float, default=0.3,
                             help="Noise fraction when fm_init_from_cond (0=pure proj)")
+        parser.add_argument("--fm_he_proj_init", type=str, default="",
+                            choices=["", "gray", "identity"],
+                            help="he_proj init: gray (bridge default) or identity RGB copy")
+        parser.add_argument("--fm_bridge_x0_sigma", type=float, default=0.0,
+                            help="Bridge train: add sigma*noise to proj(H&E) x0")
+        parser.add_argument("--fm_bridge_noise_prob", type=float, default=0.0,
+                            help="Bridge train: prob of Gaussian x0 (joint_perc-style mix)")
         if is_train:
             parser.add_argument("--fm_lambda_perc", type=float, default=0.1,
                                 help="Perceptual weight (x1 mode; flow_matching.py; 0=off)")
@@ -329,6 +351,12 @@ class VanillaFMModel(BaseModel):
         self.fm_flow_path = str(getattr(opt, "fm_flow_path", "noise"))
         self.fm_init_from_cond = bool(getattr(opt, "fm_init_from_cond", False))
         self.fm_init_noise_sigma = float(getattr(opt, "fm_init_noise_sigma", 0.3))
+        he_init = str(getattr(opt, "fm_he_proj_init", "") or "")
+        if not he_init:
+            he_init = "gray" if self.fm_flow_path == "bridge" else "identity"
+        self.fm_he_proj_init = he_init
+        self.fm_bridge_x0_sigma = float(getattr(opt, "fm_bridge_x0_sigma", 0.0))
+        self.fm_bridge_noise_prob = float(getattr(opt, "fm_bridge_noise_prob", 0.0))
         self.fm_cond_extra = 1 if self.fm_use_seg else 0
         use_he_proj = (
             self.fm_flow_path == "bridge" or self.fm_init_from_cond
@@ -378,13 +406,16 @@ class VanillaFMModel(BaseModel):
                 cond_nc=cond_nc,
                 film_hidden=int(getattr(opt, "fm_film_hidden", 128)),
                 use_he_proj=use_he_proj,
+                he_proj_init=self.fm_he_proj_init,
             )
             if self.fm_use_seg:
                 print(f"FM cond: H&E + seg -> {cond_nc}ch, stem in_ch={stem_in}")
             if use_he_proj:
                 print(
-                    f"FM he_proj: flow={self.fm_flow_path} "
-                    f"init_cond={self.fm_init_from_cond} sigma={self.fm_init_noise_sigma}"
+                    f"FM he_proj: init={self.fm_he_proj_init} flow={self.fm_flow_path} "
+                    f"init_cond={self.fm_init_from_cond} sigma={self.fm_init_noise_sigma} "
+                    f"bridge_x0_sigma={self.fm_bridge_x0_sigma} "
+                    f"bridge_noise_prob={self.fm_bridge_noise_prob}"
                 )
             if use_film:
                 print(
@@ -503,7 +534,16 @@ class VanillaFMModel(BaseModel):
 
     def _sample_x0(self, like: torch.Tensor) -> torch.Tensor:
         if self.fm_flow_path == "bridge":
-            return self._he_proj(self.real_A)
+            if (
+                self.isTrain
+                and self.fm_bridge_noise_prob > 0
+                and random.random() < self.fm_bridge_noise_prob
+            ):
+                return torch.randn_like(like)
+            x0 = self._he_proj(self.real_A)
+            if self.isTrain and self.fm_bridge_x0_sigma > 0:
+                x0 = x0 + self.fm_bridge_x0_sigma * torch.randn_like(like)
+            return x0
         return torch.randn_like(like)
 
     def _ode_x_init(self, cond_A: torch.Tensor) -> torch.Tensor:

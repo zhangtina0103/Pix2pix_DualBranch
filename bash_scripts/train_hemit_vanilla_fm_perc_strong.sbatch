@@ -31,6 +31,8 @@ source "${REPO_ROOT}/scripts/vanilla_fm_env.sh"
 vanilla_fm_apply_perc_strong_env
 export VANILLA_FM_ENV_LOCKED=1
 export TRAIN_NAME=hemit_vanilla_fm_perc_strong
+export FM_CHANNELS=96,192,256
+export FM_LAMBDA_PERC=0.5
 export FM_CHANNEL_WEIGHTS=1,1,1
 vanilla_fm_print_train_env
 

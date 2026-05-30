@@ -43,11 +43,10 @@ vanilla_fm_apply_train_env() {
 # Ablation 1: same recipe as hemit_vanilla_fm_joint_perc, only bilinear decoder (after git pull).
 vanilla_fm_apply_decoder_only_env() {
   vanilla_fm_apply_train_env
-  # Force name: stale shell TRAIN_NAME=joint_perc survives ${VAR:-default}.
   export TRAIN_NAME=hemit_vanilla_fm_decoder_only
-  export FM_CHANNELS="${FM_CHANNELS:-96,192,256}"
-  export FM_LAMBDA_PERC="${FM_LAMBDA_PERC:-0.1}"
-  export FM_PERC_SIZE="${FM_PERC_SIZE:-256}"
+  export FM_CHANNELS=96,192,256
+  export FM_LAMBDA_PERC=0.1
+  export FM_PERC_SIZE=256
   export FM_STEPS="${FM_STEPS:-25}"
   export FM_VAL_STEPS="${FM_VAL_STEPS:-8}"
   export FM_SAMPLE_METHOD="${FM_SAMPLE_METHOD:-heun}"
@@ -62,9 +61,9 @@ vanilla_fm_apply_decoder_only_env() {
 vanilla_fm_apply_perc_strong_env() {
   vanilla_fm_apply_train_env
   export TRAIN_NAME=hemit_vanilla_fm_perc_strong
-  export FM_CHANNELS="${FM_CHANNELS:-96,192,256}"
-  export FM_LAMBDA_PERC="${FM_LAMBDA_PERC:-0.5}"
-  export FM_PERC_SIZE="${FM_PERC_SIZE:-256}"
+  export FM_CHANNELS=96,192,256
+  export FM_LAMBDA_PERC=0.5
+  export FM_PERC_SIZE=256
   export FM_STEPS="${FM_STEPS:-25}"
   export FM_VAL_STEPS="${FM_VAL_STEPS:-8}"
   export FM_SAMPLE_METHOD="${FM_SAMPLE_METHOD:-heun}"
@@ -79,9 +78,9 @@ vanilla_fm_apply_perc_strong_env() {
 vanilla_fm_apply_cd3_weight_env() {
   vanilla_fm_apply_train_env
   export TRAIN_NAME=hemit_vanilla_fm_cd3_weight
-  export FM_CHANNELS="${FM_CHANNELS:-96,192,256}"
-  export FM_LAMBDA_PERC="${FM_LAMBDA_PERC:-0.1}"
-  export FM_PERC_SIZE="${FM_PERC_SIZE:-256}"
+  export FM_CHANNELS=96,192,256
+  export FM_LAMBDA_PERC=0.1
+  export FM_PERC_SIZE=256
   export FM_STEPS="${FM_STEPS:-25}"
   export FM_VAL_STEPS="${FM_VAL_STEPS:-8}"
   export FM_SAMPLE_METHOD="${FM_SAMPLE_METHOD:-heun}"

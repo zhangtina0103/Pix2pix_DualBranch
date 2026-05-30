@@ -30,6 +30,9 @@ source "${REPO_ROOT}/scripts/vanilla_fm_env.sh"
 vanilla_fm_apply_cd3_weight_env
 export VANILLA_FM_ENV_LOCKED=1
 export TRAIN_NAME=hemit_vanilla_fm_cd3_weight
+export FM_CHANNELS=96,192,256
+export FM_LAMBDA_PERC=0.1
+export FM_CHANNEL_WEIGHTS=1,2,1
 vanilla_fm_print_train_env
 
 bash scripts/run_hemit_vanilla_fm.sh

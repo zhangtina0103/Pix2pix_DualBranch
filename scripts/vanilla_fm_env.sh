@@ -135,6 +135,23 @@ vanilla_fm_apply_beat_pix2pix_env() {
 }
 
 # joint_perc + CFG: finetune from hemit_vanilla_fm_joint_perc/80 with cond dropout; test with fm_cfg_scale.
+# joint_perc + FiLM decoder modulation (finetune from joint_perc/80; no CFG).
+vanilla_fm_apply_joint_film_env() {
+  vanilla_fm_apply_train_env
+  export TRAIN_NAME=hemit_vanilla_fm_joint_film
+  export FM_UP_MODE=conv_transpose
+  export FM_CHANNELS=96,192,256
+  export FM_LAMBDA_PERC=0.1
+  export FM_CHANNEL_WEIGHTS=1,1,1
+  unset FM_USE_CFG
+  export FM_USE_FILM=1
+  export FM_FILM_HIDDEN="${FM_FILM_HIDDEN:-128}"
+  export FM_STEPS="${FM_STEPS:-25}"
+  export FM_VAL_STEPS="${FM_VAL_STEPS:-8}"
+  export FM_SAMPLE_METHOD="${FM_SAMPLE_METHOD:-heun}"
+  echo "joint_film: joint_perc + FiLM on decoder (no CFG)" >&2
+}
+
 vanilla_fm_apply_joint_cfg_env() {
   vanilla_fm_apply_train_env
   export TRAIN_NAME=hemit_vanilla_fm_joint_cfg
@@ -156,6 +173,9 @@ vanilla_fm_print_train_env() {
   echo "  backbone=${FM_BACKBONE}  loss=${FM_LOSS}  channels=${FM_CHANNELS}  attn=${FM_ATTN}  res=${FM_RESBLOCKS}  up=${FM_UP_MODE:-bilinear}"
   if [[ "${FM_USE_CFG:-0}" == "1" ]]; then
     echo "  CFG: dropout=${FM_CFG_DROPOUT:-0.1}  test_scale=${FM_CFG_SCALE:-1.5}"
+  fi
+  if [[ "${FM_USE_FILM:-0}" == "1" ]]; then
+    echo "  FiLM: hidden=${FM_FILM_HIDDEN:-128}"
   fi
   echo "  perc=${FM_LAMBDA_PERC}  time=${FM_TIME_DIST}  BATCH_SIZE=${BATCH_SIZE:-?}"
   echo "  FM_LAMBDA_L1=${FM_LAMBDA_L1}  FM_LAMBDA_SAMPLE_L1=${FM_LAMBDA_SAMPLE_L1}"

@@ -8,6 +8,7 @@ Integrates mentor reference scripts:
 Default backbone: MONAI DiffusionModelUNet (~11M params with 64,128,192 + res=2 + attn 0,0,1).
 Legacy: --fm_backbone custom (skip U-Net, spatial t channel).
 """
+import os
 import random
 from typing import Optional, Tuple, Union
 
@@ -93,15 +94,53 @@ def _make_up_skip(up_mode: str, in_ch: int, out_ch: int, skip_ch: int, n_res: in
     raise ValueError(f"unknown fm_up_mode={up_mode!r}; use bilinear or conv_transpose")
 
 
+class FiLMGenerator(nn.Module):
+    """Global H&E embedding -> (gamma, beta) per decoder level (identity init: gamma=1, beta=0)."""
+
+    def __init__(self, cond_nc: int, decoder_dims: Tuple[int, ...], hidden_dim: int = 128):
+        super().__init__()
+        self.pool = nn.AdaptiveAvgPool2d(1)
+        self.trunk = nn.Sequential(
+            nn.Flatten(),
+            nn.Linear(cond_nc, hidden_dim),
+            nn.SiLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.SiLU(),
+        )
+        self.heads = nn.ModuleList([nn.Linear(hidden_dim, 2 * dim) for dim in decoder_dims])
+        for head in self.heads:
+            nn.init.zeros_(head.weight)
+            nn.init.zeros_(head.bias)
+            head.bias.data[: head.out_features // 2] = 1.0
+
+    def forward(self, cond: torch.Tensor):
+        h = self.trunk(self.pool(cond).flatten(1))
+        out = []
+        for head in self.heads:
+            gb = head(h)
+            dim = gb.shape[1] // 2
+            gamma = gb[:, :dim, None, None]
+            beta = gb[:, dim:, None, None]
+            out.append((gamma, beta))
+        return out
+
+
 class _CondUNet(nn.Module):
     """Legacy custom U-Net (spatial t channel). Use --fm_backbone monai for mentor parity."""
 
     def __init__(self, in_ch: int = 7, out_ch: int = 3,
                  channels: Tuple[int, int, int] = (32, 64, 96),
                  num_res_blocks: int = 1,
-                 up_mode: str = "bilinear"):
+                 up_mode: str = "bilinear",
+                 use_film: bool = False,
+                 cond_nc: int = 3,
+                 film_hidden: int = 128):
         super().__init__()
         c1, c2, c3 = channels
+        self.use_film = use_film
+        self.film = (
+            FiLMGenerator(cond_nc, (c2, c1), film_hidden) if use_film else None
+        )
         self.stem = nn.Conv2d(in_ch, c1, 3, padding=1)
         self.res1 = nn.Sequential(*[_ResBlock(c1) for _ in range(num_res_blocks)])
         self.down1 = _Down(c1, c2, num_res_blocks)
@@ -111,13 +150,22 @@ class _CondUNet(nn.Module):
         self.up1 = _make_up_skip(up_mode, c2, c1, c1, num_res_blocks)
         self.head = nn.Conv2d(c1, out_ch, 3, padding=1)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor, cond_img: Optional[torch.Tensor] = None) -> torch.Tensor:
+        film_params = (
+            self.film(cond_img) if self.film is not None and cond_img is not None else None
+        )
         h1 = self.res1(self.stem(x))
         h2 = self.down1(h1)
         h3 = self.down2(h2)
         h = self.mid(h3)
         h = self.up2(h, h2)
+        if film_params is not None:
+            g, b = film_params[0]
+            h = h * g + b
         h = self.up1(h, h1)
+        if film_params is not None:
+            g, b = film_params[1]
+            h = h * g + b
         return self.head(h)
 
 
@@ -165,6 +213,10 @@ class VanillaFMModel(BaseModel):
                             help="Train: prob of zeroing H&E cond (CFG)")
         parser.add_argument("--fm_cfg_scale", type=float, default=1.5,
                             help="Test: guidance scale w (1.0 = no guidance)")
+        parser.add_argument("--fm_use_film", action="store_true",
+                            help="FiLM on custom U-Net decoder from pooled H&E (additive to concat cond)")
+        parser.add_argument("--fm_film_hidden", type=int, default=128,
+                            help="FiLM MLP hidden dim (custom backbone only)")
         if is_train:
             parser.add_argument("--fm_lambda_perc", type=float, default=0.1,
                                 help="Perceptual weight (x1 mode; flow_matching.py; 0=off)")
@@ -224,13 +276,21 @@ class VanillaFMModel(BaseModel):
             )
         else:
             up_mode = str(getattr(opt, "fm_up_mode", "bilinear"))
+            use_film = bool(getattr(opt, "fm_use_film", False))
             self.netG = _CondUNet(
                 in_ch=opt.input_nc + opt.output_nc + 1,
                 out_ch=opt.output_nc,
                 channels=ch,  # type: ignore[arg-type]
                 num_res_blocks=n_res,
                 up_mode=up_mode,
+                use_film=use_film,
+                cond_nc=opt.input_nc,
+                film_hidden=int(getattr(opt, "fm_film_hidden", 128)),
             )
+            if use_film:
+                print(
+                    f"FM FiLM: decoder levels (gamma/beta) from H&E pool, hidden={opt.fm_film_hidden}"
+                )
 
         lam_perc = float(getattr(opt, "fm_lambda_perc", 0.0)) if self.isTrain else 0.0
         perc_size = int(getattr(opt, "fm_perc_size", 256))
@@ -308,7 +368,37 @@ class VanillaFMModel(BaseModel):
         B, _, H, W = x_t.shape
         t_ch = t.view(B, 1, 1, 1).expand(B, 1, H, W)
         inp = torch.cat([x_t, cond, t_ch], dim=1)
+        net = self.netG.module if isinstance(self.netG, nn.DataParallel) else self.netG
+        if getattr(net, "use_film", False):
+            return net(inp, cond_img=cond)
         return self.netG(inp)
+
+    def load_networks(self, epoch):
+        """Load G; strict=False when FiLM layers are new (finetune from joint_perc)."""
+        for name in self.model_names:
+            if not isinstance(name, str):
+                continue
+            load_path = os.path.join(self.save_dir, "%s_net_%s.pth" % (epoch, name))
+            net = getattr(self, "net" + name)
+            if isinstance(net, torch.nn.DataParallel):
+                net = net.module
+            print("loading the model from %s" % load_path)
+            state_dict = torch.load(load_path, map_location=str(self.device))
+            if hasattr(state_dict, "_metadata"):
+                del state_dict._metadata
+            for key in list(state_dict.keys()):
+                self._patch_instance_norm_state_dict(state_dict, net, key.split("."))
+            strict = not bool(getattr(self.opt, "fm_use_film", False))
+            incompatible = net.load_state_dict(state_dict, strict=strict)
+            if not strict:
+                n_miss = len(incompatible.missing_keys)
+                n_unexp = len(incompatible.unexpected_keys)
+                if n_miss or n_unexp:
+                    print(
+                        f"  load strict=False (FiLM finetune): missing={n_miss} unexpected={n_unexp}"
+                    )
+                    if n_miss and n_miss <= 20:
+                        print("  missing:", incompatible.missing_keys)
 
     def _cond_for_train(self, cond: torch.Tensor) -> torch.Tensor:
         """CFG train: randomly drop H&E conditioning."""

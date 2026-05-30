@@ -69,7 +69,9 @@ if is_native; then
   if [[ "${MODEL}" == "vanilla_fm" ]]; then
     # shellcheck source=/dev/null
     source "${ROOT}/scripts/vanilla_fm_env.sh"
-    vanilla_fm_apply_train_env
+    if [[ "${VANILLA_FM_ENV_LOCKED:-0}" != "1" ]]; then
+      vanilla_fm_apply_train_env
+    fi
     vanilla_fm_print_train_env
   else
     echo "Profile: PY_MODEL=${PY_MODEL} TRAIN_NAME=${TRAIN_NAME}"

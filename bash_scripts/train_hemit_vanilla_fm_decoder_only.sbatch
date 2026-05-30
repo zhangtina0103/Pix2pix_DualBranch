@@ -29,6 +29,7 @@ export DISPLAY_ID="${DISPLAY_ID:--1}"
 source "${REPO_ROOT}/scripts/vanilla_fm_env.sh"
 vanilla_fm_apply_decoder_only_env
 export VANILLA_FM_ENV_LOCKED=1
+export TRAIN_NAME=hemit_vanilla_fm_decoder_only
 vanilla_fm_print_train_env
 
 bash scripts/run_hemit_vanilla_fm.sh

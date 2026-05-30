@@ -43,7 +43,8 @@ vanilla_fm_apply_train_env() {
 # Ablation 1: same recipe as hemit_vanilla_fm_joint_perc, only bilinear decoder (after git pull).
 vanilla_fm_apply_decoder_only_env() {
   vanilla_fm_apply_train_env
-  export TRAIN_NAME="${TRAIN_NAME:-hemit_vanilla_fm_decoder_only}"
+  # Force name: stale shell TRAIN_NAME=joint_perc survives ${VAR:-default}.
+  export TRAIN_NAME=hemit_vanilla_fm_decoder_only
   export FM_CHANNELS="${FM_CHANNELS:-96,192,256}"
   export FM_LAMBDA_PERC="${FM_LAMBDA_PERC:-0.1}"
   export FM_PERC_SIZE="${FM_PERC_SIZE:-256}"
@@ -60,7 +61,7 @@ vanilla_fm_apply_decoder_only_env() {
 # No GAN, no pix2pix-style direct G(A). Val ODE steps = test steps.
 vanilla_fm_apply_mentor_strict_env() {
   vanilla_fm_apply_train_env
-  export TRAIN_NAME="${TRAIN_NAME:-hemit_vanilla_fm_mentor}"
+  export TRAIN_NAME=hemit_vanilla_fm_mentor
   export FM_CHANNELS="${FM_CHANNELS:-96,192,256}"
   export FM_LAMBDA_PERC="${FM_LAMBDA_PERC:-0.1}"
   export FM_PERC_SIZE="${FM_PERC_SIZE:-256}"
@@ -77,7 +78,7 @@ vanilla_fm_apply_mentor_strict_env() {
 # GAN is OFF by default; set FM_USE_GAN=1 only if you explicitly want PatchGAN on ODE samples.
 vanilla_fm_apply_beat_pix2pix_env() {
   vanilla_fm_apply_mentor_strict_env
-  export TRAIN_NAME="${TRAIN_NAME:-hemit_vanilla_fm_beat_p2p}"
+  export TRAIN_NAME=hemit_vanilla_fm_beat_p2p
   export FM_LAMBDA_PERC="${FM_LAMBDA_PERC:-1.0}"
   export FM_PERC_SIZE="${FM_PERC_SIZE:-512}"
   export FM_STEPS="${FM_STEPS:-50}"

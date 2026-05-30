@@ -387,7 +387,7 @@ class VanillaFMModel(BaseModel):
             if hasattr(state_dict, "_metadata"):
                 del state_dict._metadata
             for key in list(state_dict.keys()):
-                self._patch_instance_norm_state_dict(state_dict, net, key.split("."))
+                self.__patch_instance_norm_state_dict(state_dict, net, key.split("."))
             strict = not bool(getattr(self.opt, "fm_use_film", False))
             incompatible = net.load_state_dict(state_dict, strict=strict)
             if not strict:

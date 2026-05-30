@@ -13,6 +13,11 @@ DATAROOT="${DATAROOT:-./datasets/hemit}"
 GPU_IDS="${GPU_IDS:-0}"
 
 source "${ROOT}/scripts/hemit_model_profiles.sh"
+if [[ "${MODEL}" == "vanilla_fm" ]]; then
+  # shellcheck source=/dev/null
+  source "${ROOT}/scripts/vanilla_fm_env.sh"
+  vanilla_fm_verify_locked_env
+fi
 
 die() { echo "ERROR: $*" >&2; exit 1; }
 
@@ -119,6 +124,9 @@ train() {
         --fm_cfg_dropout "${FM_CFG_DROPOUT:-0.1}"
         --fm_cfg_scale "${FM_CFG_SCALE:-1.5}"
         --fm_film_hidden "${FM_FILM_HIDDEN:-128}"
+        --fm_film_where "${FM_FILM_WHERE:-decoder}"
+        --fm_film_reg "${FM_FILM_REG:-0}"
+        --fm_null_mode "${FM_NULL_MODE:-zero}"
         --fm_lambda_l1 "${FM_LAMBDA_L1}"
         --fm_lambda_sample_l1 "${FM_LAMBDA_SAMPLE_L1}"
         --fm_val_steps "${FM_VAL_STEPS:-8}"
@@ -190,9 +198,9 @@ test_one() {
   [[ -n "${DATASET_MODE:-}" ]] && extra+=(--dataset_mode "${DATASET_MODE}")
   case "${PY_MODEL}" in
     vanilla_fm)
-      echo "    fm_test: backbone=${FM_BACKBONE:-monai} loss=${FM_LOSS:-x1} steps=${FM_STEPS:-25}"
+      echo "    fm_test: backbone=${FM_BACKBONE:-custom} loss=${FM_LOSS:-x1} steps=${FM_STEPS:-25}"
       extra+=(
-        --fm_backbone "${FM_BACKBONE:-monai}"
+        --fm_backbone "${FM_BACKBONE:-custom}"
         --fm_loss "${FM_LOSS:-x1}"
         --fm_channels "${FM_CHANNELS:-64,128,192}"
         --fm_attn_levels "${FM_ATTN:-0,0,0}"
@@ -204,6 +212,9 @@ test_one() {
         --fm_cfg_dropout "${FM_CFG_DROPOUT:-0.1}"
         --fm_cfg_scale "${FM_CFG_SCALE:-1.5}"
         --fm_film_hidden "${FM_FILM_HIDDEN:-128}"
+        --fm_film_where "${FM_FILM_WHERE:-decoder}"
+        --fm_film_reg "${FM_FILM_REG:-0}"
+        --fm_null_mode "${FM_NULL_MODE:-zero}"
       )
       if [[ "${FM_USE_CFG:-0}" == "1" ]]; then
         extra+=(--fm_use_cfg)
@@ -211,7 +222,7 @@ test_one() {
       if [[ "${FM_USE_FILM:-0}" == "1" ]]; then
         extra+=(--fm_use_film)
       fi
-      if [[ "${FM_LOSS:-x1}" == "x1" ]]; then
+      if [[ "${FM_LOSS:-x1}" == "x1" && "${FM_BACKBONE:-custom}" == "monai" ]]; then
         extra+=(--fm_use_tanh)
       fi
       ;;

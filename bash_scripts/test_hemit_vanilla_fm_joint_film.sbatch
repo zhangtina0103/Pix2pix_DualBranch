@@ -38,11 +38,8 @@ export DATAROOT="${DATAROOT:-./datasets/hemit}"
 export TEST_EPOCH="${TEST_EPOCH:-100}"
 export NUM_TEST="${NUM_TEST:-100}"
 
-# Avoid stale shell overrides (CFG, ODE-train, wrong TRAIN_NAME, FM_STEPS=50, etc.)
-unset FM_USE_CFG FM_USE_ODE_TRAIN FM_USE_GAN FM_CROP_SIZE
-unset TRAIN_NAME PRETRAINED_NAME FM_STEPS
-
 # shellcheck source=/dev/null
+source "${REPO_ROOT}/bash_scripts/_vanilla_fm_sbatch_preamble.sh"
 source "${REPO_ROOT}/scripts/vanilla_fm_env.sh"
 vanilla_fm_apply_joint_film_env
 export VANILLA_FM_ENV_LOCKED=1

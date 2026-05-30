@@ -16,13 +16,14 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 export MODEL=vanilla_fm
 
 # shellcheck source=/dev/null
-source "${ROOT}/scripts/hemit_model_profiles.sh"
-# shellcheck source=/dev/null
 source "${ROOT}/scripts/vanilla_fm_env.sh"
-# Beat/mentor sbatch sets env first; do not reset with default train_env.
+# Phase sbatch sets apply_*_env + VANILLA_FM_ENV_LOCKED=1 before calling this script.
 if [[ "${VANILLA_FM_ENV_LOCKED:-0}" != "1" ]]; then
   vanilla_fm_apply_train_env
 fi
+# shellcheck source=/dev/null
+source "${ROOT}/scripts/hemit_model_profiles.sh"
+vanilla_fm_verify_locked_env
 
 if [[ "${PY_MODEL}" != "vanilla_fm" ]]; then
   echo "ERROR: expected PY_MODEL=vanilla_fm, got PY_MODEL=${PY_MODEL}" >&2

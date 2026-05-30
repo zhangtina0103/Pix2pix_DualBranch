@@ -72,6 +72,7 @@ if is_native; then
     if [[ "${VANILLA_FM_ENV_LOCKED:-0}" != "1" ]]; then
       vanilla_fm_apply_train_env
     fi
+    vanilla_fm_verify_locked_env
     vanilla_fm_print_train_env
   else
     echo "Profile: PY_MODEL=${PY_MODEL} TRAIN_NAME=${TRAIN_NAME}"

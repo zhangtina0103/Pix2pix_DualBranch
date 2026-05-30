@@ -94,6 +94,33 @@ def _make_up_skip(up_mode: str, in_ch: int, out_ch: int, skip_ch: int, n_res: in
     raise ValueError(f"unknown fm_up_mode={up_mode!r}; use bilinear or conv_transpose")
 
 
+class FiLMHeadGenerator(nn.Module):
+    """Pooled H&E -> per output channel (gamma, beta); identity init (DAPI/CD3/panCK)."""
+
+    def __init__(self, cond_nc: int, out_ch: int = 3, hidden_dim: int = 128):
+        super().__init__()
+        self.pool = nn.AdaptiveAvgPool2d(1)
+        self.trunk = nn.Sequential(
+            nn.Flatten(),
+            nn.Linear(cond_nc, hidden_dim),
+            nn.SiLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.SiLU(),
+        )
+        self.head = nn.Linear(hidden_dim, 2 * out_ch)
+        nn.init.zeros_(self.head.weight)
+        nn.init.zeros_(self.head.bias)
+        self.head.bias.data[:out_ch] = 1.0
+
+    def forward(self, cond: torch.Tensor):
+        h = self.trunk(self.pool(cond).flatten(1))
+        gb = self.head(h)
+        c = gb.shape[1] // 2
+        gamma = gb[:, :c, None, None]
+        beta = gb[:, c:, None, None]
+        return gamma, beta
+
+
 class FiLMGenerator(nn.Module):
     """Global H&E embedding -> (gamma, beta) per decoder level (identity init: gamma=1, beta=0)."""
 
@@ -133,13 +160,22 @@ class _CondUNet(nn.Module):
                  num_res_blocks: int = 1,
                  up_mode: str = "bilinear",
                  use_film: bool = False,
+                 film_where: str = "decoder",
+                 use_learned_null: bool = False,
                  cond_nc: int = 3,
                  film_hidden: int = 128):
         super().__init__()
         c1, c2, c3 = channels
         self.use_film = use_film
-        self.film = (
-            FiLMGenerator(cond_nc, (c2, c1), film_hidden) if use_film else None
+        self.film_where = film_where if use_film else ""
+        self.film = None
+        if use_film:
+            if film_where == "head":
+                self.film = FiLMHeadGenerator(cond_nc, out_ch, film_hidden)
+            else:
+                self.film = FiLMGenerator(cond_nc, (c2, c1), film_hidden)
+        self.cfg_null = (
+            nn.Parameter(torch.zeros(1, cond_nc, 1, 1)) if use_learned_null else None
         )
         self.stem = nn.Conv2d(in_ch, c1, 3, padding=1)
         self.res1 = nn.Sequential(*[_ResBlock(c1) for _ in range(num_res_blocks)])
@@ -151,9 +187,13 @@ class _CondUNet(nn.Module):
         self.head = nn.Conv2d(c1, out_ch, 3, padding=1)
 
     def forward(self, x: torch.Tensor, cond_img: Optional[torch.Tensor] = None) -> torch.Tensor:
-        film_params = (
-            self.film(cond_img) if self.film is not None and cond_img is not None else None
-        )
+        film_params = None
+        if (
+            self.film is not None
+            and cond_img is not None
+            and self.film_where == "decoder"
+        ):
+            film_params = self.film(cond_img)
         h1 = self.res1(self.stem(x))
         h2 = self.down1(h1)
         h3 = self.down2(h2)
@@ -166,7 +206,11 @@ class _CondUNet(nn.Module):
         if film_params is not None:
             g, b = film_params[1]
             h = h * g + b
-        return self.head(h)
+        out = self.head(h)
+        if self.film_where == "head" and self.film is not None and cond_img is not None:
+            g, b = self.film(cond_img)
+            out = out * g + b
+        return out
 
 
 class VanillaFMModel(BaseModel):
@@ -215,8 +259,16 @@ class VanillaFMModel(BaseModel):
                             help="Test: guidance scale w (1.0 = no guidance)")
         parser.add_argument("--fm_use_film", action="store_true",
                             help="FiLM on custom U-Net decoder from pooled H&E (additive to concat cond)")
+        parser.add_argument("--fm_film_where", type=str, default="decoder",
+                            choices=["decoder", "head"],
+                            help="decoder=legacy global FiLM on up2/up1; head=per-marker on output")
         parser.add_argument("--fm_film_hidden", type=int, default=128,
                             help="FiLM MLP hidden dim (custom backbone only)")
+        parser.add_argument("--fm_film_reg", type=float, default=0.0,
+                            help="L2 on (gamma-1)^2 and beta^2 (FiLM finetune stability)")
+        parser.add_argument("--fm_null_mode", type=str, default="zero",
+                            choices=["zero", "learned"],
+                            help="CFG null cond: zeros or learnable 1x3 (CFG v2)")
         if is_train:
             parser.add_argument("--fm_lambda_perc", type=float, default=0.1,
                                 help="Perceptual weight (x1 mode; flow_matching.py; 0=off)")
@@ -254,6 +306,8 @@ class VanillaFMModel(BaseModel):
         self.fm_use_cfg = bool(getattr(opt, "fm_use_cfg", False))
         self.fm_cfg_dropout = float(getattr(opt, "fm_cfg_dropout", 0.1))
         self.fm_cfg_scale = float(getattr(opt, "fm_cfg_scale", 1.5))
+        self.fm_null_mode = str(getattr(opt, "fm_null_mode", "zero"))
+        self.fm_film_reg = float(getattr(opt, "fm_film_reg", 0.0))
 
         self.loss_names = ["FM"]
         self.visual_names = ["real_A", "fake_B", "real_B"]
@@ -277,6 +331,8 @@ class VanillaFMModel(BaseModel):
         else:
             up_mode = str(getattr(opt, "fm_up_mode", "bilinear"))
             use_film = bool(getattr(opt, "fm_use_film", False))
+            film_where = str(getattr(opt, "fm_film_where", "decoder"))
+            use_learned_null = self.fm_use_cfg and self.fm_null_mode == "learned"
             self.netG = _CondUNet(
                 in_ch=opt.input_nc + opt.output_nc + 1,
                 out_ch=opt.output_nc,
@@ -284,13 +340,18 @@ class VanillaFMModel(BaseModel):
                 num_res_blocks=n_res,
                 up_mode=up_mode,
                 use_film=use_film,
+                film_where=film_where,
+                use_learned_null=use_learned_null,
                 cond_nc=opt.input_nc,
                 film_hidden=int(getattr(opt, "fm_film_hidden", 128)),
             )
             if use_film:
                 print(
-                    f"FM FiLM: decoder levels (gamma/beta) from H&E pool, hidden={opt.fm_film_hidden}"
+                    f"FM FiLM: where={film_where} hidden={opt.fm_film_hidden} "
+                    f"reg={self.fm_film_reg}"
                 )
+            if use_learned_null:
+                print("FM CFG v2: learned null cond (cfg_null parameter)")
 
         lam_perc = float(getattr(opt, "fm_lambda_perc", 0.0)) if self.isTrain else 0.0
         perc_size = int(getattr(opt, "fm_perc_size", 256))
@@ -324,6 +385,8 @@ class VanillaFMModel(BaseModel):
                 self.loss_names.append("L1")
             if float(getattr(opt, "fm_lambda_sample_l1", 0.0)) > 0:
                 self.loss_names.append("L1s")
+            if self.fm_film_reg > 0 and bool(getattr(opt, "fm_use_film", False)):
+                self.loss_names.append("FilmR")
             if self.fm_use_gan:
                 self.loss_names.extend(["G_GAN", "D_real", "D_fake"])
                 self.model_names.append("D")
@@ -388,25 +451,42 @@ class VanillaFMModel(BaseModel):
                 del state_dict._metadata
             for key in list(state_dict.keys()):
                 self._patch_instance_norm_state_dict(state_dict, net, key.split("."))
-            strict = not bool(getattr(self.opt, "fm_use_film", False))
-            incompatible = net.load_state_dict(state_dict, strict=strict)
-            if not strict:
+            loose = bool(getattr(self.opt, "fm_use_film", False))
+            if getattr(self.opt, "fm_use_cfg", False) and getattr(
+                self.opt, "fm_null_mode", "zero"
+            ) == "learned":
+                loose = True
+            incompatible = net.load_state_dict(state_dict, strict=not loose)
+            if loose:
                 n_miss = len(incompatible.missing_keys)
                 n_unexp = len(incompatible.unexpected_keys)
                 if n_miss or n_unexp:
                     print(
-                        f"  load strict=False (FiLM finetune): missing={n_miss} unexpected={n_unexp}"
+                        f"  load strict=False (finetune): missing={n_miss} unexpected={n_unexp}"
                     )
                     if n_miss and n_miss <= 20:
                         print("  missing:", incompatible.missing_keys)
 
+    def _unwrap_netg(self) -> nn.Module:
+        net = self.netG.module if isinstance(self.netG, nn.DataParallel) else self.netG
+        return net
+
+    def _null_cond(self, like: torch.Tensor) -> torch.Tensor:
+        if self.fm_null_mode == "learned" and not self.use_monai:
+            net = self._unwrap_netg()
+            if getattr(net, "cfg_null", None) is not None:
+                null = net.cfg_null.to(like.device, like.dtype)
+                return null.expand(like.shape[0], -1, like.shape[2], like.shape[3])
+        return torch.zeros_like(like)
+
     def _cond_for_train(self, cond: torch.Tensor) -> torch.Tensor:
-        """CFG train: randomly drop H&E conditioning."""
+        """CFG train: replace H&E with null embedding on dropped samples."""
         if not self.fm_use_cfg or not self.isTrain:
             return cond
         B = cond.shape[0]
         keep = torch.rand(B, device=cond.device) > self.fm_cfg_dropout
-        return cond * keep.view(B, 1, 1, 1).to(cond.dtype)
+        null = self._null_cond(cond)
+        return torch.where(keep.view(B, 1, 1, 1), cond, null)
 
     def _pred_x1(self, x_t: torch.Tensor, t: torch.Tensor,
                  cond: Optional[torch.Tensor] = None,
@@ -416,9 +496,28 @@ class VanillaFMModel(BaseModel):
         w = self.fm_cfg_scale if cfg_scale is None else float(cfg_scale)
         if cfg_guidance and self.fm_use_cfg and w != 1.0:
             x1_c = self._net_forward(x_t, t, cond_a)
-            x1_u = self._net_forward(x_t, t, torch.zeros_like(cond_a))
+            x1_u = self._net_forward(x_t, t, self._null_cond(cond_a))
             return x1_u + w * (x1_c - x1_u)
         return self._net_forward(x_t, t, cond_a)
+
+    def _film_regularizer(self) -> torch.Tensor:
+        if self.fm_film_reg <= 0 or self.use_monai:
+            return torch.tensor(0.0, device=self.device)
+        net = self._unwrap_netg()
+        if not getattr(net, "use_film", False) or net.film is None:
+            return torch.tensor(0.0, device=self.device)
+        reg = torch.tensor(0.0, device=self.device)
+        film = net.film
+        if isinstance(film, FiLMHeadGenerator):
+            reg = reg + (film.head.weight ** 2).mean() + (film.head.bias ** 2).mean()
+            gamma_bias = film.head.bias.data[: film.head.out_features // 2]
+            reg = reg + ((gamma_bias - 1.0) ** 2).mean()
+        elif isinstance(film, FiLMGenerator):
+            for head in film.heads:
+                half = head.out_features // 2
+                reg = reg + ((head.bias.data[:half] - 1.0) ** 2).mean()
+                reg = reg + (head.bias.data[half:] ** 2).mean()
+        return reg * self.fm_film_reg
 
     def _velocity_from_x1(self, x_t: torch.Tensor, t: torch.Tensor,
                           x1_hat: Optional[torch.Tensor] = None) -> torch.Tensor:
@@ -554,6 +653,10 @@ class VanillaFMModel(BaseModel):
         if lam_path > 0 and self.fm_loss_mode == "x1":
             self.loss_L1 = F.l1_loss(x1_hat, x1) * lam_path
             loss = loss + self.loss_L1
+
+        if self.fm_film_reg > 0:
+            self.loss_FilmR = self._film_regularizer()
+            loss = loss + self.loss_FilmR
 
         # Ensure loggable scalars exist for every registered loss name.
         for name in self.loss_names:

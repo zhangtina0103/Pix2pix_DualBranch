@@ -9,6 +9,25 @@
 # MONAI UNet: each channel width must be divisible by 32 (not 272 — use 256)
 # Tune on login node: python scripts/count_fm_params.py --search
 
+# Remove flags from a prior run / login shell (sbatch without --export=ALL still inherits some shells).
+vanilla_fm_clear_stale_env() {
+  unset FM_USE_CFG FM_USE_FILM FM_USE_GAN FM_USE_ODE_TRAIN FM_CROP_SIZE
+  unset FM_NULL_MODE FM_FILM_WHERE FM_FILM_REG
+  unset FM_LAMBDA_SAMPLE_L1 FM_LAMBDA_L1 FM_USE_TANH
+}
+
+vanilla_fm_verify_locked_env() {
+  [[ "${VANILLA_FM_ENV_LOCKED:-0}" == "1" ]] || return 0
+  if [[ -n "${VANILLA_FM_EXPECTED_TRAIN_NAME:-}" && "${TRAIN_NAME:-}" != "${VANILLA_FM_EXPECTED_TRAIN_NAME}" ]]; then
+    echo "ERROR: TRAIN_NAME=${TRAIN_NAME:-<unset>} but locked profile expects ${VANILLA_FM_EXPECTED_TRAIN_NAME}" >&2
+    exit 1
+  fi
+  if [[ "${FM_BACKBONE:-}" != "custom" ]]; then
+    echo "ERROR: FM_BACKBONE=${FM_BACKBONE:-<unset>} (locked HEMIT phases require custom)" >&2
+    exit 1
+  fi
+}
+
 vanilla_fm_apply_train_env() {
   # monai-generative: middle block ALWAYS has attention → OOM at 1024² on L40S.
   # HEMIT fair compare @ 1024: use custom (skip U-Net). monai: set FM_CROP_SIZE=512.
@@ -79,16 +98,24 @@ vanilla_fm_apply_perc_strong_env() {
 
 # Ablation 3: emphasize CD3 in x1 L1 (1,2,1) — vanilla FM, same recipe as joint_perc otherwise.
 vanilla_fm_apply_cd3_weight_env() {
+  vanilla_fm_clear_stale_env
+  unset FM_STEPS FM_CHANNELS TRAIN_NAME
   vanilla_fm_apply_train_env
   export TRAIN_NAME=hemit_vanilla_fm_cd3_weight
+  export VANILLA_FM_EXPECTED_TRAIN_NAME="${TRAIN_NAME}"
+  export FM_BACKBONE=custom
+  export FM_UP_MODE=conv_transpose
   export FM_CHANNELS=96,192,256
   export FM_LAMBDA_PERC=0.1
   export FM_PERC_SIZE=256
-  export FM_STEPS="${FM_STEPS:-25}"
-  export FM_VAL_STEPS="${FM_VAL_STEPS:-8}"
-  export FM_SAMPLE_METHOD="${FM_SAMPLE_METHOD:-heun}"
-  export FM_TIME_DIST="${FM_TIME_DIST:-logit_normal}"
+  export FM_STEPS=25
+  export FM_VAL_STEPS=8
+  export FM_SAMPLE_METHOD=heun
+  export FM_TIME_DIST=logit_normal
+  export FM_LAMBDA_L1=0
+  export FM_LAMBDA_SAMPLE_L1=0
   export FM_USE_GAN=0
+  unset FM_USE_CFG FM_USE_FILM
   export FM_CHANNEL_WEIGHTS=1,2,1
   export VAL_FREQ="${VAL_FREQ:-10}"
   echo "cd3_weight: vanilla FM, channel L1 weights=${FM_CHANNEL_WEIGHTS}" >&2
@@ -137,45 +164,122 @@ vanilla_fm_apply_beat_pix2pix_env() {
 # joint_perc + CFG: finetune from hemit_vanilla_fm_joint_perc/80 with cond dropout; test with fm_cfg_scale.
 # joint_perc + FiLM decoder modulation (finetune from joint_perc/80; no CFG).
 vanilla_fm_apply_joint_film_env() {
+  vanilla_fm_clear_stale_env
+  unset FM_STEPS TRAIN_NAME
   vanilla_fm_apply_train_env
   export TRAIN_NAME=hemit_vanilla_fm_joint_film
+  export VANILLA_FM_EXPECTED_TRAIN_NAME="${TRAIN_NAME}"
+  export FM_BACKBONE=custom
   export FM_UP_MODE=conv_transpose
   export FM_CHANNELS=96,192,256
   export FM_LAMBDA_PERC=0.1
   export FM_CHANNEL_WEIGHTS=1,1,1
-  unset FM_USE_CFG
+  export FM_LAMBDA_L1=0
+  export FM_LAMBDA_SAMPLE_L1=0
+  unset FM_USE_CFG FM_USE_GAN
   export FM_USE_FILM=1
-  export FM_FILM_HIDDEN="${FM_FILM_HIDDEN:-128}"
+  export FM_FILM_WHERE=decoder
+  export FM_FILM_HIDDEN=128
+  export FM_FILM_REG=0
   export FM_STEPS=25
-  export FM_VAL_STEPS="${FM_VAL_STEPS:-8}"
-  export FM_SAMPLE_METHOD="${FM_SAMPLE_METHOD:-heun}"
+  export FM_VAL_STEPS=8
+  export FM_SAMPLE_METHOD=heun
   echo "joint_film: joint_perc + FiLM on decoder (no CFG)" >&2
 }
 
 vanilla_fm_apply_joint_cfg_env() {
+  vanilla_fm_clear_stale_env
+  unset FM_STEPS TRAIN_NAME
   vanilla_fm_apply_train_env
   export TRAIN_NAME=hemit_vanilla_fm_joint_cfg
+  export VANILLA_FM_EXPECTED_TRAIN_NAME="${TRAIN_NAME}"
+  export FM_BACKBONE=custom
   export FM_UP_MODE=conv_transpose
   export FM_CHANNELS=96,192,256
   export FM_LAMBDA_PERC=0.1
   export FM_CHANNEL_WEIGHTS=1,1,1
+  export FM_LAMBDA_L1=0
+  export FM_LAMBDA_SAMPLE_L1=0
+  unset FM_USE_FILM FM_USE_GAN
   export FM_USE_CFG=1
-  export FM_CFG_DROPOUT="${FM_CFG_DROPOUT:-0.1}"
-  export FM_CFG_SCALE="${FM_CFG_SCALE:-1.5}"
-  export FM_STEPS="${FM_STEPS:-25}"
-  export FM_VAL_STEPS="${FM_VAL_STEPS:-8}"
-  export FM_SAMPLE_METHOD="${FM_SAMPLE_METHOD:-heun}"
+  export FM_NULL_MODE=zero
+  export FM_CFG_DROPOUT=0.1
+  export FM_CFG_SCALE=1.5
+  export FM_STEPS=25
+  export FM_VAL_STEPS=8
+  export FM_SAMPLE_METHOD=heun
   echo "joint_cfg: joint_perc + CFG dropout=${FM_CFG_DROPOUT} test_scale=${FM_CFG_SCALE}" >&2
 }
 
+# Shared joint_perc recipe (baseline checkpoint hemit_vanilla_fm_joint_perc/80).
+vanilla_fm_apply_joint_perc_pins() {
+  vanilla_fm_clear_stale_env
+  unset FM_STEPS FM_CHANNELS TRAIN_NAME PRETRAINED_NAME
+  vanilla_fm_apply_train_env
+  export FM_BACKBONE=custom
+  export FM_UP_MODE=conv_transpose
+  export FM_CHANNELS=96,192,256
+  export FM_LAMBDA_PERC=0.1
+  export FM_CHANNEL_WEIGHTS=1,1,1
+  export FM_STEPS=25
+  export FM_VAL_STEPS=8
+  export FM_SAMPLE_METHOD=heun
+  export FM_TIME_DIST=logit_normal
+  export FM_LAMBDA_L1=0
+  export FM_LAMBDA_SAMPLE_L1=0
+  unset FM_USE_CFG FM_USE_FILM FM_USE_GAN FM_USE_ODE_TRAIN
+  unset FM_NULL_MODE FM_FILM_WHERE
+  export FM_FILM_REG=0
+}
+
+# Phase 1: FM+GAN — PatchGAN on 12-step ODE samples, finetune from joint_perc/80.
+vanilla_fm_apply_joint_gan_env() {
+  vanilla_fm_apply_joint_perc_pins
+  export TRAIN_NAME=hemit_vanilla_fm_joint_gan
+  export VANILLA_FM_EXPECTED_TRAIN_NAME="${TRAIN_NAME}"
+  export FM_USE_GAN=1
+  export FM_LAMBDA_GAN=1.0
+  export FM_GAN_SAMPLE_PROB=0.35
+  export FM_GAN_SAMPLE_STEPS=12
+  export FM_LAMBDA_SAMPLE_L1=0
+  echo "phase1 joint_gan: FM + PatchGAN on ODE fakes (prob=${FM_GAN_SAMPLE_PROB})" >&2
+}
+
+# Phase 3: CFG v2 — learned null embedding, higher dropout, low test scale.
+vanilla_fm_apply_joint_cfg_v2_env() {
+  vanilla_fm_apply_joint_perc_pins
+  export TRAIN_NAME=hemit_vanilla_fm_joint_cfg_v2
+  export VANILLA_FM_EXPECTED_TRAIN_NAME="${TRAIN_NAME}"
+  unset FM_USE_FILM FM_USE_GAN
+  export FM_USE_CFG=1
+  export FM_NULL_MODE=learned
+  export FM_CFG_DROPOUT=0.18
+  export FM_CFG_SCALE=1.1
+  echo "phase3 joint_cfg_v2: learned null dropout=${FM_CFG_DROPOUT} test_w=${FM_CFG_SCALE}" >&2
+}
+
+# Phase 4: FiLM v2 — per-marker head FiLM, identity reg, CD3-weighted L1.
+vanilla_fm_apply_joint_film_v2_env() {
+  vanilla_fm_apply_joint_perc_pins
+  export TRAIN_NAME=hemit_vanilla_fm_joint_film_v2
+  export VANILLA_FM_EXPECTED_TRAIN_NAME="${TRAIN_NAME}"
+  unset FM_USE_CFG FM_USE_GAN
+  export FM_USE_FILM=1
+  export FM_FILM_WHERE=head
+  export FM_FILM_HIDDEN="${FM_FILM_HIDDEN:-128}"
+  export FM_FILM_REG=0.01
+  export FM_CHANNEL_WEIGHTS=1,2,1
+  echo "phase4 joint_film_v2: head FiLM reg=${FM_FILM_REG} ch_weights=${FM_CHANNEL_WEIGHTS}" >&2
+}
+
 vanilla_fm_print_train_env() {
-  echo "vanilla_fm config:"
+  echo "vanilla_fm config: locked=${VANILLA_FM_ENV_LOCKED:-0} TRAIN_NAME=${TRAIN_NAME:-?}"
   echo "  backbone=${FM_BACKBONE}  loss=${FM_LOSS}  channels=${FM_CHANNELS}  attn=${FM_ATTN}  res=${FM_RESBLOCKS}  up=${FM_UP_MODE:-bilinear}"
   if [[ "${FM_USE_CFG:-0}" == "1" ]]; then
-    echo "  CFG: dropout=${FM_CFG_DROPOUT:-0.1}  test_scale=${FM_CFG_SCALE:-1.5}"
+    echo "  CFG: null=${FM_NULL_MODE:-zero} dropout=${FM_CFG_DROPOUT:-0.1} test_scale=${FM_CFG_SCALE:-1.5}"
   fi
   if [[ "${FM_USE_FILM:-0}" == "1" ]]; then
-    echo "  FiLM: hidden=${FM_FILM_HIDDEN:-128}"
+    echo "  FiLM: where=${FM_FILM_WHERE:-decoder} hidden=${FM_FILM_HIDDEN:-128} reg=${FM_FILM_REG:-0}"
   fi
   echo "  perc=${FM_LAMBDA_PERC}  time=${FM_TIME_DIST}  BATCH_SIZE=${BATCH_SIZE:-?}"
   echo "  FM_LAMBDA_L1=${FM_LAMBDA_L1}  FM_LAMBDA_SAMPLE_L1=${FM_LAMBDA_SAMPLE_L1}"

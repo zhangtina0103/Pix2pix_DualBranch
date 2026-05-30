@@ -110,21 +110,22 @@ case "${MODEL}" in
     PRETRAINED_NAME="${PRETRAINED_NAME:-hemit_vanilla_fm_joint}"
     TRAIN_LR="${TRAIN_LR:-0.0002}"
     DATASET_MODE="${DATASET_MODE:-aligned}"
-    # MONAI UNet (mentor flow_matching.py); ~11M @ 64,128,192 attn 0,0,1 res=2
-    FM_BACKBONE="${FM_BACKBONE:-custom}"
-    FM_LOSS="${FM_LOSS:-x1}"
-    FM_CHANNELS="${FM_CHANNELS:-64,128,192}"
-    FM_ATTN="${FM_ATTN:-0,0,0}"
-    FM_RESBLOCKS="${FM_RESBLOCKS:-2}"
-    FM_LAMBDA_PERC="${FM_LAMBDA_PERC:-0.1}"
-    FM_STEPS="${FM_STEPS:-25}"
-    FM_VAL_STEPS="${FM_VAL_STEPS:-8}"
-    FM_SAMPLE_METHOD="${FM_SAMPLE_METHOD:-heun}"
-    # Lambdas pinned in scripts/vanilla_fm_env.sh (vanilla_fm_apply_train_env)
-    FM_SAMPLE_L1_PROB="${FM_SAMPLE_L1_PROB:-1.0}"
-    FM_TRAIN_SAMPLE_METHOD="${FM_TRAIN_SAMPLE_METHOD:-euler}"
     DISPLAY_ID="${DISPLAY_ID:--1}"
     VAL_FREQ="${VAL_FREQ:-10}"
+    # When VANILLA_FM_ENV_LOCKED=1, FM_* come only from vanilla_fm_apply_*_env (not profile defaults).
+    if [[ "${VANILLA_FM_ENV_LOCKED:-0}" != "1" ]]; then
+      FM_BACKBONE="${FM_BACKBONE:-custom}"
+      FM_LOSS="${FM_LOSS:-x1}"
+      FM_CHANNELS="${FM_CHANNELS:-64,128,192}"
+      FM_ATTN="${FM_ATTN:-0,0,0}"
+      FM_RESBLOCKS="${FM_RESBLOCKS:-2}"
+      FM_LAMBDA_PERC="${FM_LAMBDA_PERC:-0.1}"
+      FM_STEPS="${FM_STEPS:-25}"
+      FM_VAL_STEPS="${FM_VAL_STEPS:-8}"
+      FM_SAMPLE_METHOD="${FM_SAMPLE_METHOD:-heun}"
+      FM_SAMPLE_L1_PROB="${FM_SAMPLE_L1_PROB:-1.0}"
+      FM_TRAIN_SAMPLE_METHOD="${FM_TRAIN_SAMPLE_METHOD:-euler}"
+    fi
     ;;
   *)
     echo "Unknown MODEL=${MODEL}" >&2

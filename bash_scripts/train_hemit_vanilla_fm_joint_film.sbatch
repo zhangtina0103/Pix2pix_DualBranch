@@ -32,6 +32,7 @@ export N_EPOCHS=70
 export N_EPOCHS_DECAY=30
 
 # shellcheck source=/dev/null
+source "${REPO_ROOT}/bash_scripts/_vanilla_fm_sbatch_preamble.sh"
 source "${REPO_ROOT}/scripts/vanilla_fm_env.sh"
 vanilla_fm_apply_joint_film_env
 export VANILLA_FM_ENV_LOCKED=1

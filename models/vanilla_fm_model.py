@@ -15,6 +15,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from . import networks
 from .base_model import BaseModel
 from .fm_perceptual import build_fm_perceptual
 from .mentor_flow_net import MentorFlowNet
@@ -48,7 +49,10 @@ class _Down(nn.Module):
 class _UpSkip(nn.Module):
     def __init__(self, in_ch: int, out_ch: int, skip_ch: int, n_res: int):
         super().__init__()
-        self.up = nn.ConvTranspose2d(in_ch, out_ch, 4, stride=2, padding=1)
+        self.up = nn.Sequential(
+            nn.Upsample(scale_factor=2, mode="bilinear", align_corners=False),
+            nn.Conv2d(in_ch, out_ch, 3, padding=1),
+        )
         self.fuse = nn.Conv2d(out_ch + skip_ch, out_ch, 3, padding=1)
         self.res = nn.Sequential(*[_ResBlock(out_ch) for _ in range(n_res)])
 
@@ -140,6 +144,16 @@ class VanillaFMModel(BaseModel):
             parser.add_argument("--fm_train_sample_method", type=str, default="euler",
                                 choices=["euler", "heun"],
                                 help="ODE solver for train sample L1")
+            parser.add_argument("--fm_use_gan", action="store_true",
+                                help="PatchGAN on ODE samples (pix2pix-style sharpness)")
+            parser.add_argument("--fm_lambda_gan", type=float, default=1.0,
+                                help="Weight for GAN loss on ODE fake_B")
+            parser.add_argument("--fm_gan_sample_prob", type=float, default=0.5,
+                                help="Fraction of iters that run ODE for GAN / sample L1")
+            parser.add_argument("--fm_gan_sample_steps", type=int, default=12,
+                                help="ODE steps for train GAN/sample (0=fm_train_sample_steps or fm_steps)")
+            parser.add_argument("--fm_channel_weights", type=str, default="1,2,1",
+                                help="Per-channel weights on ODE L1 (DAPI,CD3,panCK) like pix2pix Focal")
         return parser
 
     def __init__(self, opt):
@@ -193,6 +207,10 @@ class VanillaFMModel(BaseModel):
                     f"lambda={lam_perc} downsample={perc_size if perc_size > 0 else 'full'}"
                 )
 
+        self.fm_use_gan = bool(getattr(opt, "fm_use_gan", False)) and self.isTrain
+        cw = [float(x) for x in str(getattr(opt, "fm_channel_weights", "1,2,1")).split(",")]
+        self.fm_channel_weights = torch.tensor(cw, device=self.device, dtype=torch.float32)
+
         if self.isTrain:
             if self.perceptual_loss_fn is not None:
                 self.loss_names.append("Perc")
@@ -202,6 +220,17 @@ class VanillaFMModel(BaseModel):
                 self.loss_names.append("L1")
             if float(getattr(opt, "fm_lambda_sample_l1", 0.0)) > 0:
                 self.loss_names.append("L1s")
+            if self.fm_use_gan:
+                self.loss_names.extend(["G_GAN", "D_real", "D_fake"])
+                self.model_names.append("D")
+                self.netD = networks.define_D(
+                    opt.input_nc + opt.output_nc, opt.ndf, opt.netD,
+                    opt.n_layers_D, opt.norm, opt.init_type, opt.init_gain, self.gpu_ids,
+                )
+                self.criterionGAN = networks.GANLoss(getattr(opt, "gan_mode", "lsgan")).to(self.device)
+                self.optimizer_D = torch.optim.Adam(
+                    self.netD.parameters(), lr=opt.lr, betas=(opt.beta1, 0.999))
+                self.optimizers.append(self.optimizer_D)
 
         if len(self.gpu_ids) > 0 and torch.cuda.is_available():
             self.netG.to(self.device)
@@ -372,28 +401,76 @@ class VanillaFMModel(BaseModel):
                 setattr(self, attr, loss.new_tensor(0.0))
         return loss
 
-    def _loss_ode_sample_l1(self):
-        x1 = self.real_B
+    def _ode_aux_steps(self) -> int:
+        gan_steps = int(getattr(self.opt, "fm_gan_sample_steps", 0))
+        if gan_steps > 0:
+            return gan_steps
         override = int(getattr(self.opt, "fm_train_sample_steps", 0))
-        steps = override if override > 0 else int(self.opt.fm_steps)
-        method = str(getattr(self.opt, "fm_train_sample_method", "euler"))
-        fake = self._integrate_train_ode(self.real_A, torch.randn_like(x1), steps, method)
+        if override > 0:
+            return override
+        return int(self.opt.fm_steps)
+
+    def _should_run_ode_aux(self) -> bool:
+        lam_sample = float(getattr(self.opt, "fm_lambda_sample_l1", 0.0))
+        prob_sample = float(getattr(self.opt, "fm_sample_l1_prob", 1.0))
+        prob_gan = float(getattr(self.opt, "fm_gan_sample_prob", 0.5))
+        need_sample = lam_sample > 0 and random.random() < prob_sample
+        need_gan = self.fm_use_gan and random.random() < prob_gan
+        return need_sample or need_gan
+
+    def _channel_weighted_l1(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        w = self.fm_channel_weights.view(1, -1, 1, 1).to(pred.device)
+        return (w * F.l1_loss(pred, target, reduction="none")).mean()
+
+    def _sample_train_fake(self) -> torch.Tensor:
+        x1 = self.real_B
+        steps = self._ode_aux_steps()
+        method = str(getattr(self.opt, "fm_train_sample_method", "heun"))
+        return self._integrate_train_ode(self.real_A, torch.randn_like(x1), steps, method)
+
+    def _loss_ode_sample_l1(self, fake: torch.Tensor) -> torch.Tensor:
         lam = float(getattr(self.opt, "fm_lambda_sample_l1", 0.0))
-        self.loss_L1s = F.l1_loss(fake, x1) * lam
+        self.loss_L1s = self._channel_weighted_l1(fake, self.real_B) * lam
         return self.loss_L1s
 
-    def backward_G(self):
-        self._loss_fm().backward()
-        lam_sample = float(getattr(self.opt, "fm_lambda_sample_l1", 0.0))
-        if lam_sample > 0 and random.random() < float(getattr(self.opt, "fm_sample_l1_prob", 1.0)):
-            self._loss_ode_sample_l1().backward()
+    def _backward_D_fm(self, fake_B: torch.Tensor) -> None:
+        fake_AB = torch.cat((self.real_A, fake_B.detach()), 1)
+        pred_fake = self.netD(fake_AB)
+        self.loss_D_fake = self.criterionGAN(pred_fake, False)
+        real_AB = torch.cat((self.real_A, self.real_B), 1)
+        pred_real = self.netD(real_AB)
+        self.loss_D_real = self.criterionGAN(pred_real, True)
+        self.loss_D = (self.loss_D_fake + self.loss_D_real) * 0.5
+        self.loss_D.backward()
+
+    def _backward_G_gan_fm(self, fake_B: torch.Tensor) -> None:
+        lam_gan = float(getattr(self.opt, "fm_lambda_gan", 1.0))
+        fake_AB = torch.cat((self.real_A, fake_B), 1)
+        pred_fake = self.netD(fake_AB)
+        self.loss_G_GAN = self.criterionGAN(pred_fake, True) * lam_gan
+        self.loss_G_GAN.backward()
 
     def optimize_parameters(self):
+        lam_sample = float(getattr(self.opt, "fm_lambda_sample_l1", 0.0))
+        fake_ode: Optional[torch.Tensor] = None
+        run_ode = self._should_run_ode_aux()
+
+        if run_ode:
+            fake_ode = self._sample_train_fake()
+
+        if self.fm_use_gan and fake_ode is not None:
+            self.set_requires_grad(self.netD, True)
+            self.optimizer_D.zero_grad(set_to_none=True)
+            self._backward_D_fm(fake_ode)
+            self.optimizer_D.step()
+
         self.optimizer_G.zero_grad(set_to_none=True)
         self._loss_fm().backward()
-        lam_sample = float(getattr(self.opt, "fm_lambda_sample_l1", 0.0))
-        if lam_sample > 0 and random.random() < float(getattr(self.opt, "fm_sample_l1_prob", 1.0)):
-            self._loss_ode_sample_l1().backward()
+        if fake_ode is not None and lam_sample > 0:
+            self._loss_ode_sample_l1(fake_ode).backward()
+        if self.fm_use_gan and fake_ode is not None:
+            self.set_requires_grad(self.netD, False)
+            self._backward_G_gan_fm(fake_ode)
         self.optimizer_G.step()
 
     @torch.no_grad()

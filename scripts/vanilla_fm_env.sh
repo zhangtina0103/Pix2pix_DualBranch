@@ -40,12 +40,71 @@ vanilla_fm_apply_train_env() {
   fi
 }
 
+# Ablation 1: same recipe as hemit_vanilla_fm_joint_perc, only bilinear decoder (after git pull).
+vanilla_fm_apply_decoder_only_env() {
+  vanilla_fm_apply_train_env
+  export TRAIN_NAME="${TRAIN_NAME:-hemit_vanilla_fm_decoder_only}"
+  export FM_CHANNELS="${FM_CHANNELS:-96,192,256}"
+  export FM_LAMBDA_PERC="${FM_LAMBDA_PERC:-0.1}"
+  export FM_PERC_SIZE="${FM_PERC_SIZE:-256}"
+  export FM_STEPS="${FM_STEPS:-25}"
+  export FM_VAL_STEPS="${FM_VAL_STEPS:-8}"
+  export FM_SAMPLE_METHOD="${FM_SAMPLE_METHOD:-heun}"
+  export FM_TIME_DIST="${FM_TIME_DIST:-logit_normal}"
+  export FM_USE_GAN=0
+  export VAL_FREQ="${VAL_FREQ:-10}"
+  echo "decoder_only: joint_perc recipe + bilinear upsample (no ODE-L1, no GAN)" >&2
+}
+
+# Mentor-style vanilla FM only: Gaussian x0, x1 L1 + perceptual, logit-normal t, Heun ODE.
+# No GAN, no pix2pix-style direct G(A). Val ODE steps = test steps.
+vanilla_fm_apply_mentor_strict_env() {
+  vanilla_fm_apply_train_env
+  export TRAIN_NAME="${TRAIN_NAME:-hemit_vanilla_fm_mentor}"
+  export FM_CHANNELS="${FM_CHANNELS:-96,192,256}"
+  export FM_LAMBDA_PERC="${FM_LAMBDA_PERC:-0.1}"
+  export FM_PERC_SIZE="${FM_PERC_SIZE:-256}"
+  export FM_STEPS="${FM_STEPS:-25}"
+  export FM_VAL_STEPS="${FM_VAL_STEPS:-${FM_STEPS}}"
+  export FM_SAMPLE_METHOD="${FM_SAMPLE_METHOD:-heun}"
+  export FM_TIME_DIST="${FM_TIME_DIST:-logit_normal}"
+  export FM_USE_GAN=0
+  export VAL_FREQ="${VAL_FREQ:-10}"
+  echo "mentor_strict: flow matching only (noise→ODE), perc=${FM_LAMBDA_PERC} val_steps=${FM_VAL_STEPS}" >&2
+}
+
+# Tune vanilla FM toward pix2pix SSIM without changing the generative path (still noise→ODE).
+# GAN is OFF by default; set FM_USE_GAN=1 only if you explicitly want PatchGAN on ODE samples.
+vanilla_fm_apply_beat_pix2pix_env() {
+  vanilla_fm_apply_mentor_strict_env
+  export TRAIN_NAME="${TRAIN_NAME:-hemit_vanilla_fm_beat_p2p}"
+  export FM_LAMBDA_PERC="${FM_LAMBDA_PERC:-1.0}"
+  export FM_PERC_SIZE="${FM_PERC_SIZE:-512}"
+  export FM_STEPS="${FM_STEPS:-50}"
+  export FM_VAL_STEPS="${FM_VAL_STEPS:-${FM_STEPS}}"
+  export FM_USE_ODE_TRAIN=1
+  export FM_LAMBDA_SAMPLE_L1="${FM_LAMBDA_SAMPLE_L1:-100}"
+  export FM_SAMPLE_L1_PROB="${FM_SAMPLE_L1_PROB:-0.5}"
+  export FM_TRAIN_SAMPLE_STEPS="${FM_TRAIN_SAMPLE_STEPS:-25}"
+  export FM_TRAIN_SAMPLE_METHOD="${FM_TRAIN_SAMPLE_METHOD:-heun}"
+  export FM_GAN_SAMPLE_STEPS="${FM_GAN_SAMPLE_STEPS:-12}"
+  export FM_USE_GAN="${FM_USE_GAN:-0}"
+  export FM_LAMBDA_GAN="${FM_LAMBDA_GAN:-1.0}"
+  export FM_GAN_SAMPLE_PROB="${FM_GAN_SAMPLE_PROB:-0.5}"
+  export FM_CHANNEL_WEIGHTS="${FM_CHANNEL_WEIGHTS:-1,2,1}"
+  export VAL_FREQ="${VAL_FREQ:-5}"
+  echo "beat_pix2pix (still FM): sample_L1=${FM_LAMBDA_SAMPLE_L1} GAN=${FM_USE_GAN} steps=${FM_STEPS}" >&2
+}
+
 vanilla_fm_print_train_env() {
   echo "vanilla_fm config:"
   echo "  backbone=${FM_BACKBONE}  loss=${FM_LOSS}  channels=${FM_CHANNELS}  attn=${FM_ATTN}  res=${FM_RESBLOCKS}"
   echo "  perc=${FM_LAMBDA_PERC}  time=${FM_TIME_DIST}  BATCH_SIZE=${BATCH_SIZE:-?}"
   echo "  FM_LAMBDA_L1=${FM_LAMBDA_L1}  FM_LAMBDA_SAMPLE_L1=${FM_LAMBDA_SAMPLE_L1}"
   echo "  infer: steps=${FM_STEPS}  ${FM_SAMPLE_METHOD}  val_steps=${FM_VAL_STEPS}"
+  if [[ "${FM_USE_GAN:-0}" == "1" ]]; then
+    echo "  GAN: lambda=${FM_LAMBDA_GAN:-1} prob=${FM_GAN_SAMPLE_PROB:-?} ode_steps=${FM_GAN_SAMPLE_STEPS:-?}"
+  fi
   if [[ "${FM_BACKBONE}" == "monai" && -z "${FM_CROP_SIZE:-}" ]]; then
     echo "  WARNING: monai UNet at 1024² OOMs (mid-block attention). Use FM_BACKBONE=custom or FM_CROP_SIZE=512" >&2
   fi

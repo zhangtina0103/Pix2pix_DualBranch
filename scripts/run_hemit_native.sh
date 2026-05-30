@@ -118,7 +118,16 @@ train() {
         --fm_lambda_l1 "${FM_LAMBDA_L1}"
         --fm_lambda_sample_l1 "${FM_LAMBDA_SAMPLE_L1}"
         --fm_val_steps "${FM_VAL_STEPS:-8}"
+        --fm_channel_weights "${FM_CHANNEL_WEIGHTS:-1,2,1}"
       )
+      if [[ "${FM_USE_GAN:-0}" == "1" ]]; then
+        extra+=(
+          --fm_use_gan
+          --fm_lambda_gan "${FM_LAMBDA_GAN:-1.0}"
+          --fm_gan_sample_prob "${FM_GAN_SAMPLE_PROB:-0.5}"
+          --fm_gan_sample_steps "${FM_GAN_SAMPLE_STEPS:-12}"
+        )
+      fi
       if [[ "${FM_LOSS:-x1}" == "x1" && "${FM_BACKBONE:-custom}" == "monai" ]]; then
         extra+=(--fm_use_tanh)
       fi
@@ -129,7 +138,8 @@ train() {
       if [[ "${FM_LAMBDA_SAMPLE_L1:-0}" != "0" && "${FM_LAMBDA_SAMPLE_L1:-0}" != "0.0" ]]; then
         extra+=(
           --fm_sample_l1_prob "${FM_SAMPLE_L1_PROB:-1.0}"
-          --fm_train_sample_method "${FM_TRAIN_SAMPLE_METHOD:-euler}"
+          --fm_train_sample_method "${FM_TRAIN_SAMPLE_METHOD:-heun}"
+          --fm_train_sample_steps "${FM_TRAIN_SAMPLE_STEPS:-0}"
         )
       fi
       ;;

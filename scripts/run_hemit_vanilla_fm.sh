@@ -19,7 +19,10 @@ export MODEL=vanilla_fm
 source "${ROOT}/scripts/hemit_model_profiles.sh"
 # shellcheck source=/dev/null
 source "${ROOT}/scripts/vanilla_fm_env.sh"
-vanilla_fm_apply_train_env
+# Beat/mentor sbatch sets env first; do not reset with default train_env.
+if [[ "${VANILLA_FM_ENV_LOCKED:-0}" != "1" ]]; then
+  vanilla_fm_apply_train_env
+fi
 
 if [[ "${PY_MODEL}" != "vanilla_fm" ]]; then
   echo "ERROR: expected PY_MODEL=vanilla_fm, got PY_MODEL=${PY_MODEL}" >&2

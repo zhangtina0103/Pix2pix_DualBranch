@@ -375,7 +375,7 @@ class VanillaFMModel(BaseModel):
                 loss = loss + self.loss_Perc
         else:
             x1_hat = self._pred_x1(xt, t)
-            self.loss_FM = F.l1_loss(x1_hat, x1)
+            self.loss_FM = self._channel_weighted_l1(x1_hat, x1)
             loss = self.loss_FM
             lam_perc = float(getattr(self.opt, "fm_lambda_perc", 0.0))
             if self.perceptual_loss_fn is not None:

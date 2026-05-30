@@ -53,8 +53,43 @@ vanilla_fm_apply_decoder_only_env() {
   export FM_SAMPLE_METHOD="${FM_SAMPLE_METHOD:-heun}"
   export FM_TIME_DIST="${FM_TIME_DIST:-logit_normal}"
   export FM_USE_GAN=0
+  export FM_CHANNEL_WEIGHTS=1,1,1
   export VAL_FREQ="${VAL_FREQ:-10}"
   echo "decoder_only: joint_perc recipe + bilinear upsample (no ODE-L1, no GAN)" >&2
+}
+
+# Ablation 2 (parallel): stronger perceptual only — still x1 + logit-normal + noise→ODE @ 25 Heun.
+vanilla_fm_apply_perc_strong_env() {
+  vanilla_fm_apply_train_env
+  export TRAIN_NAME=hemit_vanilla_fm_perc_strong
+  export FM_CHANNELS="${FM_CHANNELS:-96,192,256}"
+  export FM_LAMBDA_PERC="${FM_LAMBDA_PERC:-0.5}"
+  export FM_PERC_SIZE="${FM_PERC_SIZE:-256}"
+  export FM_STEPS="${FM_STEPS:-25}"
+  export FM_VAL_STEPS="${FM_VAL_STEPS:-8}"
+  export FM_SAMPLE_METHOD="${FM_SAMPLE_METHOD:-heun}"
+  export FM_TIME_DIST="${FM_TIME_DIST:-logit_normal}"
+  export FM_USE_GAN=0
+  export FM_CHANNEL_WEIGHTS=1,1,1
+  export VAL_FREQ="${VAL_FREQ:-10}"
+  echo "perc_strong: vanilla FM, perc=${FM_LAMBDA_PERC} (no ODE-L1, no GAN)" >&2
+}
+
+# Ablation 3: emphasize CD3 in x1 L1 (1,2,1) — vanilla FM, same recipe as joint_perc otherwise.
+vanilla_fm_apply_cd3_weight_env() {
+  vanilla_fm_apply_train_env
+  export TRAIN_NAME=hemit_vanilla_fm_cd3_weight
+  export FM_CHANNELS="${FM_CHANNELS:-96,192,256}"
+  export FM_LAMBDA_PERC="${FM_LAMBDA_PERC:-0.1}"
+  export FM_PERC_SIZE="${FM_PERC_SIZE:-256}"
+  export FM_STEPS="${FM_STEPS:-25}"
+  export FM_VAL_STEPS="${FM_VAL_STEPS:-8}"
+  export FM_SAMPLE_METHOD="${FM_SAMPLE_METHOD:-heun}"
+  export FM_TIME_DIST="${FM_TIME_DIST:-logit_normal}"
+  export FM_USE_GAN=0
+  export FM_CHANNEL_WEIGHTS=1,2,1
+  export VAL_FREQ="${VAL_FREQ:-10}"
+  echo "cd3_weight: vanilla FM, channel L1 weights=${FM_CHANNEL_WEIGHTS}" >&2
 }
 
 # Mentor-style vanilla FM only: Gaussian x0, x1 L1 + perceptual, logit-normal t, Heun ODE.
@@ -103,6 +138,7 @@ vanilla_fm_print_train_env() {
   echo "  perc=${FM_LAMBDA_PERC}  time=${FM_TIME_DIST}  BATCH_SIZE=${BATCH_SIZE:-?}"
   echo "  FM_LAMBDA_L1=${FM_LAMBDA_L1}  FM_LAMBDA_SAMPLE_L1=${FM_LAMBDA_SAMPLE_L1}"
   echo "  infer: steps=${FM_STEPS}  ${FM_SAMPLE_METHOD}  val_steps=${FM_VAL_STEPS}"
+  echo "  channel_L1_weights=${FM_CHANNEL_WEIGHTS:-1,2,1}"
   if [[ "${FM_USE_GAN:-0}" == "1" ]]; then
     echo "  GAN: lambda=${FM_LAMBDA_GAN:-1} prob=${FM_GAN_SAMPLE_PROB:-?} ode_steps=${FM_GAN_SAMPLE_STEPS:-?}"
   fi

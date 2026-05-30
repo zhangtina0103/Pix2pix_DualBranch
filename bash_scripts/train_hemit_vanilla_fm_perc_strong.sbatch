@@ -1,10 +1,11 @@
 #!/bin/bash
-# Ablation 1: bilinear decoder only — same FM as joint_perc (x1 + perc 0.1, 25 Heun, no ODE-L1/GAN).
+# Ablation 2: stronger perceptual (default 0.5) — vanilla FM, parallel to decoder_only.
 #
-#   sbatch bash_scripts/train_hemit_vanilla_fm_decoder_only.sbatch
-#SBATCH --job-name=hemit_vfm_dec
-#SBATCH --output=logs/hemit_vfm_decoder_%j.out
-#SBATCH --error=logs/hemit_vfm_decoder_%j.err
+#   sbatch bash_scripts/train_hemit_vanilla_fm_perc_strong.sbatch
+# Tune: FM_LAMBDA_PERC=1.0 FM_PERC_SIZE=256  (OOM → keep 0.5 or PERC_SIZE=128)
+#SBATCH --job-name=hemit_vfm_ps
+#SBATCH --output=logs/hemit_vfm_perc_%j.out
+#SBATCH --error=logs/hemit_vfm_perc_%j.err
 #SBATCH --partition=mit_normal_gpu
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
@@ -27,9 +28,9 @@ export DISPLAY_ID="${DISPLAY_ID:--1}"
 
 # shellcheck source=/dev/null
 source "${REPO_ROOT}/scripts/vanilla_fm_env.sh"
-vanilla_fm_apply_decoder_only_env
+vanilla_fm_apply_perc_strong_env
 export VANILLA_FM_ENV_LOCKED=1
-export TRAIN_NAME=hemit_vanilla_fm_decoder_only
+export TRAIN_NAME=hemit_vanilla_fm_perc_strong
 export FM_CHANNEL_WEIGHTS=1,1,1
 vanilla_fm_print_train_env
 

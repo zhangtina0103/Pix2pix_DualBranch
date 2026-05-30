@@ -116,6 +116,9 @@ train() {
         --fm_perc_size "${FM_PERC_SIZE:-256}"
         --fm_steps "${FM_STEPS:-25}"
         --fm_sample_method "${FM_SAMPLE_METHOD:-heun}"
+        ${FM_USE_CFG:+--fm_use_cfg}
+        --fm_cfg_dropout "${FM_CFG_DROPOUT:-0.1}"
+        --fm_cfg_scale "${FM_CFG_SCALE:-1.5}"
         --fm_lambda_l1 "${FM_LAMBDA_L1}"
         --fm_lambda_sample_l1 "${FM_LAMBDA_SAMPLE_L1}"
         --fm_val_steps "${FM_VAL_STEPS:-8}"
@@ -192,6 +195,9 @@ test_one() {
         --fm_up_mode "${FM_UP_MODE:-bilinear}"
         --fm_steps "${FM_STEPS:-25}"
         --fm_sample_method "${FM_SAMPLE_METHOD:-heun}"
+        ${FM_USE_CFG:+--fm_use_cfg}
+        --fm_cfg_dropout "${FM_CFG_DROPOUT:-0.1}"
+        --fm_cfg_scale "${FM_CFG_SCALE:-1.5}"
       )
       if [[ "${FM_LOSS:-x1}" == "x1" ]]; then
         extra+=(--fm_use_tanh)

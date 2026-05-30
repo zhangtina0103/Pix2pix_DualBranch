@@ -134,9 +134,29 @@ vanilla_fm_apply_beat_pix2pix_env() {
   echo "beat_pix2pix (still FM): sample_L1=${FM_LAMBDA_SAMPLE_L1} GAN=${FM_USE_GAN} steps=${FM_STEPS}" >&2
 }
 
+# joint_perc + CFG: finetune from hemit_vanilla_fm_joint_perc/80 with cond dropout; test with fm_cfg_scale.
+vanilla_fm_apply_joint_cfg_env() {
+  vanilla_fm_apply_train_env
+  export TRAIN_NAME=hemit_vanilla_fm_joint_cfg
+  export FM_UP_MODE=conv_transpose
+  export FM_CHANNELS=96,192,256
+  export FM_LAMBDA_PERC=0.1
+  export FM_CHANNEL_WEIGHTS=1,1,1
+  export FM_USE_CFG=1
+  export FM_CFG_DROPOUT="${FM_CFG_DROPOUT:-0.1}"
+  export FM_CFG_SCALE="${FM_CFG_SCALE:-1.5}"
+  export FM_STEPS="${FM_STEPS:-25}"
+  export FM_VAL_STEPS="${FM_VAL_STEPS:-8}"
+  export FM_SAMPLE_METHOD="${FM_SAMPLE_METHOD:-heun}"
+  echo "joint_cfg: joint_perc + CFG dropout=${FM_CFG_DROPOUT} test_scale=${FM_CFG_SCALE}" >&2
+}
+
 vanilla_fm_print_train_env() {
   echo "vanilla_fm config:"
   echo "  backbone=${FM_BACKBONE}  loss=${FM_LOSS}  channels=${FM_CHANNELS}  attn=${FM_ATTN}  res=${FM_RESBLOCKS}  up=${FM_UP_MODE:-bilinear}"
+  if [[ "${FM_USE_CFG:-0}" == "1" ]]; then
+    echo "  CFG: dropout=${FM_CFG_DROPOUT:-0.1}  test_scale=${FM_CFG_SCALE:-1.5}"
+  fi
   echo "  perc=${FM_LAMBDA_PERC}  time=${FM_TIME_DIST}  BATCH_SIZE=${BATCH_SIZE:-?}"
   echo "  FM_LAMBDA_L1=${FM_LAMBDA_L1}  FM_LAMBDA_SAMPLE_L1=${FM_LAMBDA_SAMPLE_L1}"
   echo "  infer: steps=${FM_STEPS}  ${FM_SAMPLE_METHOD}  val_steps=${FM_VAL_STEPS}"

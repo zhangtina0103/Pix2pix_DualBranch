@@ -159,6 +159,12 @@ class VanillaFMModel(BaseModel):
         parser.add_argument("--fm_sample_method", type=str, default="heun",
                             choices=["euler", "heun"],
                             help="ODE solver at val / test")
+        parser.add_argument("--fm_use_cfg", action="store_true",
+                            help="Classifier-free guidance: cond dropout at train, guided ODE at test")
+        parser.add_argument("--fm_cfg_dropout", type=float, default=0.1,
+                            help="Train: prob of zeroing H&E cond (CFG)")
+        parser.add_argument("--fm_cfg_scale", type=float, default=1.5,
+                            help="Test: guidance scale w (1.0 = no guidance)")
         if is_train:
             parser.add_argument("--fm_lambda_perc", type=float, default=0.1,
                                 help="Perceptual weight (x1 mode; flow_matching.py; 0=off)")
@@ -193,6 +199,9 @@ class VanillaFMModel(BaseModel):
         BaseModel.__init__(self, opt)
         self.fm_loss_mode = str(getattr(opt, "fm_loss", "x1"))
         self.use_monai = str(getattr(opt, "fm_backbone", "monai")) == "monai"
+        self.fm_use_cfg = bool(getattr(opt, "fm_use_cfg", False))
+        self.fm_cfg_dropout = float(getattr(opt, "fm_cfg_dropout", 0.1))
+        self.fm_cfg_scale = float(getattr(opt, "fm_cfg_scale", 1.5))
 
         self.loss_names = ["FM"]
         self.visual_names = ["real_A", "fake_B", "real_B"]
@@ -301,8 +310,25 @@ class VanillaFMModel(BaseModel):
         inp = torch.cat([x_t, cond, t_ch], dim=1)
         return self.netG(inp)
 
-    def _pred_x1(self, x_t: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
-        return self._net_forward(x_t, t, self.real_A)
+    def _cond_for_train(self, cond: torch.Tensor) -> torch.Tensor:
+        """CFG train: randomly drop H&E conditioning."""
+        if not self.fm_use_cfg or not self.isTrain:
+            return cond
+        B = cond.shape[0]
+        keep = torch.rand(B, device=cond.device) > self.fm_cfg_dropout
+        return cond * keep.view(B, 1, 1, 1).to(cond.dtype)
+
+    def _pred_x1(self, x_t: torch.Tensor, t: torch.Tensor,
+                 cond: Optional[torch.Tensor] = None,
+                 cfg_guidance: bool = False,
+                 cfg_scale: Optional[float] = None) -> torch.Tensor:
+        cond_a = self.real_A if cond is None else cond
+        w = self.fm_cfg_scale if cfg_scale is None else float(cfg_scale)
+        if cfg_guidance and self.fm_use_cfg and w != 1.0:
+            x1_c = self._net_forward(x_t, t, cond_a)
+            x1_u = self._net_forward(x_t, t, torch.zeros_like(cond_a))
+            return x1_u + w * (x1_c - x1_u)
+        return self._net_forward(x_t, t, cond_a)
 
     def _velocity_from_x1(self, x_t: torch.Tensor, t: torch.Tensor,
                           x1_hat: Optional[torch.Tensor] = None) -> torch.Tensor:
@@ -310,11 +336,15 @@ class VanillaFMModel(BaseModel):
         denom = (1.0 - t).view(-1, 1, 1, 1).clamp(min=1e-5)
         return (x1_hat - x_t) / denom
 
-    def _velocity_raw(self, x_t: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
-        return self._net_forward(x_t, t, self.real_A)
+    def _velocity_raw(self, x_t: torch.Tensor, t: torch.Tensor,
+                      cond: Optional[torch.Tensor] = None) -> torch.Tensor:
+        cond_a = self.real_A if cond is None else cond
+        return self._net_forward(x_t, t, cond_a)
 
     def _ode_step_update(self, x: torch.Tensor, t0: torch.Tensor, t1: torch.Tensor,
-                         dt: torch.Tensor, method: str, is_last: bool) -> torch.Tensor:
+                         dt: torch.Tensor, method: str, is_last: bool,
+                         cfg_guidance: bool = False,
+                         cfg_scale: Optional[float] = None) -> torch.Tensor:
         B = x.shape[0]
         if self.fm_loss_mode == "velocity":
             v0 = self._velocity_raw(x, t0)
@@ -324,17 +354,18 @@ class VanillaFMModel(BaseModel):
             v1 = self._velocity_raw(x_mid, t1)
             return x + dt * (v0 + v1) * 0.5
 
-        x1_0 = self._pred_x1(x, t0)
+        x1_0 = self._pred_x1(x, t0, cfg_guidance=cfg_guidance, cfg_scale=cfg_scale)
         v0 = self._velocity_from_x1(x, t0, x1_0)
         if method == "euler" or is_last:
             return x + dt * v0
         x_mid = x + dt * v0
-        x1_1 = self._pred_x1(x_mid, t1)
+        x1_1 = self._pred_x1(x_mid, t1, cfg_guidance=cfg_guidance, cfg_scale=cfg_scale)
         v1 = self._velocity_from_x1(x_mid, t1, x1_1)
         return x + dt * (v0 + v1) * 0.5
 
     def _integrate(self, cond_A: torch.Tensor, x: torch.Tensor, steps: int,
-                   method: str) -> torch.Tensor:
+                   method: str, cfg_guidance: bool = False,
+                   cfg_scale: Optional[float] = None) -> torch.Tensor:
         real_A_prev = getattr(self, "real_A", None)
         self.real_A = cond_A
         B = cond_A.shape[0]
@@ -344,7 +375,10 @@ class VanillaFMModel(BaseModel):
             t0 = ts[i].expand(B)
             t1 = ts[i + 1].expand(B)
             dt = ts[i + 1] - ts[i]
-            x = self._ode_step_update(x, t0, t1, dt, method, is_last=(i == steps - 1))
+            x = self._ode_step_update(
+                x, t0, t1, dt, method, is_last=(i == steps - 1),
+                cfg_guidance=cfg_guidance, cfg_scale=cfg_scale,
+            )
 
         if real_A_prev is None:
             delattr(self, "real_A")
@@ -399,8 +433,9 @@ class VanillaFMModel(BaseModel):
         xt = (1.0 - t_bc) * x0 + t_bc * x1
 
         if self.fm_loss_mode == "velocity":
+            cond = self._cond_for_train(self.real_A)
             v_tgt = x1 - x0
-            v_pred = self._velocity_raw(xt, t)
+            v_pred = self._velocity_raw(xt, t, cond=cond)
             self.loss_FM = F.mse_loss(v_pred, v_tgt)
             loss = self.loss_FM
             lam_perc = float(getattr(self.opt, "fm_lambda_perc", 0.0))
@@ -409,7 +444,8 @@ class VanillaFMModel(BaseModel):
                 self.loss_Perc = self.perceptual_loss_fn(x1_hat, x1) * lam_perc
                 loss = loss + self.loss_Perc
         else:
-            x1_hat = self._pred_x1(xt, t)
+            cond = self._cond_for_train(self.real_A)
+            x1_hat = self._pred_x1(xt, t, cond=cond)
             self.loss_FM = self._channel_weighted_l1(x1_hat, x1)
             loss = self.loss_FM
             lam_perc = float(getattr(self.opt, "fm_lambda_perc", 0.0))
@@ -510,12 +546,19 @@ class VanillaFMModel(BaseModel):
 
     @torch.no_grad()
     def sample(self, cond_A: torch.Tensor, steps: Optional[int] = None,
-               method: Optional[str] = None) -> torch.Tensor:
+               method: Optional[str] = None,
+               cfg_scale: Optional[float] = None) -> torch.Tensor:
         default_steps, default_method = self._ode_config_test()
         steps = int(steps if steps is not None else default_steps)
         method = method or default_method
+        w = self.fm_cfg_scale if cfg_scale is None else float(cfg_scale)
+        # Guided ODE only at test (test.py: isTrain=False). Train val stays unguided + fast.
+        cfg_guidance = self.fm_use_cfg and (not self.isTrain) and w != 1.0
         x_init = torch.randn(
             cond_A.shape[0], self.opt.output_nc, cond_A.shape[2], cond_A.shape[3],
             device=cond_A.device, dtype=cond_A.dtype,
         )
-        return self._integrate(cond_A, x_init, steps, method)
+        return self._integrate(
+            cond_A, x_init, steps, method,
+            cfg_guidance=cfg_guidance, cfg_scale=w,
+        )

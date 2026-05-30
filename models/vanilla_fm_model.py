@@ -163,8 +163,16 @@ class _CondUNet(nn.Module):
                  film_where: str = "decoder",
                  use_learned_null: bool = False,
                  cond_nc: int = 3,
-                 film_hidden: int = 128):
+                 film_hidden: int = 128,
+                 use_he_proj: bool = False):
         super().__init__()
+        self.he_proj = None
+        if use_he_proj:
+            self.he_proj = nn.Conv2d(3, 3, 1)
+            with torch.no_grad():
+                for c in range(3):
+                    self.he_proj.weight[c, c, 0, 0] = 1.0
+                nn.init.zeros_(self.he_proj.bias)
         c1, c2, c3 = channels
         self.use_film = use_film
         self.film_where = film_where if use_film else ""
@@ -269,6 +277,15 @@ class VanillaFMModel(BaseModel):
         parser.add_argument("--fm_null_mode", type=str, default="zero",
                             choices=["zero", "learned"],
                             help="CFG null cond: zeros or learnable 1x3 (CFG v2)")
+        parser.add_argument("--fm_use_seg", action="store_true",
+                            help="Concat 1ch pseudo seg with H&E cond (custom U-Net; dataset aligned_cond)")
+        parser.add_argument("--fm_flow_path", type=str, default="noise",
+                            choices=["noise", "bridge"],
+                            help="noise=Gaussian x0; bridge=x0=proj(H&E) straight-line path")
+        parser.add_argument("--fm_init_from_cond", action="store_true",
+                            help="ODE start: sigma*noise + (1-sigma)*proj(H&E) (noise path only)")
+        parser.add_argument("--fm_init_noise_sigma", type=float, default=0.3,
+                            help="Noise fraction when fm_init_from_cond (0=pure proj)")
         if is_train:
             parser.add_argument("--fm_lambda_perc", type=float, default=0.1,
                                 help="Perceptual weight (x1 mode; flow_matching.py; 0=off)")
@@ -308,6 +325,20 @@ class VanillaFMModel(BaseModel):
         self.fm_cfg_scale = float(getattr(opt, "fm_cfg_scale", 1.5))
         self.fm_null_mode = str(getattr(opt, "fm_null_mode", "zero"))
         self.fm_film_reg = float(getattr(opt, "fm_film_reg", 0.0))
+        self.fm_use_seg = bool(getattr(opt, "fm_use_seg", False))
+        self.fm_flow_path = str(getattr(opt, "fm_flow_path", "noise"))
+        self.fm_init_from_cond = bool(getattr(opt, "fm_init_from_cond", False))
+        self.fm_init_noise_sigma = float(getattr(opt, "fm_init_noise_sigma", 0.3))
+        self.fm_cond_extra = 1 if self.fm_use_seg else 0
+        use_he_proj = (
+            self.fm_flow_path == "bridge" or self.fm_init_from_cond
+        )
+        if self.fm_use_seg or use_he_proj:
+            if self.use_monai:
+                raise NotImplementedError(
+                    "fm_use_seg / fm_flow_path bridge / fm_init_from_cond "
+                    "require --fm_backbone custom"
+                )
 
         self.loss_names = ["FM"]
         self.visual_names = ["real_A", "fake_B", "real_B"]
@@ -333,8 +364,10 @@ class VanillaFMModel(BaseModel):
             use_film = bool(getattr(opt, "fm_use_film", False))
             film_where = str(getattr(opt, "fm_film_where", "decoder"))
             use_learned_null = self.fm_use_cfg and self.fm_null_mode == "learned"
+            cond_nc = opt.input_nc + self.fm_cond_extra
+            stem_in = opt.output_nc + cond_nc + 1
             self.netG = _CondUNet(
-                in_ch=opt.input_nc + opt.output_nc + 1,
+                in_ch=stem_in,
                 out_ch=opt.output_nc,
                 channels=ch,  # type: ignore[arg-type]
                 num_res_blocks=n_res,
@@ -342,9 +375,17 @@ class VanillaFMModel(BaseModel):
                 use_film=use_film,
                 film_where=film_where,
                 use_learned_null=use_learned_null,
-                cond_nc=opt.input_nc,
+                cond_nc=cond_nc,
                 film_hidden=int(getattr(opt, "fm_film_hidden", 128)),
+                use_he_proj=use_he_proj,
             )
+            if self.fm_use_seg:
+                print(f"FM cond: H&E + seg -> {cond_nc}ch, stem in_ch={stem_in}")
+            if use_he_proj:
+                print(
+                    f"FM he_proj: flow={self.fm_flow_path} "
+                    f"init_cond={self.fm_init_from_cond} sigma={self.fm_init_noise_sigma}"
+                )
             if use_film:
                 print(
                     f"FM FiLM: where={film_where} hidden={opt.fm_film_hidden} "
@@ -409,11 +450,71 @@ class VanillaFMModel(BaseModel):
                 self.netG.parameters(), lr=opt.lr, betas=(opt.beta1, 0.999))
             self.optimizers.append(self.optimizer_G)
 
+        self._cfg_null_inited = False
+
+    def _maybe_init_cfg_null(self) -> None:
+        """Seed learned null to batch-mean H&E (not zeros) so CFG uncond path is trainable."""
+        if self._cfg_null_inited or not self.isTrain or not self.fm_use_cfg:
+            return
+        if self.fm_null_mode != "learned" or self.use_monai:
+            return
+        net = self._unwrap_netg()
+        if getattr(net, "cfg_null", None) is None:
+            return
+        with torch.no_grad():
+            mean_he = self._effective_cond().mean(dim=(0, 2, 3), keepdim=True)
+            net.cfg_null.data.copy_(mean_he)
+        self._cfg_null_inited = True
+        print(
+            "FM CFG v2: cfg_null init from mean H&E "
+            f"(per-channel {net.cfg_null.data.flatten().tolist()})"
+        )
+
     def set_input(self, input):
         AtoB = self.opt.direction == "AtoB"
         self.real_A = input["A" if AtoB else "B"].to(self.device)
         self.real_B = input["B" if AtoB else "A"].to(self.device)
         self.image_paths = input["A_paths" if AtoB else "B_paths"]
+        seg = input.get("seg")
+        self.real_seg = seg.to(self.device) if seg is not None else None
+        self._maybe_init_cfg_null()
+
+    def _cond_tensor(self, he: torch.Tensor,
+                    seg: Optional[torch.Tensor] = None) -> torch.Tensor:
+        if self.fm_use_seg:
+            s = seg if seg is not None else getattr(self, "real_seg", None)
+            if s is None:
+                s = torch.zeros(he.shape[0], 1, he.shape[2], he.shape[3],
+                                device=he.device, dtype=he.dtype)
+            return torch.cat([he, s], dim=1)
+        return he
+
+    def _effective_cond(self) -> torch.Tensor:
+        return self._cond_tensor(self.real_A, getattr(self, "real_seg", None))
+
+    def _film_cond_img(self, cond: torch.Tensor) -> torch.Tensor:
+        return cond[:, : self.opt.input_nc]
+
+    def _he_proj(self, he: torch.Tensor) -> torch.Tensor:
+        net = self._unwrap_netg()
+        if getattr(net, "he_proj", None) is not None:
+            return net.he_proj(he)
+        return he
+
+    def _sample_x0(self, like: torch.Tensor) -> torch.Tensor:
+        if self.fm_flow_path == "bridge":
+            return self._he_proj(self.real_A)
+        return torch.randn_like(like)
+
+    def _ode_x_init(self, cond_A: torch.Tensor) -> torch.Tensor:
+        if self.fm_flow_path == "bridge":
+            return self._he_proj(cond_A)
+        shape = (cond_A.shape[0], self.opt.output_nc, cond_A.shape[2], cond_A.shape[3])
+        if self.fm_init_from_cond:
+            sigma = self.fm_init_noise_sigma
+            noise = torch.randn(shape, device=cond_A.device, dtype=cond_A.dtype)
+            return sigma * noise + (1.0 - sigma) * self._he_proj(cond_A)
+        return torch.randn(shape, device=cond_A.device, dtype=cond_A.dtype)
 
     def _sample_t(self, batch_size: int, device: torch.device) -> torch.Tensor:
         dist = str(getattr(self.opt, "fm_time_dist", "logit_normal"))
@@ -433,7 +534,7 @@ class VanillaFMModel(BaseModel):
         inp = torch.cat([x_t, cond, t_ch], dim=1)
         net = self.netG.module if isinstance(self.netG, nn.DataParallel) else self.netG
         if getattr(net, "use_film", False):
-            return net(inp, cond_img=cond)
+            return net(inp, cond_img=self._film_cond_img(cond))
         return self.netG(inp)
 
     def load_networks(self, epoch):
@@ -464,6 +565,12 @@ class VanillaFMModel(BaseModel):
                 self.opt, "fm_null_mode", "zero"
             ) == "learned":
                 loose = True
+            if getattr(self.opt, "fm_use_seg", False):
+                loose = True
+            if getattr(self.opt, "fm_flow_path", "noise") == "bridge":
+                loose = True
+            if getattr(self.opt, "fm_init_from_cond", False):
+                loose = True
             incompatible = net.load_state_dict(state_dict, strict=not loose)
             if loose:
                 n_miss = len(incompatible.missing_keys)
@@ -487,8 +594,10 @@ class VanillaFMModel(BaseModel):
                 return null.expand(like.shape[0], -1, like.shape[2], like.shape[3])
         return torch.zeros_like(like)
 
-    def _cond_for_train(self, cond: torch.Tensor) -> torch.Tensor:
+    def _cond_for_train(self, cond: Optional[torch.Tensor] = None) -> torch.Tensor:
         """CFG train: replace H&E with null embedding on dropped samples."""
+        if cond is None:
+            cond = self._effective_cond()
         if not self.fm_use_cfg or not self.isTrain:
             return cond
         B = cond.shape[0]
@@ -500,7 +609,7 @@ class VanillaFMModel(BaseModel):
                  cond: Optional[torch.Tensor] = None,
                  cfg_guidance: bool = False,
                  cfg_scale: Optional[float] = None) -> torch.Tensor:
-        cond_a = self.real_A if cond is None else cond
+        cond_a = self._effective_cond() if cond is None else cond
         w = self.fm_cfg_scale if cfg_scale is None else float(cfg_scale)
         if cfg_guidance and self.fm_use_cfg and w != 1.0:
             x1_c = self._net_forward(x_t, t, cond_a)
@@ -518,8 +627,8 @@ class VanillaFMModel(BaseModel):
         film = net.film
         if isinstance(film, FiLMHeadGenerator):
             reg = reg + (film.head.weight ** 2).mean() + (film.head.bias ** 2).mean()
-            gamma_bias = film.head.bias.data[: film.head.out_features // 2]
-            reg = reg + ((gamma_bias - 1.0) ** 2).mean()
+            out_ch = film.head.out_features // 2
+            reg = reg + ((film.head.bias[:out_ch] - 1.0) ** 2).mean()
         elif isinstance(film, FiLMGenerator):
             for head in film.heads:
                 half = head.out_features // 2
@@ -535,7 +644,7 @@ class VanillaFMModel(BaseModel):
 
     def _velocity_raw(self, x_t: torch.Tensor, t: torch.Tensor,
                       cond: Optional[torch.Tensor] = None) -> torch.Tensor:
-        cond_a = self.real_A if cond is None else cond
+        cond_a = self._effective_cond() if cond is None else cond
         return self._net_forward(x_t, t, cond_a)
 
     def _ode_step_update(self, x: torch.Tensor, t0: torch.Tensor, t1: torch.Tensor,
@@ -624,13 +733,13 @@ class VanillaFMModel(BaseModel):
 
     def _loss_fm(self):
         x1 = self.real_B
-        x0 = torch.randn_like(x1)
+        x0 = self._sample_x0(x1)
         t = self._sample_t(x1.shape[0], x1.device)
         t_bc = t.view(-1, 1, 1, 1)
         xt = (1.0 - t_bc) * x0 + t_bc * x1
 
         if self.fm_loss_mode == "velocity":
-            cond = self._cond_for_train(self.real_A)
+            cond = self._cond_for_train()
             v_tgt = x1 - x0
             v_pred = self._velocity_raw(xt, t, cond=cond)
             self.loss_FM = F.mse_loss(v_pred, v_tgt)
@@ -641,7 +750,7 @@ class VanillaFMModel(BaseModel):
                 self.loss_Perc = self.perceptual_loss_fn(x1_hat, x1) * lam_perc
                 loss = loss + self.loss_Perc
         else:
-            cond = self._cond_for_train(self.real_A)
+            cond = self._cond_for_train()
             x1_hat = self._pred_x1(xt, t, cond=cond)
             self.loss_FM = self._channel_weighted_l1(x1_hat, x1)
             loss = self.loss_FM
@@ -698,7 +807,8 @@ class VanillaFMModel(BaseModel):
         x1 = self.real_B
         steps = self._ode_aux_steps()
         method = str(getattr(self.opt, "fm_train_sample_method", "heun"))
-        return self._integrate_train_ode(self.real_A, torch.randn_like(x1), steps, method)
+        x_init = self._ode_x_init(self.real_A)
+        return self._integrate_train_ode(self.real_A, x_init, steps, method)
 
     def _loss_ode_sample_l1(self, fake: torch.Tensor) -> torch.Tensor:
         lam = float(getattr(self.opt, "fm_lambda_sample_l1", 0.0))
@@ -755,10 +865,7 @@ class VanillaFMModel(BaseModel):
         w = self.fm_cfg_scale if cfg_scale is None else float(cfg_scale)
         # Guided ODE only at test (test.py: isTrain=False). Train val stays unguided + fast.
         cfg_guidance = self.fm_use_cfg and (not self.isTrain) and w != 1.0
-        x_init = torch.randn(
-            cond_A.shape[0], self.opt.output_nc, cond_A.shape[2], cond_A.shape[3],
-            device=cond_A.device, dtype=cond_A.dtype,
-        )
+        x_init = self._ode_x_init(cond_A)
         return self._integrate(
             cond_A, x_init, steps, method,
             cfg_guidance=cfg_guidance, cfg_scale=w,

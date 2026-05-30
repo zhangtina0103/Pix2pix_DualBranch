@@ -1,5 +1,5 @@
 #!/bin/bash
-# Phase 4: FiLM v2 (head + reg + 1,2,1) short low-LR finetune from joint_perc/80 → epoch 100.
+# Phase 4: FiLM v2 (head + reg + 1,1,1) short low-LR finetune from joint_perc/80 → epoch 100.
 #   sbatch bash_scripts/train_hemit_vanilla_fm_joint_film_v2.sbatch
 #SBATCH --job-name=hemit_vfm_film2
 #SBATCH --output=logs/hemit_vfm_joint_film_v2_%j.out

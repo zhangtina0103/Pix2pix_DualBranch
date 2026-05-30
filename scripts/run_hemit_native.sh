@@ -160,6 +160,19 @@ train() {
       if [[ "${FM_USE_FILM:-0}" == "1" ]]; then
         extra+=(--fm_use_film)
       fi
+      if [[ "${FM_USE_SEG:-0}" == "1" ]]; then
+        extra+=(--fm_use_seg)
+      fi
+      if [[ "${FM_FLOW_PATH:-noise}" == "bridge" ]]; then
+        extra+=(--fm_flow_path bridge)
+      fi
+      if [[ "${FM_INIT_FROM_COND:-0}" == "1" ]]; then
+        extra+=(
+          --fm_init_from_cond
+          --fm_init_noise_sigma "${FM_INIT_NOISE_SIGMA:-0.3}"
+        )
+      fi
+      echo "    FM conditioning CLI: dataset_mode=${DATASET_MODE:-aligned} seg=${FM_USE_SEG:-0} flow=${FM_FLOW_PATH:-noise} init_cond=${FM_INIT_FROM_COND:-0}"
       ;;
   esac
   local train_args=(
@@ -222,6 +235,19 @@ test_one() {
       if [[ "${FM_USE_FILM:-0}" == "1" ]]; then
         extra+=(--fm_use_film)
       fi
+      if [[ "${FM_USE_SEG:-0}" == "1" ]]; then
+        extra+=(--fm_use_seg)
+      fi
+      if [[ "${FM_FLOW_PATH:-noise}" == "bridge" ]]; then
+        extra+=(--fm_flow_path bridge)
+      fi
+      if [[ "${FM_INIT_FROM_COND:-0}" == "1" ]]; then
+        extra+=(
+          --fm_init_from_cond
+          --fm_init_noise_sigma "${FM_INIT_NOISE_SIGMA:-0.3}"
+        )
+      fi
+      echo "    FM conditioning CLI: dataset_mode=${DATASET_MODE:-aligned} seg=${FM_USE_SEG:-0} flow=${FM_FLOW_PATH:-noise} init_cond=${FM_INIT_FROM_COND:-0}"
       if [[ "${FM_LOSS:-x1}" == "x1" && "${FM_BACKBONE:-custom}" == "monai" ]]; then
         extra+=(--fm_use_tanh)
       fi

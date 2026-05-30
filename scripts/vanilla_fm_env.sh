@@ -14,6 +14,52 @@ vanilla_fm_clear_stale_env() {
   unset FM_USE_CFG FM_USE_FILM FM_USE_GAN FM_USE_ODE_TRAIN FM_CROP_SIZE
   unset FM_NULL_MODE FM_FILM_WHERE FM_FILM_REG
   unset FM_LAMBDA_SAMPLE_L1 FM_LAMBDA_L1 FM_USE_TANH
+  unset FM_USE_SEG FM_FLOW_PATH FM_INIT_FROM_COND FM_INIT_NOISE_SIGMA DATASET_MODE
+  unset VANILLA_FM_COND_PROFILE
+}
+
+vanilla_fm_verify_cond_profile() {
+  [[ "${VANILLA_FM_ENV_LOCKED:-0}" == "1" ]] || return 0
+  local profile="${VANILLA_FM_COND_PROFILE:-}"
+  [[ -n "${profile}" ]] || return 0
+
+  _fm_cond_fail() {
+    echo "ERROR: cond profile=${profile} check failed: $*" >&2
+    echo "  TRAIN_NAME=${TRAIN_NAME:-} FM_USE_SEG=${FM_USE_SEG:-} FM_FLOW_PATH=${FM_FLOW_PATH:-}" >&2
+    echo "  FM_INIT_FROM_COND=${FM_INIT_FROM_COND:-} DATASET_MODE=${DATASET_MODE:-}" >&2
+    echo "  FM_USE_CFG=${FM_USE_CFG:-} FM_USE_FILM=${FM_USE_FILM:-} FM_STEPS=${FM_STEPS:-}" >&2
+    exit 1
+  }
+
+  [[ "${FM_USE_CFG:-0}" == "0" ]] || _fm_cond_fail "FM_USE_CFG must be 0 for conditioning runs"
+  [[ "${FM_USE_FILM:-0}" == "0" ]] || _fm_cond_fail "FM_USE_FILM must be 0 for conditioning runs"
+  [[ "${FM_USE_GAN:-0}" == "0" ]] || _fm_cond_fail "FM_USE_GAN must be 0 for conditioning runs"
+  [[ "${FM_STEPS:-}" == "25" ]] || _fm_cond_fail "FM_STEPS must be 25 (got ${FM_STEPS:-unset})"
+  [[ "${FM_CHANNEL_WEIGHTS:-}" == "1,1,1" ]] || _fm_cond_fail "FM_CHANNEL_WEIGHTS must be 1,1,1"
+
+  case "${profile}" in
+    seg)
+      [[ "${FM_USE_SEG:-0}" == "1" ]] || _fm_cond_fail "FM_USE_SEG=1 required"
+      [[ "${DATASET_MODE:-}" == "aligned_cond" ]] || _fm_cond_fail "DATASET_MODE=aligned_cond required"
+      [[ "${FM_FLOW_PATH:-noise}" == "noise" ]] || _fm_cond_fail "FM_FLOW_PATH must be noise"
+      [[ "${FM_INIT_FROM_COND:-0}" == "0" ]] || _fm_cond_fail "FM_INIT_FROM_COND must be 0"
+      ;;
+    bridge)
+      [[ "${FM_USE_SEG:-0}" == "0" ]] || _fm_cond_fail "FM_USE_SEG must be 0"
+      [[ "${FM_FLOW_PATH:-}" == "bridge" ]] || _fm_cond_fail "FM_FLOW_PATH=bridge required"
+      [[ "${FM_INIT_FROM_COND:-0}" == "0" ]] || _fm_cond_fail "FM_INIT_FROM_COND must be 0"
+      [[ "${DATASET_MODE:-aligned}" == "aligned" ]] || _fm_cond_fail "DATASET_MODE must be aligned (or unset)"
+      ;;
+    init_cond)
+      [[ "${FM_USE_SEG:-0}" == "0" ]] || _fm_cond_fail "FM_USE_SEG must be 0"
+      [[ "${FM_FLOW_PATH:-noise}" == "noise" ]] || _fm_cond_fail "FM_FLOW_PATH must be noise"
+      [[ "${FM_INIT_FROM_COND:-0}" == "1" ]] || _fm_cond_fail "FM_INIT_FROM_COND=1 required"
+      [[ "${DATASET_MODE:-aligned}" == "aligned" ]] || _fm_cond_fail "DATASET_MODE must be aligned (or unset)"
+      ;;
+    *)
+      _fm_cond_fail "unknown VANILLA_FM_COND_PROFILE=${profile}"
+      ;;
+  esac
 }
 
 vanilla_fm_verify_locked_env() {
@@ -26,6 +72,7 @@ vanilla_fm_verify_locked_env() {
     echo "ERROR: FM_BACKBONE=${FM_BACKBONE:-<unset>} (locked HEMIT phases require custom)" >&2
     exit 1
   fi
+  vanilla_fm_verify_cond_profile
 }
 
 vanilla_fm_apply_train_env() {
@@ -253,7 +300,7 @@ vanilla_fm_apply_joint_cfg_v2_env() {
   unset FM_USE_FILM FM_USE_GAN
   export FM_USE_CFG=1
   export FM_NULL_MODE=learned
-  export FM_CFG_DROPOUT=0.18
+  export FM_CFG_DROPOUT=0.12
   export FM_CFG_SCALE=1.1
   echo "phase3 joint_cfg_v2: learned null dropout=${FM_CFG_DROPOUT} test_w=${FM_CFG_SCALE}" >&2
 }
@@ -272,6 +319,46 @@ vanilla_fm_apply_joint_film_v2_env() {
   echo "phase4 joint_film_v2: head FiLM reg=${FM_FILM_REG} ch_weights=${FM_CHANNEL_WEIGHTS}" >&2
 }
 
+# Conditioning (finetune joint_perc/80): pseudo seg concat, bridge path, informed ODE init.
+vanilla_fm_apply_joint_seg_env() {
+  vanilla_fm_apply_joint_perc_pins
+  export TRAIN_NAME=hemit_vanilla_fm_joint_seg
+  export VANILLA_FM_EXPECTED_TRAIN_NAME="${TRAIN_NAME}"
+  export VANILLA_FM_COND_PROFILE=seg
+  export DATASET_MODE=aligned_cond
+  export FM_USE_SEG=1
+  export FM_FLOW_PATH=noise
+  export FM_INIT_FROM_COND=0
+  unset FM_INIT_NOISE_SIGMA
+  echo "joint_seg: H&E+seg concat, dataset=${DATASET_MODE}" >&2
+}
+
+vanilla_fm_apply_joint_bridge_env() {
+  vanilla_fm_apply_joint_perc_pins
+  export TRAIN_NAME=hemit_vanilla_fm_joint_bridge
+  export VANILLA_FM_EXPECTED_TRAIN_NAME="${TRAIN_NAME}"
+  export VANILLA_FM_COND_PROFILE=bridge
+  export FM_USE_SEG=0
+  unset DATASET_MODE
+  export FM_FLOW_PATH=bridge
+  export FM_INIT_FROM_COND=0
+  unset FM_INIT_NOISE_SIGMA
+  echo "joint_bridge: x0=proj(H&E), straight-line FM path" >&2
+}
+
+vanilla_fm_apply_joint_init_cond_env() {
+  vanilla_fm_apply_joint_perc_pins
+  export TRAIN_NAME=hemit_vanilla_fm_joint_init_cond
+  export VANILLA_FM_EXPECTED_TRAIN_NAME="${TRAIN_NAME}"
+  export VANILLA_FM_COND_PROFILE=init_cond
+  export FM_USE_SEG=0
+  unset DATASET_MODE
+  export FM_FLOW_PATH=noise
+  export FM_INIT_FROM_COND=1
+  export FM_INIT_NOISE_SIGMA="${FM_INIT_NOISE_SIGMA:-0.3}"
+  echo "joint_init_cond: ODE start sigma*noise+(1-sigma)*proj(H&E), sigma=${FM_INIT_NOISE_SIGMA}" >&2
+}
+
 vanilla_fm_print_train_env() {
   echo "vanilla_fm config: locked=${VANILLA_FM_ENV_LOCKED:-0} TRAIN_NAME=${TRAIN_NAME:-?}"
   echo "  backbone=${FM_BACKBONE}  loss=${FM_LOSS}  channels=${FM_CHANNELS}  attn=${FM_ATTN}  res=${FM_RESBLOCKS}  up=${FM_UP_MODE:-bilinear}"
@@ -287,6 +374,18 @@ vanilla_fm_print_train_env() {
   echo "  channel_L1_weights=${FM_CHANNEL_WEIGHTS:-1,2,1}"
   if [[ "${FM_USE_GAN:-0}" == "1" ]]; then
     echo "  GAN: lambda=${FM_LAMBDA_GAN:-1} prob=${FM_GAN_SAMPLE_PROB:-?} ode_steps=${FM_GAN_SAMPLE_STEPS:-?}"
+  fi
+  if [[ "${FM_USE_SEG:-0}" == "1" ]]; then
+    echo "  cond: seg concat  dataset=${DATASET_MODE:-aligned_cond}"
+  fi
+  if [[ "${FM_FLOW_PATH:-noise}" != "noise" ]]; then
+    echo "  flow_path=${FM_FLOW_PATH}"
+  fi
+  if [[ "${FM_INIT_FROM_COND:-0}" == "1" ]]; then
+    echo "  init_from_cond: sigma=${FM_INIT_NOISE_SIGMA:-0.3}"
+  fi
+  if [[ -n "${VANILLA_FM_COND_PROFILE:-}" ]]; then
+    echo "  cond_profile=${VANILLA_FM_COND_PROFILE} (verified when locked=1)"
   fi
   if [[ "${FM_BACKBONE}" == "monai" && -z "${FM_CROP_SIZE:-}" ]]; then
     echo "  WARNING: monai UNet at 1024² OOMs (mid-block attention). Use FM_BACKBONE=custom or FM_CROP_SIZE=512" >&2

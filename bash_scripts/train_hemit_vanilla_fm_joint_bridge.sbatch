@@ -1,9 +1,9 @@
 #!/bin/bash
-# Phase 3: CFG v2 (learned null) finetune from joint_perc/80.
-#   sbatch bash_scripts/train_hemit_vanilla_fm_joint_cfg_v2.sbatch
-#SBATCH --job-name=hemit_vfm_cfg2
-#SBATCH --output=logs/hemit_vfm_joint_cfg_v2_%j.out
-#SBATCH --error=logs/hemit_vfm_joint_cfg_v2_%j.err
+# Bridge FM: x0 = proj(H&E), integrate from g(H&E) not noise. Finetune joint_perc/80.
+#   sbatch bash_scripts/train_hemit_vanilla_fm_joint_bridge.sbatch
+#SBATCH --job-name=hemit_vfm_bridge
+#SBATCH --output=logs/hemit_vfm_joint_bridge_%j.out
+#SBATCH --error=logs/hemit_vfm_joint_bridge_%j.err
 #SBATCH --partition=mit_normal_gpu
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
@@ -27,7 +27,7 @@ export TRAIN_LR=0.0001
 # shellcheck source=/dev/null
 source "${REPO_ROOT}/bash_scripts/_vanilla_fm_sbatch_preamble.sh"
 source "${REPO_ROOT}/scripts/vanilla_fm_env.sh"
-vanilla_fm_apply_joint_cfg_v2_env
+vanilla_fm_apply_joint_bridge_env
 export VANILLA_FM_ENV_LOCKED=1
 source "${REPO_ROOT}/bash_scripts/_vanilla_fm_finetune_from_joint_perc.sh"
 vanilla_fm_finetune_from_joint_perc_80

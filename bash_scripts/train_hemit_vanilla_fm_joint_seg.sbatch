@@ -1,9 +1,9 @@
 #!/bin/bash
-# Phase 3: CFG v2 (learned null) finetune from joint_perc/80.
-#   sbatch bash_scripts/train_hemit_vanilla_fm_joint_cfg_v2.sbatch
-#SBATCH --job-name=hemit_vfm_cfg2
-#SBATCH --output=logs/hemit_vfm_joint_cfg_v2_%j.out
-#SBATCH --error=logs/hemit_vfm_joint_cfg_v2_%j.err
+# Rich cond: H&E + pseudo seg (Otsu nuclei). Finetune joint_perc/80.
+#   sbatch bash_scripts/train_hemit_vanilla_fm_joint_seg.sbatch
+#SBATCH --job-name=hemit_vfm_seg
+#SBATCH --output=logs/hemit_vfm_joint_seg_%j.out
+#SBATCH --error=logs/hemit_vfm_joint_seg_%j.err
 #SBATCH --partition=mit_normal_gpu
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
@@ -27,8 +27,10 @@ export TRAIN_LR=0.0001
 # shellcheck source=/dev/null
 source "${REPO_ROOT}/bash_scripts/_vanilla_fm_sbatch_preamble.sh"
 source "${REPO_ROOT}/scripts/vanilla_fm_env.sh"
-vanilla_fm_apply_joint_cfg_v2_env
+vanilla_fm_apply_joint_seg_env
 export VANILLA_FM_ENV_LOCKED=1
+
+python "${REPO_ROOT}/scripts/generate_hemit_seg_masks.py" --dataroot "${REPO_ROOT}/${DATAROOT}"
 source "${REPO_ROOT}/bash_scripts/_vanilla_fm_finetune_from_joint_perc.sh"
 vanilla_fm_finetune_from_joint_perc_80
 vanilla_fm_print_train_env

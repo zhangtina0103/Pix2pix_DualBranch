@@ -26,6 +26,8 @@ vanilla_fm_apply_train_env() {
   export FM_STEPS="${FM_STEPS:-25}"
   export FM_VAL_STEPS="${FM_VAL_STEPS:-8}"
   export FM_SAMPLE_METHOD="${FM_SAMPLE_METHOD:-heun}"
+  # custom U-Net decoder: conv_transpose = joint_perc / perc_strong; bilinear = decoder_only
+  export FM_UP_MODE="${FM_UP_MODE:-conv_transpose}"
 
   if [[ "${FM_USE_ODE_TRAIN:-0}" == "1" ]]; then
     export FM_LAMBDA_L1="${FM_LAMBDA_L1:-10}"
@@ -44,6 +46,7 @@ vanilla_fm_apply_train_env() {
 vanilla_fm_apply_decoder_only_env() {
   vanilla_fm_apply_train_env
   export TRAIN_NAME=hemit_vanilla_fm_decoder_only
+  export FM_UP_MODE=bilinear
   export FM_CHANNELS=96,192,256
   export FM_LAMBDA_PERC=0.1
   export FM_PERC_SIZE=256
@@ -133,7 +136,7 @@ vanilla_fm_apply_beat_pix2pix_env() {
 
 vanilla_fm_print_train_env() {
   echo "vanilla_fm config:"
-  echo "  backbone=${FM_BACKBONE}  loss=${FM_LOSS}  channels=${FM_CHANNELS}  attn=${FM_ATTN}  res=${FM_RESBLOCKS}"
+  echo "  backbone=${FM_BACKBONE}  loss=${FM_LOSS}  channels=${FM_CHANNELS}  attn=${FM_ATTN}  res=${FM_RESBLOCKS}  up=${FM_UP_MODE:-bilinear}"
   echo "  perc=${FM_LAMBDA_PERC}  time=${FM_TIME_DIST}  BATCH_SIZE=${BATCH_SIZE:-?}"
   echo "  FM_LAMBDA_L1=${FM_LAMBDA_L1}  FM_LAMBDA_SAMPLE_L1=${FM_LAMBDA_SAMPLE_L1}"
   echo "  infer: steps=${FM_STEPS}  ${FM_SAMPLE_METHOD}  val_steps=${FM_VAL_STEPS}"

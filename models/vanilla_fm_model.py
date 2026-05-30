@@ -46,7 +46,9 @@ class _Down(nn.Module):
         return self.res(x)
 
 
-class _UpSkip(nn.Module):
+class _UpSkipBilinear(nn.Module):
+    """Bilinear upsample + conv (decoder_only ablation; keys up.N.weight in state_dict)."""
+
     def __init__(self, in_ch: int, out_ch: int, skip_ch: int, n_res: int):
         super().__init__()
         self.up = nn.Sequential(
@@ -65,12 +67,39 @@ class _UpSkip(nn.Module):
         return self.res(x)
 
 
+class _UpSkipConvTranspose(nn.Module):
+    """ConvTranspose2d upsample (joint_perc / perc_strong checkpoints; keys up.weight)."""
+
+    def __init__(self, in_ch: int, out_ch: int, skip_ch: int, n_res: int):
+        super().__init__()
+        self.up = nn.ConvTranspose2d(in_ch, out_ch, kernel_size=4, stride=2, padding=1)
+        self.fuse = nn.Conv2d(out_ch + skip_ch, out_ch, 3, padding=1)
+        self.res = nn.Sequential(*[_ResBlock(out_ch) for _ in range(n_res)])
+
+    def forward(self, x: torch.Tensor, skip: torch.Tensor) -> torch.Tensor:
+        x = self.up(x)
+        if x.shape[2:] != skip.shape[2:]:
+            x = F.interpolate(x, size=skip.shape[2:], mode="bilinear", align_corners=False)
+        x = torch.cat([x, skip], dim=1)
+        x = self.fuse(x)
+        return self.res(x)
+
+
+def _make_up_skip(up_mode: str, in_ch: int, out_ch: int, skip_ch: int, n_res: int) -> nn.Module:
+    if up_mode == "conv_transpose":
+        return _UpSkipConvTranspose(in_ch, out_ch, skip_ch, n_res)
+    if up_mode == "bilinear":
+        return _UpSkipBilinear(in_ch, out_ch, skip_ch, n_res)
+    raise ValueError(f"unknown fm_up_mode={up_mode!r}; use bilinear or conv_transpose")
+
+
 class _CondUNet(nn.Module):
     """Legacy custom U-Net (spatial t channel). Use --fm_backbone monai for mentor parity."""
 
     def __init__(self, in_ch: int = 7, out_ch: int = 3,
                  channels: Tuple[int, int, int] = (32, 64, 96),
-                 num_res_blocks: int = 1):
+                 num_res_blocks: int = 1,
+                 up_mode: str = "bilinear"):
         super().__init__()
         c1, c2, c3 = channels
         self.stem = nn.Conv2d(in_ch, c1, 3, padding=1)
@@ -78,8 +107,8 @@ class _CondUNet(nn.Module):
         self.down1 = _Down(c1, c2, num_res_blocks)
         self.down2 = _Down(c2, c3, num_res_blocks)
         self.mid = nn.Sequential(*[_ResBlock(c3) for _ in range(max(1, num_res_blocks))])
-        self.up2 = _UpSkip(c3, c2, c2, num_res_blocks)
-        self.up1 = _UpSkip(c2, c1, c1, num_res_blocks)
+        self.up2 = _make_up_skip(up_mode, c3, c2, c2, num_res_blocks)
+        self.up1 = _make_up_skip(up_mode, c2, c1, c1, num_res_blocks)
         self.head = nn.Conv2d(c1, out_ch, 3, padding=1)
 
     def forward(self, x):
@@ -110,6 +139,10 @@ class VanillaFMModel(BaseModel):
                             help="MONAI attention head channels (monai only)")
         parser.add_argument("--fm_num_res_blocks", type=int, default=2,
                             help="ResBlocks per UNet level")
+        parser.add_argument("--fm_up_mode", type=str, default="bilinear",
+                            choices=["bilinear", "conv_transpose"],
+                            help="custom U-Net decoder: bilinear (decoder_only) or "
+                                 "conv_transpose (joint_perc / perc_strong checkpoints)")
         parser.add_argument("--fm_use_tanh", action="store_true",
                             help="tanh on net output (flow_matching.py; x1 + monai)")
         parser.add_argument("--fm_time_dist", type=str, default="logit_normal",
@@ -181,11 +214,13 @@ class VanillaFMModel(BaseModel):
                 use_tanh=use_tanh,
             )
         else:
+            up_mode = str(getattr(opt, "fm_up_mode", "bilinear"))
             self.netG = _CondUNet(
                 in_ch=opt.input_nc + opt.output_nc + 1,
                 out_ch=opt.output_nc,
                 channels=ch,  # type: ignore[arg-type]
                 num_res_blocks=n_res,
+                up_mode=up_mode,
             )
 
         lam_perc = float(getattr(opt, "fm_lambda_perc", 0.0)) if self.isTrain else 0.0

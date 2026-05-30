@@ -110,6 +110,7 @@ train() {
         --fm_attn_levels "${FM_ATTN:-0,0,0}"
         --fm_num_head_channels "${FM_NUM_HEAD_CHANNELS:-32}"
         --fm_num_res_blocks "${FM_RESBLOCKS:-2}"
+        --fm_up_mode "${FM_UP_MODE:-bilinear}"
         --fm_time_dist "${FM_TIME_DIST:-logit_normal}"
         --fm_lambda_perc "${FM_LAMBDA_PERC:-0.1}"
         --fm_perc_size "${FM_PERC_SIZE:-256}"
@@ -188,6 +189,7 @@ test_one() {
         --fm_attn_levels "${FM_ATTN:-0,0,0}"
         --fm_num_head_channels "${FM_NUM_HEAD_CHANNELS:-32}"
         --fm_num_res_blocks "${FM_RESBLOCKS:-2}"
+        --fm_up_mode "${FM_UP_MODE:-bilinear}"
         --fm_steps "${FM_STEPS:-25}"
         --fm_sample_method "${FM_SAMPLE_METHOD:-heun}"
       )

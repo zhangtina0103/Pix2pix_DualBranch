@@ -583,8 +583,8 @@ class VanillaFMModel(BaseModel):
         return self.netG(inp)
 
     @staticmethod
-    def _patch_stem_seg_channels(state_dict: dict, net: nn.Module) -> dict:
-        """joint_perc stem is 7ch [x_t|H&E|t]; seg model is 8ch [x_t|H&E|seg|t]."""
+    def _patch_stem_extra_cond_channel(state_dict: dict, net: nn.Module) -> dict:
+        """Expand stem when finetuning seg: 7ch [x_t|H&E|t] -> 8ch [x_t|H&E|seg|t]."""
         key = "stem.weight"
         if key not in state_dict or not hasattr(net, "stem"):
             return state_dict
@@ -592,17 +592,26 @@ class VanillaFMModel(BaseModel):
         new_w = net.stem.weight
         if old_w.shape == new_w.shape:
             return state_dict
-        if old_w.shape[0] != new_w.shape[0] or old_w.shape[1] != 7 or new_w.shape[1] != 8:
+        out_c, old_in, new_in = old_w.shape[0], old_w.shape[1], new_w.shape[1]
+        if out_c != new_w.shape[0] or new_in != old_in + 1 or old_in < 4:
+            print(
+                f"  WARNING: cannot patch {key} {list(old_w.shape)} -> "
+                f"{list(new_w.shape)}; load may fail"
+            )
             return state_dict
         patched = new_w.data.new_zeros(new_w.shape)
-        patched[:, 0:3].copy_(old_w[:, 0:3])
-        patched[:, 3:6].copy_(old_w[:, 3:6])
-        patched[:, 7].copy_(old_w[:, 6])
+        # x_t + H&E (first old_in - 1 cond channels), new ch at -2, t at -1
+        n_xt = 3
+        n_he = old_in - 1 - n_xt
+        patched[:, :n_xt].copy_(old_w[:, :n_xt])
+        if n_he > 0:
+            patched[:, n_xt:n_xt + n_he].copy_(old_w[:, n_xt:n_xt + n_he])
+        patched[:, -1].copy_(old_w[:, -1])
         out = dict(state_dict)
         out[key] = patched
         print(
-            "  patched stem.weight: in_ch 7->8 "
-            "(copied x_t+H&E+t; seg input ch6 zero-init)"
+            f"  patched {key}: in_ch {old_in}->{new_in} "
+            f"(extra cond ch{n_xt + n_he} zero-init; t on ch {new_in - 1})"
         )
         return out
 
@@ -629,8 +638,9 @@ class VanillaFMModel(BaseModel):
                 del state_dict._metadata
             for key in list(state_dict.keys()):
                 self._patch_instance_norm_state_dict(state_dict, net, key.split("."))
-            if getattr(self.opt, "fm_use_seg", False) and name == "G":
-                state_dict = self._patch_stem_seg_channels(state_dict, net)
+            if name == "G" and "stem.weight" in state_dict and hasattr(net, "stem"):
+                if state_dict["stem.weight"].shape != net.stem.weight.shape:
+                    state_dict = self._patch_stem_extra_cond_channel(state_dict, net)
             loose = bool(getattr(self.opt, "fm_use_film", False))
             if getattr(self.opt, "fm_use_cfg", False) and getattr(
                 self.opt, "fm_null_mode", "zero"

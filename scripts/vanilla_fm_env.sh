@@ -146,7 +146,7 @@ vanilla_fm_apply_joint_film_env() {
   unset FM_USE_CFG
   export FM_USE_FILM=1
   export FM_FILM_HIDDEN="${FM_FILM_HIDDEN:-128}"
-  export FM_STEPS="${FM_STEPS:-25}"
+  export FM_STEPS=25
   export FM_VAL_STEPS="${FM_VAL_STEPS:-8}"
   export FM_SAMPLE_METHOD="${FM_SAMPLE_METHOD:-heun}"
   echo "joint_film: joint_perc + FiLM on decoder (no CFG)" >&2

@@ -2,6 +2,7 @@
 # cond_consistent v2: 8-step ODE-aux, perc=0.15 — faster per epoch than v1 scratch.
 #
 #   sbatch bash_scripts/train_hemit_cond_fm_consistent_v2.sbatch
+# After 6h: RESUME_PROFILE=v2 sbatch bash_scripts/resume_hemit_fm_scratch.sbatch
 #SBATCH --job-name=hemit_cfm_v2
 #SBATCH --output=logs/hemit_cond_fm_consistent_v2_%j.out
 #SBATCH --error=logs/hemit_cond_fm_consistent_v2_%j.err
@@ -9,7 +10,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
-#SBATCH --time=40:00:00
+#SBATCH --time=06:00:00
 
 set -euo pipefail
 source "${SLURM_SUBMIT_DIR:-$PWD}/bash_scripts/_common.sh"

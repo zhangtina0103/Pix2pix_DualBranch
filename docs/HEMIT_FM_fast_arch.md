@@ -1,5 +1,7 @@
 # Fast FM / architecture track (avoid slow ODE-in-training)
 
+**Cluster:** max **6h** per job → chain resumes (`docs/HEMIT_cluster_6h.md`).
+
 ## Speed ranking (per training step @ 1024²)
 
 | Recipe | Relative cost | Why |

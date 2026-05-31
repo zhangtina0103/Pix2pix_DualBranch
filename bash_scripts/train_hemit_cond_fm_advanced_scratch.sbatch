@@ -1,7 +1,7 @@
 #!/bin/bash
-# Tri-head + multi-scale H&E cross-attn + seg + init + light ODE-aux. Scratch 1→130.
+# Tri-head + cross-attn + seg + init. 6h max → resume until 130 (docs/HEMIT_cluster_6h.md).
 #   sbatch bash_scripts/train_hemit_cond_fm_advanced_scratch.sbatch
-# OOM → BATCH_SIZE=1 FM_CROSS_ATTN_HEADS=4 (drop --fm_cross_attn_decoder via env)
+#   export RESUME_PROFILE=advanced && sbatch bash_scripts/resume_hemit_fm_scratch.sbatch
 #SBATCH --job-name=hemit_adv
 #SBATCH --output=logs/hemit_cond_fm_advanced_scratch_%j.out
 #SBATCH --error=logs/hemit_cond_fm_advanced_scratch_%j.err
@@ -9,7 +9,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
-#SBATCH --time=36:00:00
+#SBATCH --time=06:00:00
 
 set -euo pipefail
 source "${SLURM_SUBMIT_DIR:-$PWD}/bash_scripts/_common.sh"

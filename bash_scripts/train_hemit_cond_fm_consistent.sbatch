@@ -18,6 +18,7 @@ source /home/zhangtin/miniforge3/etc/profile.d/conda.sh
 conda activate "${CONDA_ENV:-pix2pix_cuda}"
 source "${REPO_ROOT}/bash_scripts/_cuda.sh"
 
+export MODEL=vanilla_fm
 export MODE=train
 export HEMIT_SRC="${HEMIT_SRC:-/home/zhangtin/virtual-staining/data/hemit}"
 export DATAROOT="${DATAROOT:-./datasets/hemit}"
@@ -34,4 +35,5 @@ python "${REPO_ROOT}/scripts/generate_hemit_seg_masks.py" --dataroot "${REPO_ROO
 source "${REPO_ROOT}/bash_scripts/_vanilla_fm_finetune_from_joint_perc.sh"
 vanilla_fm_finetune_joint_opt_from_perc_80
 vanilla_fm_print_train_env
-bash scripts/run_hemit_vanilla_fm.sh
+echo "Train epochs: ${EPOCH_COUNT:-?} .. $(( ${N_EPOCHS:-0} + ${N_EPOCHS_DECAY:-0} )) (expect 81..130)"
+bash "${REPO_ROOT}/scripts/run_hemit_vanilla_fm.sh"

@@ -15,6 +15,8 @@ vanilla_fm_clear_stale_env() {
   unset FM_NULL_MODE FM_FILM_WHERE FM_FILM_REG
   unset FM_LAMBDA_SAMPLE_L1 FM_LAMBDA_L1 FM_USE_TANH
   unset FM_USE_SEG FM_FLOW_PATH FM_INIT_FROM_COND FM_INIT_NOISE_SIGMA DATASET_MODE
+  unset FM_HE_PROJ_INIT FM_BRIDGE_X0_SIGMA FM_BRIDGE_NOISE_PROB
+  unset FM_SAMPLE_L1_PROB FM_TRAIN_SAMPLE_STEPS FM_TRAIN_SAMPLE_METHOD
   unset VANILLA_FM_COND_PROFILE
 }
 
@@ -425,7 +427,10 @@ vanilla_fm_print_train_env() {
     echo "  flow_path=${FM_FLOW_PATH} he_proj_init=${FM_HE_PROJ_INIT:-gray} bridge_noise_prob=${FM_BRIDGE_NOISE_PROB:-0}"
   fi
   if [[ "${FM_INIT_FROM_COND:-0}" == "1" ]]; then
-    echo "  init_from_cond: sigma=${FM_INIT_NOISE_SIGMA:-0.3}"
+    echo "  init_from_cond: sigma=${FM_INIT_NOISE_SIGMA:-0.3} he_proj=${FM_HE_PROJ_INIT:-gray}"
+  fi
+  if [[ "${FM_LAMBDA_SAMPLE_L1:-0}" != "0" ]]; then
+    echo "  ODE-aux L1: lambda=${FM_LAMBDA_SAMPLE_L1} prob=${FM_SAMPLE_L1_PROB:-1} steps=${FM_TRAIN_SAMPLE_STEPS:-?} ${FM_TRAIN_SAMPLE_METHOD:-heun}"
   fi
   if [[ -n "${VANILLA_FM_COND_PROFILE:-}" ]]; then
     echo "  cond_profile=${VANILLA_FM_COND_PROFILE} (verified when locked=1)"

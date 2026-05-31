@@ -1,5 +1,5 @@
 #!/bin/bash
-# Test joint_bridge @ 100.
+# Test joint_bridge_v2 @ TEST_EPOCH (default 100; use 80 if train still running).
 #   sbatch bash_scripts/test_hemit_vanilla_fm_joint_bridge.sbatch
 #SBATCH --job-name=hemit_vfm_bridge_t
 #SBATCH --output=logs/hemit_vfm_joint_bridge_test_%j.out
@@ -31,9 +31,17 @@ source "${REPO_ROOT}/bash_scripts/_vanilla_fm_sbatch_preamble.sh"
 source "${REPO_ROOT}/scripts/vanilla_fm_env.sh"
 vanilla_fm_apply_joint_bridge_env
 export VANILLA_FM_ENV_LOCKED=1
-[[ -f "${REPO_ROOT}/checkpoints/${TRAIN_NAME}/${TEST_EPOCH}_net_G.pth" ]] || {
-  echo "ERROR: train joint_bridge first" >&2
+CKPT_G="${REPO_ROOT}/checkpoints/${TRAIN_NAME}/${TEST_EPOCH}_net_G.pth"
+if [[ ! -f "${CKPT_G}" ]]; then
+  echo "ERROR: missing checkpoint:" >&2
+  echo "  ${CKPT_G}" >&2
+  echo "  TRAIN_NAME=${TRAIN_NAME} (expect hemit_vanilla_fm_joint_bridge_v2)" >&2
+  echo "  Available under checkpoints/${TRAIN_NAME}/:" >&2
+  ls -1 "${REPO_ROOT}/checkpoints/${TRAIN_NAME}/"*_net_G.pth 2>/dev/null >&2 || \
+    echo "  (no *_net_G.pth — train not started or wrong folder name)" >&2
+  echo "  Fix: wait for train to epoch 100, or: export TEST_EPOCH=<latest>" >&2
   exit 1
-}
+fi
+echo "Using checkpoint: ${CKPT_G}"
 vanilla_fm_print_train_env
 bash "${REPO_ROOT}/scripts/run_hemit_all.sh"

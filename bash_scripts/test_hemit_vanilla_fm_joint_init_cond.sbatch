@@ -31,9 +31,17 @@ source "${REPO_ROOT}/bash_scripts/_vanilla_fm_sbatch_preamble.sh"
 source "${REPO_ROOT}/scripts/vanilla_fm_env.sh"
 vanilla_fm_apply_joint_init_cond_env
 export VANILLA_FM_ENV_LOCKED=1
-[[ -f "${REPO_ROOT}/checkpoints/${TRAIN_NAME}/${TEST_EPOCH}_net_G.pth" ]] || {
-  echo "ERROR: train joint_init_cond first" >&2
+CKPT_G="${REPO_ROOT}/checkpoints/${TRAIN_NAME}/${TEST_EPOCH}_net_G.pth"
+if [[ ! -f "${CKPT_G}" ]]; then
+  echo "ERROR: missing checkpoint:" >&2
+  echo "  ${CKPT_G}" >&2
+  echo "  TRAIN_NAME=${TRAIN_NAME} (expect hemit_vanilla_fm_joint_init_cond_v2)" >&2
+  echo "  Available under checkpoints/${TRAIN_NAME}/:" >&2
+  ls -1 "${REPO_ROOT}/checkpoints/${TRAIN_NAME}/"*_net_G.pth 2>/dev/null >&2 || \
+    echo "  (no *_net_G.pth — train not started or wrong folder name)" >&2
+  echo "  Fix: wait for train to epoch 100, or: export TEST_EPOCH=<latest>" >&2
   exit 1
-}
+fi
+echo "Using checkpoint: ${CKPT_G}"
 vanilla_fm_print_train_env
 bash "${REPO_ROOT}/scripts/run_hemit_all.sh"

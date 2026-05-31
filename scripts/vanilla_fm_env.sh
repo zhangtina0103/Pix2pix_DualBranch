@@ -96,7 +96,7 @@ vanilla_fm_verify_cond_profile() {
       [[ "${FM_BACKBONE:-}" == "monai" ]] || _fm_cond_fail "FM_BACKBONE must be monai"
       [[ -n "${FM_CROP_SIZE:-}" ]] || _fm_cond_fail "FM_CROP_SIZE required"
       ;;
-    consistent)
+    consistent|consistent_scratch|consistent_v2)
       [[ "${FM_USE_SEG:-0}" == "1" ]] || _fm_cond_fail "FM_USE_SEG=1 required"
       [[ "${DATASET_MODE:-}" == "aligned_cond" ]] || _fm_cond_fail "DATASET_MODE=aligned_cond required"
       [[ "${FM_FLOW_PATH:-noise}" == "noise" ]] || _fm_cond_fail "FM_FLOW_PATH must be noise"
@@ -306,6 +306,16 @@ vanilla_fm_apply_joint_cfg_env() {
   echo "joint_cfg: joint_perc + CFG dropout=${FM_CFG_DROPOUT} test_scale=${FM_CFG_SCALE}" >&2
 }
 
+# Fresh train 1→130 (no joint_perc/80 seed). Use for cond_consistent / beat_p2p scratch jobs.
+vanilla_fm_apply_fm_scratch_schedule() {
+  unset CONTINUE_TRAIN RESUME_FROM_EPOCH PRETRAINED_NAME
+  export EPOCH_COUNT=1
+  export N_EPOCHS="${N_EPOCHS:-100}"
+  export N_EPOCHS_DECAY="${N_EPOCHS_DECAY:-30}"
+  export TRAIN_LR="${TRAIN_LR:-0.0002}"
+  echo "scratch schedule: epochs ${EPOCH_COUNT}..$((N_EPOCHS + N_EPOCHS_DECAY)) TRAIN_LR=${TRAIN_LR}" >&2
+}
+
 # Consistent conditioning (hypothesis to beat pix2pix): seg in UNet + same ODE start at train & test.
 # Main FM loss: noise path (joint_perc). Aux: short ODE from gray informed z0 (matches test init).
 vanilla_fm_apply_cond_consistent_env() {
@@ -326,6 +336,53 @@ vanilla_fm_apply_cond_consistent_env() {
   unset FM_USE_CFG FM_USE_FILM FM_USE_GAN FM_USE_ODE_TRAIN
   unset FM_BRIDGE_X0_SIGMA FM_BRIDGE_NOISE_PROB FM_LAMBDA_VEL
   echo "cond_consistent: seg + init_v2 + ODE-aux@${FM_TRAIN_SAMPLE_STEPS} (train/test same z0)" >&2
+}
+
+# Same recipe as cond_consistent, train from epoch 1 (not finetune from joint_perc/80).
+# @95 finetune was 0.827 vs 0.831 perc — DAPI/CD3 up, panCK down; full co-training may close gap.
+vanilla_fm_apply_cond_consistent_scratch_env() {
+  vanilla_fm_apply_cond_consistent_env
+  export TRAIN_NAME=hemit_cond_fm_consistent_scratch
+  export VANILLA_FM_EXPECTED_TRAIN_NAME="${TRAIN_NAME}"
+  export VANILLA_FM_COND_PROFILE=consistent_scratch
+  vanilla_fm_apply_fm_scratch_schedule
+  echo "cond_consistent_scratch: full train 1→130, lr=${TRAIN_LR}" >&2
+}
+
+# Lighter ODE-aux (8 Heun steps, 35% prob) + slightly stronger perc — faster steps, less panCK drag.
+vanilla_fm_apply_cond_consistent_v2_env() {
+  vanilla_fm_apply_joint_perc_pins
+  export TRAIN_NAME=hemit_cond_fm_consistent_v2
+  export VANILLA_FM_EXPECTED_TRAIN_NAME="${TRAIN_NAME}"
+  export VANILLA_FM_COND_PROFILE=consistent_v2
+  export DATASET_MODE=aligned_cond
+  export FM_USE_SEG=1
+  export FM_FLOW_PATH=noise
+  export FM_INIT_FROM_COND=1
+  export FM_HE_PROJ_INIT=gray
+  export FM_INIT_NOISE_SIGMA=0.55
+  export FM_LAMBDA_PERC=0.15
+  export FM_LAMBDA_SAMPLE_L1=22
+  export FM_SAMPLE_L1_PROB=0.35
+  export FM_TRAIN_SAMPLE_STEPS=8
+  export FM_TRAIN_SAMPLE_METHOD=heun
+  unset FM_USE_CFG FM_USE_FILM FM_USE_GAN FM_USE_ODE_TRAIN
+  unset FM_BRIDGE_X0_SIGMA FM_BRIDGE_NOISE_PROB FM_LAMBDA_VEL
+  vanilla_fm_apply_fm_scratch_schedule
+  echo "cond_consistent_v2: perc=${FM_LAMBDA_PERC} ODE-aux@${FM_TRAIN_SAMPLE_STEPS} p=${FM_SAMPLE_L1_PROB}" >&2
+}
+
+# FM trained on ODE outputs (SSIM-aligned); 1,1,1 channel weights for fair vs joint_perc.
+vanilla_fm_apply_beat_pix2pix_111_scratch_env() {
+  vanilla_fm_apply_beat_pix2pix_env
+  export TRAIN_NAME=hemit_vanilla_fm_beat_p2p_111
+  export VANILLA_FM_EXPECTED_TRAIN_NAME="${TRAIN_NAME}"
+  export FM_CHANNEL_WEIGHTS=1,1,1
+  export FM_BACKBONE=custom
+  export FM_UP_MODE=conv_transpose
+  export FM_CHANNELS=96,192,256
+  vanilla_fm_apply_fm_scratch_schedule
+  echo "beat_p2p_111_scratch: sample_L1=${FM_LAMBDA_SAMPLE_L1} perc=${FM_LAMBDA_PERC} ch=${FM_CHANNEL_WEIGHTS}" >&2
 }
 
 # Phase B: informed z0 + ODE-aux only (no seg). Tests whether init_cond v2 works with train/test consistency.

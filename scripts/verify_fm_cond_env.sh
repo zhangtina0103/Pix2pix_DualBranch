@@ -7,7 +7,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 export REPO_ROOT="${ROOT}"
-PROFILE="${1:?usage: verify_fm_cond_env.sh seg|bridge|init_cond|init_only|seg_only|consistent|cellpose|patchnce|res3}"
+PROFILE="${1:?usage: verify_fm_cond_env.sh seg|bridge|init_cond|init_only|seg_only|consistent|consistent_scratch|consistent_v2|cellpose|patchnce|res3}"
 
 # shellcheck source=/dev/null
 source "${ROOT}/bash_scripts/_vanilla_fm_sbatch_preamble.sh"
@@ -21,6 +21,8 @@ case "${PROFILE}" in
   init_only) vanilla_fm_apply_cond_init_only_env ;;
   seg_only) vanilla_fm_apply_cond_seg_only_env ;;
   consistent|opt) vanilla_fm_apply_cond_consistent_env ;;
+  consistent_scratch) vanilla_fm_apply_cond_consistent_scratch_env ;;
+  consistent_v2) vanilla_fm_apply_cond_consistent_v2_env ;;
   cellpose|mentor_cellpose) vanilla_fm_apply_joint_perc_cellpose_env ;;
   patchnce|mentor_patchnce) vanilla_fm_apply_joint_perc_patchnce_env ;;
   res3|mentor_res3) vanilla_fm_apply_joint_perc_res3_env ;;

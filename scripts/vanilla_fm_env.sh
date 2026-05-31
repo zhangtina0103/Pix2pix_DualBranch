@@ -372,6 +372,62 @@ vanilla_fm_apply_cond_consistent_v2_env() {
   echo "cond_consistent_v2: perc=${FM_LAMBDA_PERC} ODE-aux@${FM_TRAIN_SAMPLE_STEPS} p=${FM_SAMPLE_L1_PROB}" >&2
 }
 
+# Fast arch track: joint_perc speed (no ODE in train loop). Scratch 1→130 unless noted.
+
+vanilla_fm_apply_joint_perc_scratch_env() {
+  vanilla_fm_apply_joint_perc_pins
+  export TRAIN_NAME=hemit_vanilla_fm_joint_perc_scratch
+  export VANILLA_FM_EXPECTED_TRAIN_NAME="${TRAIN_NAME}"
+  unset DATASET_MODE FM_USE_SEG FM_INIT_FROM_COND
+  export FM_FLOW_PATH=noise
+  vanilla_fm_apply_fm_scratch_schedule
+  echo "joint_perc_scratch: same as baseline recipe, train 1→130 (speed reference)" >&2
+}
+
+vanilla_fm_apply_joint_perc_res3_scratch_env() {
+  vanilla_fm_apply_joint_perc_pins
+  export TRAIN_NAME=hemit_vanilla_fm_joint_perc_res3_scratch
+  export VANILLA_FM_EXPECTED_TRAIN_NAME="${TRAIN_NAME}"
+  export VANILLA_FM_COND_PROFILE=mentor_res3
+  export FM_RESBLOCKS=3
+  unset DATASET_MODE FM_USE_SEG FM_INIT_FROM_COND
+  export FM_FLOW_PATH=noise
+  vanilla_fm_apply_fm_scratch_schedule
+  echo "joint_perc_res3_scratch: 3 res blocks/level, 1→130" >&2
+}
+
+vanilla_fm_apply_perc_strong_scratch_env() {
+  vanilla_fm_apply_joint_perc_pins
+  export TRAIN_NAME=hemit_vanilla_fm_perc_strong_scratch
+  export VANILLA_FM_EXPECTED_TRAIN_NAME="${TRAIN_NAME}"
+  export FM_LAMBDA_PERC=0.5
+  unset DATASET_MODE FM_USE_SEG FM_INIT_FROM_COND
+  export FM_FLOW_PATH=noise
+  vanilla_fm_apply_fm_scratch_schedule
+  echo "perc_strong_scratch: perc=0.5, no ODE-aux, 1→130" >&2
+}
+
+# cond without heavy ODE-aux: seg + init only, 4-step aux @ 20% (much faster than v2).
+vanilla_fm_apply_cond_light_scratch_env() {
+  vanilla_fm_apply_joint_perc_pins
+  export TRAIN_NAME=hemit_cond_fm_light_scratch
+  export VANILLA_FM_EXPECTED_TRAIN_NAME="${TRAIN_NAME}"
+  export VANILLA_FM_COND_PROFILE=consistent
+  export DATASET_MODE=aligned_cond
+  export FM_USE_SEG=1
+  export FM_FLOW_PATH=noise
+  export FM_INIT_FROM_COND=1
+  export FM_HE_PROJ_INIT=gray
+  export FM_INIT_NOISE_SIGMA=0.55
+  export FM_LAMBDA_SAMPLE_L1=20
+  export FM_SAMPLE_L1_PROB=0.2
+  export FM_TRAIN_SAMPLE_STEPS=4
+  export FM_TRAIN_SAMPLE_METHOD=heun
+  unset FM_USE_CFG FM_USE_FILM FM_USE_GAN FM_USE_ODE_TRAIN
+  vanilla_fm_apply_fm_scratch_schedule
+  echo "cond_light_scratch: seg+init, ODE-aux 4-step p=0.2 (fast cond)" >&2
+}
+
 # FM trained on ODE outputs (SSIM-aligned); 1,1,1 channel weights for fair vs joint_perc.
 vanilla_fm_apply_beat_pix2pix_111_scratch_env() {
   vanilla_fm_apply_beat_pix2pix_env

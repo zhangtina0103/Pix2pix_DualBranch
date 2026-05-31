@@ -107,20 +107,30 @@ class _HEEncoder(nn.Module):
 
 
 class _SpatialCrossAttn(nn.Module):
-    """Queries = FM trunk; keys/values = H&E encoder features (same spatial size)."""
+    """
+    Cross-attn: FM queries H&E context. Full MHA at 1024² is ~1M tokens (hangs for minutes).
+    Features larger than attn_side are pooled to attn_side² before attention.
+    """
 
-    def __init__(self, dim: int, context_dim: int, num_heads: int = 8):
+    def __init__(
+        self,
+        dim: int,
+        context_dim: int,
+        num_heads: int = 8,
+        attn_side: int = 64,
+    ):
         super().__init__()
         nh = num_heads
         while dim % nh != 0 and nh > 1:
             nh -= 1
+        self.attn_side = attn_side
         self.norm_q = nn.GroupNorm(min(8, dim), dim)
         self.norm_kv = nn.GroupNorm(min(8, context_dim), context_dim)
         self.kv_proj = nn.Conv2d(context_dim, dim, 1) if context_dim != dim else nn.Identity()
         self.attn = nn.MultiheadAttention(dim, nh, batch_first=True, dropout=0.0)
         self.proj_out = nn.Conv2d(dim, dim, 1)
 
-    def forward(self, x: torch.Tensor, context: torch.Tensor) -> torch.Tensor:
+    def _attn_at_res(self, x: torch.Tensor, context: torch.Tensor) -> torch.Tensor:
         if context.shape[2:] != x.shape[2:]:
             context = F.interpolate(
                 context, size=x.shape[2:], mode="bilinear", align_corners=False,
@@ -133,6 +143,17 @@ class _SpatialCrossAttn(nn.Module):
         out, _ = self.attn(q, kv, kv, need_weights=False)
         out = out.transpose(1, 2).view(b, c, h, w)
         return x + self.proj_out(out)
+
+    def forward(self, x: torch.Tensor, context: torch.Tensor) -> torch.Tensor:
+        h, w = x.shape[2:]
+        side = self.attn_side
+        if h <= side and w <= side:
+            return self._attn_at_res(x, context)
+        x_s = F.adaptive_avg_pool2d(x, side)
+        ctx_s = F.adaptive_avg_pool2d(context, side)
+        delta_s = self._attn_at_res(x_s, ctx_s) - x_s
+        delta = F.interpolate(delta_s, size=(h, w), mode="bilinear", align_corners=False)
+        return x + delta
 
 
 class CondUNetAdvanced(nn.Module):

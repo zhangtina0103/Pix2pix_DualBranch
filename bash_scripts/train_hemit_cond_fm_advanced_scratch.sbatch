@@ -1,5 +1,6 @@
 #!/bin/bash
-# Tri-head + cross-attn + seg + init. 6h max → resume until 130 (docs/HEMIT_cluster_6h.md).
+# Tri-head + pooled cross-attn + seg + init. 6h chunks → resume (docs/HEMIT_cluster_6h.md).
+# git pull required: old build did full-res MHA @ 1024² (~10min stuck at epoch 0).
 #   sbatch bash_scripts/train_hemit_cond_fm_advanced_scratch.sbatch
 #   export RESUME_PROFILE=advanced && sbatch bash_scripts/resume_hemit_fm_scratch.sbatch
 #SBATCH --job-name=hemit_adv

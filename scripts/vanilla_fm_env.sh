@@ -447,7 +447,8 @@ vanilla_fm_apply_cond_fm_advanced_scratch_env() {
   export FM_TRAIN_SAMPLE_METHOD=heun
   export FM_USE_TRI_HEAD=1
   export FM_USE_CROSS_ATTN=1
-  export FM_CROSS_ATTN_DECODER=1
+  # Decoder cross-attn uses pooled 64² MHA (safe @ 1024²). Set =1 to enable up2/up1 blocks.
+  export FM_CROSS_ATTN_DECODER="${FM_CROSS_ATTN_DECODER:-1}"
   export FM_CROSS_ATTN_HEADS="${FM_CROSS_ATTN_HEADS:-8}"
   unset FM_USE_CFG FM_USE_FILM FM_USE_GAN FM_USE_ODE_TRAIN
   vanilla_fm_apply_fm_scratch_schedule

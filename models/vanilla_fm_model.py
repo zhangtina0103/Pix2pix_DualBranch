@@ -444,7 +444,7 @@ class VanillaFMModel(BaseModel):
                 )
                 print(
                     f"FM advanced U-Net: tri_head={self.fm_use_tri_head} "
-                    f"cross_attn={self.fm_use_cross_attn} "
+                    f"cross_attn={self.fm_use_cross_attn} (pooled 64² MHA) "
                     f"dec_cross={getattr(opt, 'fm_cross_attn_decoder', False)} "
                     f"heads={getattr(opt, 'fm_cross_attn_heads', 8)}"
                 )

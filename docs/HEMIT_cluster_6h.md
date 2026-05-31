@@ -54,6 +54,11 @@ export TEST_EPOCH=130
 sbatch bash_scripts/test_hemit_cond_fm_advanced_scratch.sbatch
 ```
 
+## Advanced / cross-attn speed
+
+Cross-attention **pools to 64×64** before MHA (1024² full attention is ~10+ min/iter).
+After `git pull`, advanced should be ~**2–4 min/iter** (similar order to cond_v2 + tri-head).
+
 ## Do not
 
 - Re-run the **train** sbatch after partial progress (re-seeds or copies perc/80).

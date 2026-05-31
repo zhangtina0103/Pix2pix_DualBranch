@@ -18,6 +18,7 @@ vanilla_fm_clear_stale_env() {
   unset FM_HE_PROJ_INIT FM_BRIDGE_X0_SIGMA FM_BRIDGE_NOISE_PROB
   unset FM_SAMPLE_L1_PROB FM_TRAIN_SAMPLE_STEPS FM_TRAIN_SAMPLE_METHOD
   unset FM_USE_PATCHNCE FM_LAMBDA_NCE FM_NCE_PATCHES FM_SEG_SUFFIX FM_CROP_SIZE
+  unset FM_USE_TRI_HEAD FM_USE_CROSS_ATTN FM_CROSS_ATTN_DECODER FM_CROSS_ATTN_HEADS
   unset VANILLA_FM_COND_PROFILE
 }
 
@@ -96,7 +97,7 @@ vanilla_fm_verify_cond_profile() {
       [[ "${FM_BACKBONE:-}" == "monai" ]] || _fm_cond_fail "FM_BACKBONE must be monai"
       [[ -n "${FM_CROP_SIZE:-}" ]] || _fm_cond_fail "FM_CROP_SIZE required"
       ;;
-    consistent|consistent_scratch|consistent_v2)
+    consistent|consistent_scratch|consistent_v2|advanced|advanced_scratch)
       [[ "${FM_USE_SEG:-0}" == "1" ]] || _fm_cond_fail "FM_USE_SEG=1 required"
       [[ "${DATASET_MODE:-}" == "aligned_cond" ]] || _fm_cond_fail "DATASET_MODE=aligned_cond required"
       [[ "${FM_FLOW_PATH:-noise}" == "noise" ]] || _fm_cond_fail "FM_FLOW_PATH must be noise"
@@ -426,6 +427,63 @@ vanilla_fm_apply_cond_light_scratch_env() {
   unset FM_USE_CFG FM_USE_FILM FM_USE_GAN FM_USE_ODE_TRAIN
   vanilla_fm_apply_fm_scratch_schedule
   echo "cond_light_scratch: seg+init, ODE-aux 4-step p=0.2 (fast cond)" >&2
+}
+
+# Flagship: tri-head + multi-scale H&E cross-attn + seg + informed init + light ODE-aux.
+vanilla_fm_apply_cond_fm_advanced_scratch_env() {
+  vanilla_fm_apply_joint_perc_pins
+  export TRAIN_NAME=hemit_cond_fm_advanced_scratch
+  export VANILLA_FM_EXPECTED_TRAIN_NAME="${TRAIN_NAME}"
+  export VANILLA_FM_COND_PROFILE=advanced_scratch
+  export DATASET_MODE=aligned_cond
+  export FM_USE_SEG=1
+  export FM_FLOW_PATH=noise
+  export FM_INIT_FROM_COND=1
+  export FM_HE_PROJ_INIT=gray
+  export FM_INIT_NOISE_SIGMA=0.55
+  export FM_LAMBDA_SAMPLE_L1=20
+  export FM_SAMPLE_L1_PROB=0.2
+  export FM_TRAIN_SAMPLE_STEPS=4
+  export FM_TRAIN_SAMPLE_METHOD=heun
+  export FM_USE_TRI_HEAD=1
+  export FM_USE_CROSS_ATTN=1
+  export FM_CROSS_ATTN_DECODER=1
+  export FM_CROSS_ATTN_HEADS="${FM_CROSS_ATTN_HEADS:-8}"
+  unset FM_USE_CFG FM_USE_FILM FM_USE_GAN FM_USE_ODE_TRAIN
+  vanilla_fm_apply_fm_scratch_schedule
+  echo "cond_fm_advanced_scratch: tri_head+cross_attn+seg+init+ODE-light" >&2
+}
+
+# Ablation: tri-head only (joint_perc path, no cross-attn).
+vanilla_fm_apply_fm_tri_head_scratch_env() {
+  vanilla_fm_apply_joint_perc_pins
+  export TRAIN_NAME=hemit_fm_tri_head_scratch
+  export VANILLA_FM_EXPECTED_TRAIN_NAME="${TRAIN_NAME}"
+  unset DATASET_MODE FM_USE_SEG FM_INIT_FROM_COND
+  export FM_FLOW_PATH=noise
+  export FM_USE_TRI_HEAD=1
+  export FM_USE_CROSS_ATTN=0
+  unset FM_CROSS_ATTN_DECODER FM_LAMBDA_SAMPLE_L1
+  export FM_LAMBDA_SAMPLE_L1=0
+  vanilla_fm_apply_fm_scratch_schedule
+  echo "fm_tri_head_scratch: 3 marker heads, no seg/cross-attn" >&2
+}
+
+# Ablation: cross-attn only (single head).
+vanilla_fm_apply_fm_cross_attn_scratch_env() {
+  vanilla_fm_apply_joint_perc_pins
+  export TRAIN_NAME=hemit_fm_cross_attn_scratch
+  export VANILLA_FM_EXPECTED_TRAIN_NAME="${TRAIN_NAME}"
+  unset DATASET_MODE FM_USE_SEG FM_INIT_FROM_COND
+  export FM_FLOW_PATH=noise
+  export FM_USE_TRI_HEAD=0
+  export FM_USE_CROSS_ATTN=1
+  export FM_CROSS_ATTN_DECODER=1
+  export FM_CROSS_ATTN_HEADS="${FM_CROSS_ATTN_HEADS:-8}"
+  unset FM_LAMBDA_SAMPLE_L1
+  export FM_LAMBDA_SAMPLE_L1=0
+  vanilla_fm_apply_fm_scratch_schedule
+  echo "fm_cross_attn_scratch: H&E cross-attn, single head" >&2
 }
 
 # FM trained on ODE outputs (SSIM-aligned); 1,1,1 channel weights for fair vs joint_perc.

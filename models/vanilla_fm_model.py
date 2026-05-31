@@ -343,6 +343,14 @@ class VanillaFMModel(BaseModel):
                                 help="Weight for PatchNCE loss")
             parser.add_argument("--fm_nce_patches", type=int, default=256,
                                 help="Patches per image for PatchNCE")
+        parser.add_argument("--fm_use_tri_head", action="store_true",
+                                help="Custom U-Net: separate 1ch head per marker (DAPI/CD3/panCK)")
+        parser.add_argument("--fm_use_cross_attn", action="store_true",
+                                help="Custom U-Net: multi-scale H&E(+seg) cross-attention")
+        parser.add_argument("--fm_cross_attn_heads", type=int, default=8,
+                                help="Num heads for fm_use_cross_attn blocks")
+        parser.add_argument("--fm_cross_attn_decoder", action="store_true",
+                                help="Cross-attn at decoder (up2/up1) in addition to bottleneck")
         return parser
 
     def __init__(self, opt):
@@ -374,6 +382,11 @@ class VanillaFMModel(BaseModel):
         self.fm_nce_patches = int(getattr(opt, "fm_nce_patches", 256))
         self.fm_patchnce_head: Optional[FMPatchNCEHead] = None
         self.fm_cond_extra = 1 if self.fm_use_seg else 0
+        self.fm_use_tri_head = bool(getattr(opt, "fm_use_tri_head", False))
+        self.fm_use_cross_attn = bool(getattr(opt, "fm_use_cross_attn", False))
+        self.fm_use_advanced_unet = (
+            not self.use_monai and (self.fm_use_tri_head or self.fm_use_cross_attn)
+        )
         use_he_proj = (
             self.fm_flow_path == "bridge" or self.fm_init_from_cond
         )
@@ -410,20 +423,46 @@ class VanillaFMModel(BaseModel):
             use_learned_null = self.fm_use_cfg and self.fm_null_mode == "learned"
             cond_nc = opt.input_nc + self.fm_cond_extra
             stem_in = opt.output_nc + cond_nc + 1
-            self.netG = _CondUNet(
-                in_ch=stem_in,
-                out_ch=opt.output_nc,
-                channels=ch,  # type: ignore[arg-type]
-                num_res_blocks=n_res,
-                up_mode=up_mode,
-                use_film=use_film,
-                film_where=film_where,
-                use_learned_null=use_learned_null,
-                cond_nc=cond_nc,
-                film_hidden=int(getattr(opt, "fm_film_hidden", 128)),
-                use_he_proj=use_he_proj,
-                he_proj_init=self.fm_he_proj_init,
-            )
+            if self.fm_use_advanced_unet:
+                from .fm_cond_unet import CondUNetAdvanced
+
+                self.netG = CondUNetAdvanced(
+                    in_ch=stem_in,
+                    out_ch=opt.output_nc,
+                    channels=ch,  # type: ignore[arg-type]
+                    num_res_blocks=n_res,
+                    up_mode=up_mode,
+                    cond_nc=cond_nc,
+                    use_he_proj=use_he_proj,
+                    he_proj_init=self.fm_he_proj_init,
+                    use_tri_head=self.fm_use_tri_head,
+                    use_cross_attn=self.fm_use_cross_attn,
+                    cross_attn_heads=int(getattr(opt, "fm_cross_attn_heads", 8)),
+                    cross_attn_decoder=bool(
+                        getattr(opt, "fm_cross_attn_decoder", False)
+                    ),
+                )
+                print(
+                    f"FM advanced U-Net: tri_head={self.fm_use_tri_head} "
+                    f"cross_attn={self.fm_use_cross_attn} "
+                    f"dec_cross={getattr(opt, 'fm_cross_attn_decoder', False)} "
+                    f"heads={getattr(opt, 'fm_cross_attn_heads', 8)}"
+                )
+            else:
+                self.netG = _CondUNet(
+                    in_ch=stem_in,
+                    out_ch=opt.output_nc,
+                    channels=ch,  # type: ignore[arg-type]
+                    num_res_blocks=n_res,
+                    up_mode=up_mode,
+                    use_film=use_film,
+                    film_where=film_where,
+                    use_learned_null=use_learned_null,
+                    cond_nc=cond_nc,
+                    film_hidden=int(getattr(opt, "fm_film_hidden", 128)),
+                    use_he_proj=use_he_proj,
+                    he_proj_init=self.fm_he_proj_init,
+                )
             if self.fm_use_seg:
                 print(f"FM cond: H&E + seg -> {cond_nc}ch, stem in_ch={stem_in}")
             if use_he_proj:
@@ -603,7 +642,36 @@ class VanillaFMModel(BaseModel):
         net = self.netG.module if isinstance(self.netG, nn.DataParallel) else self.netG
         if getattr(net, "use_film", False):
             return net(inp, cond_img=self._film_cond_img(cond))
+        if getattr(net, "use_cross_attn", False) or getattr(net, "use_tri_head", False):
+            return net(inp, cond_spatial=cond)
         return self.netG(inp)
+
+    @staticmethod
+    @staticmethod
+    def _patch_tri_head_from_single_head(state_dict: dict, net: nn.Module) -> dict:
+        """Finetune: copy legacy head.weight to each marker head when shapes match."""
+        if not getattr(net, "marker_heads", None):
+            return state_dict
+        key = "head.weight"
+        if key not in state_dict:
+            return state_dict
+        w = state_dict[key]
+        if w.shape[0] != len(net.marker_heads):
+            return state_dict
+        out = dict(state_dict)
+        bias = out.pop("head.bias", None)
+        out.pop("head.weight", None)
+        for i, head in enumerate(net.marker_heads):
+            if w.shape[0] == 1:
+                out[f"marker_heads.{i}.weight"] = w.clone()
+                if bias is not None:
+                    out[f"marker_heads.{i}.bias"] = bias.clone()
+            else:
+                out[f"marker_heads.{i}.weight"] = w[i : i + 1].clone()
+                if bias is not None:
+                    out[f"marker_heads.{i}.bias"] = bias[i : i + 1].clone()
+        print(f"  patched tri-head from {key} ({list(w.shape)})")
+        return out
 
     @staticmethod
     def _patch_stem_extra_cond_channel(state_dict: dict, net: nn.Module) -> dict:
@@ -679,6 +747,11 @@ class VanillaFMModel(BaseModel):
                 loose = True
             if int(getattr(self.opt, "fm_num_res_blocks", 2)) != 2:
                 loose = True
+            if getattr(self.opt, "fm_use_tri_head", False) or getattr(
+                self.opt, "fm_use_cross_attn", False
+            ):
+                loose = True
+                state_dict = self._patch_tri_head_from_single_head(state_dict, net)
             incompatible = net.load_state_dict(state_dict, strict=not loose)
             if loose:
                 n_miss = len(incompatible.missing_keys)

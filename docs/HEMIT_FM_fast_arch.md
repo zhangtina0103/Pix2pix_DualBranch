@@ -78,6 +78,28 @@ python scripts/count_fm_params.py --fm_channels 96,192,256 --fm_num_res_blocks 3
 
 ---
 
+## Advanced architecture (tri-head + cross-attn + seg)
+
+**Flagship** (after `git pull`):
+
+```bash
+bash scripts/verify_fm_cond_env.sh advanced
+sbatch bash_scripts/train_hemit_cond_fm_advanced_scratch.sbatch
+```
+
+`TRAIN_NAME=hemit_cond_fm_advanced_scratch` — tri-head, H&E cross-attn @ mid+decoder, seg, init, light ODE.
+
+**Ablations** (isolate what helps):
+
+```bash
+sbatch bash_scripts/train_hemit_fm_tri_head_scratch.sbatch      # tri-head only
+sbatch bash_scripts/train_hemit_fm_cross_attn_scratch.sbatch    # cross-attn only
+```
+
+Test: `export TEST_EPOCH=130 && sbatch bash_scripts/test_hemit_cond_fm_advanced_scratch.sbatch`
+
+OOM: `FM_CROSS_ATTN_HEADS=4` or train without decoder cross-attn (edit env: unset `FM_CROSS_ATTN_DECODER`).
+
 ## Success
 
-Beat **0.831** (`joint_perc`) with **≤1.2×** joint_perc step time.
+Beat **0.831** (`joint_perc`) with **≤1.2×** joint_perc step time (advanced ~1.25–1.4×).

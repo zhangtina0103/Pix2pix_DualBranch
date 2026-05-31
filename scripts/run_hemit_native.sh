@@ -164,6 +164,16 @@ train() {
       if [[ "${FM_USE_SEG:-0}" == "1" ]]; then
         extra+=(--fm_use_seg)
       fi
+      if [[ "${FM_USE_TRI_HEAD:-0}" == "1" ]]; then
+        extra+=(--fm_use_tri_head)
+      fi
+      if [[ "${FM_USE_CROSS_ATTN:-0}" == "1" ]]; then
+        extra+=(--fm_use_cross_attn)
+        extra+=(--fm_cross_attn_heads "${FM_CROSS_ATTN_HEADS:-8}")
+      fi
+      if [[ "${FM_CROSS_ATTN_DECODER:-0}" == "1" ]]; then
+        extra+=(--fm_cross_attn_decoder)
+      fi
       [[ -n "${FM_SEG_SUFFIX:-}" ]] && extra+=(--fm_seg_suffix "${FM_SEG_SUFFIX}")
       if [[ "${FM_USE_PATCHNCE:-0}" == "1" ]]; then
         extra+=(--fm_use_patchnce --fm_lambda_nce "${FM_LAMBDA_NCE:-1.0}")
@@ -247,6 +257,16 @@ test_one() {
       fi
       if [[ "${FM_USE_SEG:-0}" == "1" ]]; then
         extra+=(--fm_use_seg)
+      fi
+      if [[ "${FM_USE_TRI_HEAD:-0}" == "1" ]]; then
+        extra+=(--fm_use_tri_head)
+      fi
+      if [[ "${FM_USE_CROSS_ATTN:-0}" == "1" ]]; then
+        extra+=(--fm_use_cross_attn)
+        extra+=(--fm_cross_attn_heads "${FM_CROSS_ATTN_HEADS:-8}")
+      fi
+      if [[ "${FM_CROSS_ATTN_DECODER:-0}" == "1" ]]; then
+        extra+=(--fm_cross_attn_decoder)
       fi
       [[ -n "${FM_SEG_SUFFIX:-}" ]] && extra+=(--fm_seg_suffix "${FM_SEG_SUFFIX}")
       if [[ "${FM_FLOW_PATH:-noise}" == "bridge" ]]; then

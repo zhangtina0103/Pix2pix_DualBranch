@@ -7,7 +7,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 export REPO_ROOT="${ROOT}"
-PROFILE="${1:?usage: verify_fm_cond_env.sh seg|bridge|init_cond|init_only|seg_only|consistent|consistent_scratch|consistent_v2|cellpose|patchnce|res3}"
+PROFILE="${1:?usage: verify_fm_cond_env.sh seg|...|advanced|tri_head|cross_attn|...}"
 
 # shellcheck source=/dev/null
 source "${ROOT}/bash_scripts/_vanilla_fm_sbatch_preamble.sh"
@@ -28,6 +28,9 @@ case "${PROFILE}" in
   res3|mentor_res3) vanilla_fm_apply_joint_perc_res3_env ;;
   monai512) vanilla_fm_apply_monai512_env ;;
   beat_p2p_111|beat_p2p) vanilla_fm_apply_beat_pix2pix_111_scratch_env ;;
+  advanced|advanced_scratch) vanilla_fm_apply_cond_fm_advanced_scratch_env ;;
+  tri_head) vanilla_fm_apply_fm_tri_head_scratch_env ;;
+  cross_attn) vanilla_fm_apply_fm_cross_attn_scratch_env ;;
   *) echo "unknown profile: ${PROFILE}" >&2; exit 1 ;;
 esac
 

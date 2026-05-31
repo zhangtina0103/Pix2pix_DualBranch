@@ -1037,6 +1037,8 @@ class VanillaFMModel(BaseModel):
         self.optimizer_G.zero_grad(set_to_none=True)
         self._loss_fm().backward()
         if fake_ode is not None and lam_sample > 0:
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
             self._loss_ode_sample_l1(fake_ode).backward()
         if self.fm_use_gan and fake_ode is not None:
             self.set_requires_grad(self.netD, False)

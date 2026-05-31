@@ -97,13 +97,20 @@ vanilla_fm_verify_cond_profile() {
       [[ "${FM_BACKBONE:-}" == "monai" ]] || _fm_cond_fail "FM_BACKBONE must be monai"
       [[ -n "${FM_CROP_SIZE:-}" ]] || _fm_cond_fail "FM_CROP_SIZE required"
       ;;
-    consistent|consistent_scratch|consistent_v2|advanced|advanced_scratch)
+    consistent|consistent_scratch|consistent_v2)
       [[ "${FM_USE_SEG:-0}" == "1" ]] || _fm_cond_fail "FM_USE_SEG=1 required"
       [[ "${DATASET_MODE:-}" == "aligned_cond" ]] || _fm_cond_fail "DATASET_MODE=aligned_cond required"
       [[ "${FM_FLOW_PATH:-noise}" == "noise" ]] || _fm_cond_fail "FM_FLOW_PATH must be noise"
       [[ "${FM_INIT_FROM_COND:-0}" == "1" ]] || _fm_cond_fail "FM_INIT_FROM_COND=1 required"
       [[ "${FM_HE_PROJ_INIT:-gray}" == "gray" ]] || _fm_cond_fail "FM_HE_PROJ_INIT must be gray"
       [[ "${FM_LAMBDA_SAMPLE_L1:-0}" != "0" ]] || _fm_cond_fail "FM_LAMBDA_SAMPLE_L1 required (train/test consistency)"
+      ;;
+    advanced|advanced_scratch|advanced_ode)
+      [[ "${FM_USE_SEG:-0}" == "1" ]] || _fm_cond_fail "FM_USE_SEG=1 required"
+      [[ "${DATASET_MODE:-}" == "aligned_cond" ]] || _fm_cond_fail "DATASET_MODE=aligned_cond required"
+      [[ "${FM_FLOW_PATH:-noise}" == "noise" ]] || _fm_cond_fail "FM_FLOW_PATH must be noise"
+      [[ "${FM_INIT_FROM_COND:-0}" == "1" ]] || _fm_cond_fail "FM_INIT_FROM_COND=1 required"
+      [[ "${FM_HE_PROJ_INIT:-gray}" == "gray" ]] || _fm_cond_fail "FM_HE_PROJ_INIT must be gray"
       ;;
     *)
       _fm_cond_fail "unknown VANILLA_FM_COND_PROFILE=${profile}"
@@ -441,18 +448,28 @@ vanilla_fm_apply_cond_fm_advanced_scratch_env() {
   export FM_INIT_FROM_COND=1
   export FM_HE_PROJ_INIT=gray
   export FM_INIT_NOISE_SIGMA=0.55
-  export FM_LAMBDA_SAMPLE_L1=20
-  export FM_SAMPLE_L1_PROB=0.2
-  export FM_TRAIN_SAMPLE_STEPS=4
-  export FM_TRAIN_SAMPLE_METHOD=heun
+  # ODE-aux backward through advanced U-Net OOMs on 44GB L40S — init still used at test.
+  export FM_LAMBDA_SAMPLE_L1=0
+  unset FM_SAMPLE_L1_PROB FM_TRAIN_SAMPLE_STEPS FM_TRAIN_SAMPLE_METHOD
   export FM_USE_TRI_HEAD=1
   export FM_USE_CROSS_ATTN=1
-  # Decoder cross-attn uses pooled 64² MHA (safe @ 1024²). Set =1 to enable up2/up1 blocks.
   export FM_CROSS_ATTN_DECODER="${FM_CROSS_ATTN_DECODER:-1}"
   export FM_CROSS_ATTN_HEADS="${FM_CROSS_ATTN_HEADS:-8}"
   unset FM_USE_CFG FM_USE_FILM FM_USE_GAN FM_USE_ODE_TRAIN
   vanilla_fm_apply_fm_scratch_schedule
-  echo "cond_fm_advanced_scratch: tri_head+cross_attn+seg+init+ODE-light" >&2
+  echo "cond_fm_advanced_scratch: tri_head+cross_attn+seg+init (no train ODE-aux; OOM-safe)" >&2
+}
+
+# Same as advanced but 2-step ODE-aux @ 15% — only if 44GB fits; else OOM on backward.
+vanilla_fm_apply_cond_fm_advanced_ode_scratch_env() {
+  vanilla_fm_apply_cond_fm_advanced_scratch_env
+  export TRAIN_NAME=hemit_cond_fm_advanced_ode_scratch
+  export VANILLA_FM_EXPECTED_TRAIN_NAME="${TRAIN_NAME}"
+  export FM_LAMBDA_SAMPLE_L1=15
+  export FM_SAMPLE_L1_PROB=0.15
+  export FM_TRAIN_SAMPLE_STEPS=2
+  export FM_TRAIN_SAMPLE_METHOD=euler
+  echo "cond_fm_advanced_ode_scratch: advanced + tiny ODE-aux (may OOM)" >&2
 }
 
 # Ablation: tri-head only (joint_perc path, no cross-attn).

@@ -26,6 +26,7 @@ source "${ROOT}/scripts/vanilla_fm_env.sh"
 
 case "${RESUME_PROFILE}" in
   advanced) vanilla_fm_apply_cond_fm_advanced_scratch_env ;;
+  advanced_ode) vanilla_fm_apply_cond_fm_advanced_ode_scratch_env ;;
   v2|consistent_v2) vanilla_fm_apply_cond_consistent_v2_env ;;
   consistent_scratch) vanilla_fm_apply_cond_consistent_scratch_env ;;
   light) vanilla_fm_apply_cond_light_scratch_env ;;

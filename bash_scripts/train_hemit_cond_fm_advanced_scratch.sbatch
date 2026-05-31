@@ -1,6 +1,7 @@
 #!/bin/bash
-# Tri-head + pooled cross-attn + seg + init. 6h chunks → resume (docs/HEMIT_cluster_6h.md).
-# git pull required: old build did full-res MHA @ 1024² (~10min stuck at epoch 0).
+# Tri-head + pooled cross-attn + seg + init (no train ODE-aux — OOM on L40S 44GB with ODE backward).
+# 6h chunks → resume. git pull required.
+# OOM on FM pass: export FM_CROSS_ATTN_DECODER=0 FM_CROSS_ATTN_HEADS=4
 #   sbatch bash_scripts/train_hemit_cond_fm_advanced_scratch.sbatch
 #   export RESUME_PROFILE=advanced && sbatch bash_scripts/resume_hemit_fm_scratch.sbatch
 #SBATCH --job-name=hemit_adv

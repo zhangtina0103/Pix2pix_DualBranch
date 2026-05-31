@@ -11,16 +11,19 @@ vanilla_fm_finetune_from_joint_perc_80() {
   cp -f "${src}" "${dst}"
   export CONTINUE_TRAIN=1
   export RESUME_FROM_EPOCH=80
-  export EPOCH_COUNT="${EPOCH_COUNT:-81}"
-  export N_EPOCHS="${N_EPOCHS:-70}"
-  export N_EPOCHS_DECAY="${N_EPOCHS_DECAY:-30}"
+  export EPOCH_COUNT=81
+  # Always set (do not use ${N_EPOCHS:-70} — stale login/sbatch env can force 81→130).
+  export N_EPOCHS=70
+  export N_EPOCHS_DECAY=30
+  echo "finetune schedule: epochs ${EPOCH_COUNT}..$((N_EPOCHS + N_EPOCHS_DECAY)) (short, from joint_perc/80)" >&2
 }
 
 # Longer low-LR finetune for cond_consistent (81 → 130).
 # train.py: for epoch in range(epoch_count, n_epochs + n_epochs_decay + 1)
 vanilla_fm_finetune_joint_opt_from_perc_80() {
   vanilla_fm_finetune_from_joint_perc_80
-  export EPOCH_COUNT="${EPOCH_COUNT:-81}"
-  export N_EPOCHS="${N_EPOCHS:-100}"
-  export N_EPOCHS_DECAY="${N_EPOCHS_DECAY:-30}"
+  export EPOCH_COUNT=81
+  export N_EPOCHS=100
+  export N_EPOCHS_DECAY=30
+  echo "finetune schedule: epochs ${EPOCH_COUNT}..$((N_EPOCHS + N_EPOCHS_DECAY)) (long, cond_consistent)" >&2
 }

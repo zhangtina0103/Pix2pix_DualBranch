@@ -31,4 +31,5 @@ export VANILLA_FM_ENV_LOCKED=1
 source "${REPO_ROOT}/bash_scripts/_vanilla_fm_finetune_from_joint_perc.sh"
 vanilla_fm_finetune_from_joint_perc_80
 vanilla_fm_print_train_env
+echo "Train epochs: ${EPOCH_COUNT} .. $(( N_EPOCHS + N_EPOCHS_DECAY )) (expect 81..100)"
 bash "${REPO_ROOT}/scripts/run_hemit_vanilla_fm.sh"

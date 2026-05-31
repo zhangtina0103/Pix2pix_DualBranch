@@ -119,6 +119,7 @@ train() {
         --fm_time_dist "${FM_TIME_DIST:-logit_normal}"
         --fm_lambda_perc "${FM_LAMBDA_PERC:-0.1}"
         --fm_perc_size "${FM_PERC_SIZE:-256}"
+        --fm_lambda_vel "${FM_LAMBDA_VEL:-0}"
         --fm_steps "${FM_STEPS:-25}"
         --fm_sample_method "${FM_SAMPLE_METHOD:-heun}"
         --fm_cfg_dropout "${FM_CFG_DROPOUT:-0.1}"

@@ -7,7 +7,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 export REPO_ROOT="${ROOT}"
-PROFILE="${1:?usage: verify_fm_cond_env.sh seg|bridge|init_cond}"
+PROFILE="${1:?usage: verify_fm_cond_env.sh seg|bridge|init_cond|consistent}"
 
 # shellcheck source=/dev/null
 source "${ROOT}/bash_scripts/_vanilla_fm_sbatch_preamble.sh"
@@ -18,7 +18,8 @@ case "${PROFILE}" in
   seg) vanilla_fm_apply_joint_seg_env ;;
   bridge) vanilla_fm_apply_joint_bridge_env ;;
   init_cond) vanilla_fm_apply_joint_init_cond_env ;;
-  *) echo "unknown profile: ${PROFILE}" >&2; exit 1 ;;
+  consistent|opt) vanilla_fm_apply_cond_consistent_env ;;
+  *) echo "unknown profile: ${PROFILE} (use seg|bridge|init_cond|consistent)" >&2; exit 1 ;;
 esac
 
 export VANILLA_FM_ENV_LOCKED=1

@@ -15,3 +15,11 @@ vanilla_fm_finetune_from_joint_perc_80() {
   export N_EPOCHS="${N_EPOCHS:-70}"
   export N_EPOCHS_DECAY="${N_EPOCHS_DECAY:-30}"
 }
+
+# Longer low-LR finetune for joint_fm_opt (81 → 130).
+vanilla_fm_finetune_joint_opt_from_perc_80() {
+  vanilla_fm_finetune_from_joint_perc_80
+  export EPOCH_COUNT="${EPOCH_COUNT:-81}"
+  export N_EPOCHS="${N_EPOCHS:-50}"
+  export N_EPOCHS_DECAY="${N_EPOCHS_DECAY:-30}"
+}

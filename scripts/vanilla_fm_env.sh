@@ -58,6 +58,14 @@ vanilla_fm_verify_cond_profile() {
       [[ "${DATASET_MODE:-aligned}" == "aligned" ]] || _fm_cond_fail "DATASET_MODE must be aligned (or unset)"
       [[ "${FM_HE_PROJ_INIT:-gray}" == "gray" ]] || _fm_cond_fail "FM_HE_PROJ_INIT must be gray (v2)"
       ;;
+    consistent)
+      [[ "${FM_USE_SEG:-0}" == "1" ]] || _fm_cond_fail "FM_USE_SEG=1 required"
+      [[ "${DATASET_MODE:-}" == "aligned_cond" ]] || _fm_cond_fail "DATASET_MODE=aligned_cond required"
+      [[ "${FM_FLOW_PATH:-noise}" == "noise" ]] || _fm_cond_fail "FM_FLOW_PATH must be noise"
+      [[ "${FM_INIT_FROM_COND:-0}" == "1" ]] || _fm_cond_fail "FM_INIT_FROM_COND=1 required"
+      [[ "${FM_HE_PROJ_INIT:-gray}" == "gray" ]] || _fm_cond_fail "FM_HE_PROJ_INIT must be gray"
+      [[ "${FM_LAMBDA_SAMPLE_L1:-0}" != "0" ]] || _fm_cond_fail "FM_LAMBDA_SAMPLE_L1 required (train/test consistency)"
+      ;;
     *)
       _fm_cond_fail "unknown VANILLA_FM_COND_PROFILE=${profile}"
       ;;
@@ -260,6 +268,34 @@ vanilla_fm_apply_joint_cfg_env() {
   echo "joint_cfg: joint_perc + CFG dropout=${FM_CFG_DROPOUT} test_scale=${FM_CFG_SCALE}" >&2
 }
 
+# Consistent conditioning (hypothesis to beat pix2pix): seg in UNet + same ODE start at train & test.
+# Main FM loss: noise path (joint_perc). Aux: short ODE from gray informed z0 (matches test init).
+vanilla_fm_apply_cond_consistent_env() {
+  vanilla_fm_apply_joint_perc_pins
+  export TRAIN_NAME=hemit_cond_fm_consistent
+  export VANILLA_FM_EXPECTED_TRAIN_NAME="${TRAIN_NAME}"
+  export VANILLA_FM_COND_PROFILE=consistent
+  export DATASET_MODE=aligned_cond
+  export FM_USE_SEG=1
+  export FM_FLOW_PATH=noise
+  export FM_INIT_FROM_COND=1
+  export FM_HE_PROJ_INIT=gray
+  export FM_INIT_NOISE_SIGMA=0.55
+  export FM_LAMBDA_SAMPLE_L1=30
+  export FM_SAMPLE_L1_PROB=0.4
+  export FM_TRAIN_SAMPLE_STEPS=12
+  export FM_TRAIN_SAMPLE_METHOD=heun
+  unset FM_USE_CFG FM_USE_FILM FM_USE_GAN FM_USE_ODE_TRAIN
+  unset FM_BRIDGE_X0_SIGMA FM_BRIDGE_NOISE_PROB FM_LAMBDA_VEL
+  echo "cond_consistent: seg + init_v2 + ODE-aux@${FM_TRAIN_SAMPLE_STEPS} (train/test same z0)" >&2
+}
+
+# Alias (old sbatch name)
+vanilla_fm_apply_joint_fm_opt_env() {
+  vanilla_fm_apply_cond_consistent_env
+  echo "NOTE: joint_fm_opt -> hemit_cond_fm_consistent (see HEMIT_cond_beating_pix2pix.md)" >&2
+}
+
 # Shared joint_perc recipe (baseline checkpoint hemit_vanilla_fm_joint_perc/80).
 vanilla_fm_apply_joint_perc_pins() {
   vanilla_fm_clear_stale_env
@@ -393,6 +429,9 @@ vanilla_fm_print_train_env() {
   fi
   if [[ -n "${VANILLA_FM_COND_PROFILE:-}" ]]; then
     echo "  cond_profile=${VANILLA_FM_COND_PROFILE} (verified when locked=1)"
+  fi
+  if [[ "${FM_LAMBDA_VEL:-0}" != "0" ]]; then
+    echo "  velocity_aux: lambda=${FM_LAMBDA_VEL}"
   fi
   if [[ "${FM_BACKBONE}" == "monai" && -z "${FM_CROP_SIZE:-}" ]]; then
     echo "  WARNING: monai UNet at 1024² OOMs (mid-block attention). Use FM_BACKBONE=custom or FM_CROP_SIZE=512" >&2

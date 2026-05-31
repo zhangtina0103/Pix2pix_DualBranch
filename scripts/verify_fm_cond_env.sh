@@ -27,6 +27,7 @@ case "${PROFILE}" in
   patchnce|mentor_patchnce) vanilla_fm_apply_joint_perc_patchnce_env ;;
   res3|mentor_res3) vanilla_fm_apply_joint_perc_res3_env ;;
   monai512) vanilla_fm_apply_monai512_env ;;
+  beat_p2p_111|beat_p2p) vanilla_fm_apply_beat_pix2pix_111_scratch_env ;;
   *) echo "unknown profile: ${PROFILE}" >&2; exit 1 ;;
 esac
 

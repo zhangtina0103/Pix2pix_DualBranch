@@ -7,7 +7,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 export REPO_ROOT="${ROOT}"
-PROFILE="${1:?usage: verify_fm_cond_env.sh seg|bridge|init_cond|consistent}"
+PROFILE="${1:?usage: verify_fm_cond_env.sh seg|bridge|init_cond|init_only|seg_only|consistent|cellpose|patchnce|res3}"
 
 # shellcheck source=/dev/null
 source "${ROOT}/bash_scripts/_vanilla_fm_sbatch_preamble.sh"
@@ -18,8 +18,14 @@ case "${PROFILE}" in
   seg) vanilla_fm_apply_joint_seg_env ;;
   bridge) vanilla_fm_apply_joint_bridge_env ;;
   init_cond) vanilla_fm_apply_joint_init_cond_env ;;
+  init_only) vanilla_fm_apply_cond_init_only_env ;;
+  seg_only) vanilla_fm_apply_cond_seg_only_env ;;
   consistent|opt) vanilla_fm_apply_cond_consistent_env ;;
-  *) echo "unknown profile: ${PROFILE} (use seg|bridge|init_cond|consistent)" >&2; exit 1 ;;
+  cellpose|mentor_cellpose) vanilla_fm_apply_joint_perc_cellpose_env ;;
+  patchnce|mentor_patchnce) vanilla_fm_apply_joint_perc_patchnce_env ;;
+  res3|mentor_res3) vanilla_fm_apply_joint_perc_res3_env ;;
+  monai512) vanilla_fm_apply_monai512_env ;;
+  *) echo "unknown profile: ${PROFILE}" >&2; exit 1 ;;
 esac
 
 export VANILLA_FM_ENV_LOCKED=1

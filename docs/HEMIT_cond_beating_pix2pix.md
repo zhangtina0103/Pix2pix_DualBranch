@@ -39,6 +39,26 @@ sbatch bash_scripts/train_hemit_cond_fm_consistent.sbatch
 sbatch bash_scripts/test_hemit_cond_fm_consistent.sbatch
 ```
 
+## Phased ablations (parallel GPUs, 81→130 from joint_perc/80)
+
+| Phase | `TRAIN_NAME` | What |
+|-------|----------------|------|
+| **A** | `hemit_cond_fm_seg_only` | Seg concat only (no init, no ODE-aux) |
+| **B** | `hemit_cond_fm_init_only` | Informed z₀ + ODE-aux (no seg) — fixes init_cond v2 mismatch |
+| **C** | `hemit_cond_fm_consistent` | Full stack (A+B) |
+
+```bash
+git pull
+bash scripts/verify_fm_cond_env.sh init_only   # or seg_only
+sbatch bash_scripts/train_hemit_cond_fm_init_only.sbatch   # Phase B (priority)
+sbatch bash_scripts/train_hemit_cond_fm_seg_only.sbatch    # Phase A (optional)
+# tests @ 130 when done
+sbatch bash_scripts/test_hemit_cond_fm_init_only.sbatch
+sbatch bash_scripts/test_hemit_cond_fm_seg_only.sbatch
+```
+
+Compare all to **0.831** (perc) and **~0.854** (pix2pix).
+
 ## Hypothesis B — better seg (if A is close but &lt; 0.854)
 
 - Cellpose or stronger pseudo masks → regenerate `trainSeg/`

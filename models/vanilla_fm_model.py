@@ -18,6 +18,7 @@ import torch.nn.functional as F
 
 from . import networks
 from .base_model import BaseModel
+from .fm_patchnce import FMPatchNCEHead
 from .fm_perceptual import build_fm_perceptual
 from .mentor_flow_net import MentorFlowNet
 
@@ -336,6 +337,12 @@ class VanillaFMModel(BaseModel):
                                 help="ODE steps for train GAN/sample (0=fm_train_sample_steps or fm_steps)")
             parser.add_argument("--fm_channel_weights", type=str, default="1,2,1",
                                 help="Per-channel weights on ODE L1 (DAPI,CD3,panCK) like pix2pix Focal")
+            parser.add_argument("--fm_use_patchnce", action="store_true",
+                                help="CUT-style PatchNCE between H&E and x1_hat (paired structure)")
+            parser.add_argument("--fm_lambda_nce", type=float, default=1.0,
+                                help="Weight for PatchNCE loss")
+            parser.add_argument("--fm_nce_patches", type=int, default=256,
+                                help="Patches per image for PatchNCE")
         return parser
 
     def __init__(self, opt):
@@ -362,6 +369,10 @@ class VanillaFMModel(BaseModel):
         self.fm_he_proj_init = he_init
         self.fm_bridge_x0_sigma = float(getattr(opt, "fm_bridge_x0_sigma", 0.0))
         self.fm_bridge_noise_prob = float(getattr(opt, "fm_bridge_noise_prob", 0.0))
+        self.fm_use_patchnce = bool(getattr(opt, "fm_use_patchnce", False)) and self.isTrain
+        self.fm_lambda_nce = float(getattr(opt, "fm_lambda_nce", 1.0))
+        self.fm_nce_patches = int(getattr(opt, "fm_nce_patches", 256))
+        self.fm_patchnce_head: Optional[FMPatchNCEHead] = None
         self.fm_cond_extra = 1 if self.fm_use_seg else 0
         use_he_proj = (
             self.fm_flow_path == "bridge" or self.fm_init_from_cond
@@ -454,6 +465,15 @@ class VanillaFMModel(BaseModel):
         self.fm_channel_weights = torch.tensor(cw, device=self.device, dtype=torch.float32)
 
         if self.isTrain:
+            if self.fm_use_patchnce:
+                self.fm_patchnce_head = FMPatchNCEHead(
+                    feat_dim=256, n_patches=self.fm_nce_patches,
+                ).to(self.device)
+                self.loss_names.append("NCE")
+                print(
+                    f"FM PatchNCE: lambda={self.fm_lambda_nce} "
+                    f"patches={self.fm_nce_patches}"
+                )
             if self.perceptual_loss_fn is not None:
                 self.loss_names.append("Perc")
             if float(getattr(opt, "fm_lambda_vel", 0.0)) > 0:
@@ -482,8 +502,11 @@ class VanillaFMModel(BaseModel):
                 self.netG = torch.nn.DataParallel(self.netG, self.gpu_ids)
 
         if self.isTrain:
+            g_params = list(self.netG.parameters())
+            if self.fm_patchnce_head is not None:
+                g_params += list(self.fm_patchnce_head.parameters())
             self.optimizer_G = torch.optim.Adam(
-                self.netG.parameters(), lr=opt.lr, betas=(opt.beta1, 0.999))
+                g_params, lr=opt.lr, betas=(opt.beta1, 0.999))
             self.optimizers.append(self.optimizer_G)
 
         self._cfg_null_inited = False
@@ -651,6 +674,10 @@ class VanillaFMModel(BaseModel):
             if getattr(self.opt, "fm_flow_path", "noise") == "bridge":
                 loose = True
             if getattr(self.opt, "fm_init_from_cond", False):
+                loose = True
+            if getattr(self.opt, "fm_use_patchnce", False):
+                loose = True
+            if int(getattr(self.opt, "fm_num_res_blocks", 2)) != 2:
                 loose = True
             incompatible = net.load_state_dict(state_dict, strict=not loose)
             if loose:
@@ -851,6 +878,13 @@ class VanillaFMModel(BaseModel):
         if lam_path > 0 and self.fm_loss_mode == "x1":
             self.loss_L1 = F.l1_loss(x1_hat, x1) * lam_path
             loss = loss + self.loss_L1
+
+        if self.fm_use_patchnce and self.fm_patchnce_head is not None:
+            he = self.real_A
+            self.loss_NCE = (
+                self.fm_patchnce_head(he, x1_hat) * self.fm_lambda_nce
+            )
+            loss = loss + self.loss_NCE
 
         if self.fm_film_reg > 0:
             self.loss_FilmR = self._film_regularizer()

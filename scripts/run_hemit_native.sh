@@ -164,6 +164,11 @@ train() {
       if [[ "${FM_USE_SEG:-0}" == "1" ]]; then
         extra+=(--fm_use_seg)
       fi
+      [[ -n "${FM_SEG_SUFFIX:-}" ]] && extra+=(--fm_seg_suffix "${FM_SEG_SUFFIX}")
+      if [[ "${FM_USE_PATCHNCE:-0}" == "1" ]]; then
+        extra+=(--fm_use_patchnce --fm_lambda_nce "${FM_LAMBDA_NCE:-1.0}")
+        extra+=(--fm_nce_patches "${FM_NCE_PATCHES:-256}")
+      fi
       if [[ "${FM_FLOW_PATH:-noise}" == "bridge" ]]; then
         extra+=(--fm_flow_path bridge)
         [[ -n "${FM_HE_PROJ_INIT:-}" ]] && extra+=(--fm_he_proj_init "${FM_HE_PROJ_INIT}")
@@ -243,6 +248,7 @@ test_one() {
       if [[ "${FM_USE_SEG:-0}" == "1" ]]; then
         extra+=(--fm_use_seg)
       fi
+      [[ -n "${FM_SEG_SUFFIX:-}" ]] && extra+=(--fm_seg_suffix "${FM_SEG_SUFFIX}")
       if [[ "${FM_FLOW_PATH:-noise}" == "bridge" ]]; then
         extra+=(--fm_flow_path bridge)
         [[ -n "${FM_HE_PROJ_INIT:-}" ]] && extra+=(--fm_he_proj_init "${FM_HE_PROJ_INIT}")

@@ -4,9 +4,11 @@ Build pseudo segmentation masks from H&E (trainA/valA/testA) for FM conditioning
 
 Writes parallel folders: trainSeg/, valSeg/, testSeg/ (1ch uint8 TIFF, 0/255).
 Uses Otsu on inverted luminance + light morphology (skimage if installed).
+Optional Cellpose (--method cellpose; pip install cellpose).
 
 Usage:
   python scripts/generate_hemit_seg_masks.py --dataroot ./datasets/hemit
+  python scripts/generate_hemit_seg_masks.py --dataroot ./datasets/hemit --method cellpose --suffix _cellpose
   python scripts/generate_hemit_seg_masks.py --src /path/to/hemit --dst ./datasets/hemit
 """
 from __future__ import annotations
@@ -42,7 +44,15 @@ def _rgb_to_nuclei_mask(arr: np.ndarray) -> np.ndarray:
     return score > thr
 
 
-def process_split(a_dir: Path, seg_dir: Path) -> int:
+def _cellpose_mask(arr: np.ndarray) -> np.ndarray:
+    from cellpose import models
+
+    model = models.CellposeModel(gpu=False)
+    masks, _, _ = model.eval(arr, diameter=None, channels=[0, 0])
+    return masks > 0
+
+
+def process_split(a_dir: Path, seg_dir: Path, method: str) -> int:
     if not a_dir.is_dir():
         return 0
     seg_dir.mkdir(parents=True, exist_ok=True)
@@ -50,7 +60,10 @@ def process_split(a_dir: Path, seg_dir: Path) -> int:
     for pattern in ("*.tif", "*.tiff", "*.TIF", "*.TIFF", "*.png", "*.PNG"):
         for path in sorted(a_dir.glob(pattern)):
             img = np.array(Image.open(path).convert("RGB"))
-            mask = _rgb_to_nuclei_mask(img)
+            if method == "cellpose":
+                mask = _cellpose_mask(img)
+            else:
+                mask = _rgb_to_nuclei_mask(img)
             out = (mask.astype(np.uint8) * 255)
             Image.fromarray(out, mode="L").save(seg_dir / path.name)
             n += 1
@@ -65,6 +78,19 @@ def main() -> None:
                    help="HEMIT layout root; runs prepare then generates on dst")
     p.add_argument("--dst", type=str, default="./datasets/hemit",
                    help="Output dataroot when using --src")
+    p.add_argument(
+        "--method",
+        type=str,
+        default="otsu",
+        choices=["otsu", "cellpose"],
+        help="otsu=fast pseudo nuclei; cellpose=slower, often sharper masks",
+    )
+    p.add_argument(
+        "--suffix",
+        type=str,
+        default="",
+        help="Seg dir suffix: '_cellpose' -> trainSeg_cellpose (set FM_SEG_SUFFIX=_cellpose)",
+    )
     args = p.parse_args()
 
     if args.src:
@@ -88,15 +114,19 @@ def main() -> None:
         print("Warning: skimage not found; using percentile threshold only")
 
     total = 0
+    suffix = args.suffix or ("_cellpose" if args.method == "cellpose" else "")
     for split in ("train", "val", "test"):
         a_dir = dataroot / f"{split}A"
-        seg_dir = dataroot / f"{split}Seg"
-        n = process_split(a_dir, seg_dir)
+        seg_dir = dataroot / f"{split}Seg{suffix}"
+        n = process_split(a_dir, seg_dir, args.method)
         print(f"  {split}: {n} masks -> {seg_dir}")
         total += n
     if total == 0:
         raise SystemExit(f"No images in {dataroot}/*A/")
-    print(f"Done. {total} seg masks. Use DATASET_MODE=aligned_cond")
+    print(
+        f"Done. {total} seg masks. Use DATASET_MODE=aligned_cond "
+        f"FM_SEG_SUFFIX={suffix!r}"
+    )
 
 
 if __name__ == "__main__":

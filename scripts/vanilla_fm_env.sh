@@ -17,6 +17,7 @@ vanilla_fm_clear_stale_env() {
   unset FM_USE_SEG FM_FLOW_PATH FM_INIT_FROM_COND FM_INIT_NOISE_SIGMA DATASET_MODE
   unset FM_HE_PROJ_INIT FM_BRIDGE_X0_SIGMA FM_BRIDGE_NOISE_PROB
   unset FM_SAMPLE_L1_PROB FM_TRAIN_SAMPLE_STEPS FM_TRAIN_SAMPLE_METHOD
+  unset FM_USE_PATCHNCE FM_LAMBDA_NCE FM_NCE_PATCHES FM_SEG_SUFFIX FM_CROP_SIZE
   unset VANILLA_FM_COND_PROFILE
 }
 
@@ -59,6 +60,41 @@ vanilla_fm_verify_cond_profile() {
       [[ "${FM_INIT_FROM_COND:-0}" == "1" ]] || _fm_cond_fail "FM_INIT_FROM_COND=1 required"
       [[ "${DATASET_MODE:-aligned}" == "aligned" ]] || _fm_cond_fail "DATASET_MODE must be aligned (or unset)"
       [[ "${FM_HE_PROJ_INIT:-gray}" == "gray" ]] || _fm_cond_fail "FM_HE_PROJ_INIT must be gray (v2)"
+      ;;
+    init_only)
+      [[ "${FM_USE_SEG:-0}" == "0" ]] || _fm_cond_fail "FM_USE_SEG must be 0"
+      [[ "${FM_FLOW_PATH:-noise}" == "noise" ]] || _fm_cond_fail "FM_FLOW_PATH must be noise"
+      [[ "${FM_INIT_FROM_COND:-0}" == "1" ]] || _fm_cond_fail "FM_INIT_FROM_COND=1 required"
+      [[ "${DATASET_MODE:-aligned}" == "aligned" ]] || _fm_cond_fail "DATASET_MODE must be aligned (or unset)"
+      [[ "${FM_HE_PROJ_INIT:-gray}" == "gray" ]] || _fm_cond_fail "FM_HE_PROJ_INIT must be gray"
+      [[ "${FM_LAMBDA_SAMPLE_L1:-0}" != "0" ]] || _fm_cond_fail "FM_LAMBDA_SAMPLE_L1 required (ODE-aux)"
+      ;;
+    seg_only)
+      [[ "${FM_USE_SEG:-0}" == "1" ]] || _fm_cond_fail "FM_USE_SEG=1 required"
+      [[ "${DATASET_MODE:-}" == "aligned_cond" ]] || _fm_cond_fail "DATASET_MODE=aligned_cond required"
+      [[ "${FM_FLOW_PATH:-noise}" == "noise" ]] || _fm_cond_fail "FM_FLOW_PATH must be noise"
+      [[ "${FM_INIT_FROM_COND:-0}" == "0" ]] || _fm_cond_fail "FM_INIT_FROM_COND must be 0"
+      [[ "${FM_LAMBDA_SAMPLE_L1:-0}" == "0" ]] || _fm_cond_fail "FM_LAMBDA_SAMPLE_L1 must be 0 (seg-only ablation)"
+      ;;
+    mentor_cellpose)
+      [[ "${FM_USE_SEG:-0}" == "1" ]] || _fm_cond_fail "FM_USE_SEG=1 required"
+      [[ "${FM_SEG_SUFFIX:-}" == "_cellpose" ]] || _fm_cond_fail "FM_SEG_SUFFIX must be _cellpose"
+      [[ "${FM_INIT_FROM_COND:-0}" == "0" ]] || _fm_cond_fail "FM_INIT_FROM_COND must be 0"
+      [[ "${FM_USE_PATCHNCE:-0}" == "0" ]] || _fm_cond_fail "FM_USE_PATCHNCE must be 0"
+      ;;
+    mentor_patchnce)
+      [[ "${FM_USE_PATCHNCE:-0}" == "1" ]] || _fm_cond_fail "FM_USE_PATCHNCE=1 required"
+      [[ "${FM_USE_SEG:-0}" == "0" ]] || _fm_cond_fail "FM_USE_SEG must be 0"
+      [[ "${FM_INIT_FROM_COND:-0}" == "0" ]] || _fm_cond_fail "FM_INIT_FROM_COND must be 0"
+      ;;
+    mentor_res3)
+      [[ "${FM_RESBLOCKS:-2}" == "3" ]] || _fm_cond_fail "FM_RESBLOCKS must be 3"
+      [[ "${FM_UP_MODE:-}" == "conv_transpose" ]] || _fm_cond_fail "FM_UP_MODE must be conv_transpose"
+      [[ "${FM_USE_SEG:-0}" == "0" ]] || _fm_cond_fail "FM_USE_SEG must be 0"
+      ;;
+    monai512)
+      [[ "${FM_BACKBONE:-}" == "monai" ]] || _fm_cond_fail "FM_BACKBONE must be monai"
+      [[ -n "${FM_CROP_SIZE:-}" ]] || _fm_cond_fail "FM_CROP_SIZE required"
       ;;
     consistent)
       [[ "${FM_USE_SEG:-0}" == "1" ]] || _fm_cond_fail "FM_USE_SEG=1 required"
@@ -292,10 +328,117 @@ vanilla_fm_apply_cond_consistent_env() {
   echo "cond_consistent: seg + init_v2 + ODE-aux@${FM_TRAIN_SAMPLE_STEPS} (train/test same z0)" >&2
 }
 
+# Phase B: informed z0 + ODE-aux only (no seg). Tests whether init_cond v2 works with train/test consistency.
+vanilla_fm_apply_cond_init_only_env() {
+  vanilla_fm_apply_joint_perc_pins
+  export TRAIN_NAME=hemit_cond_fm_init_only
+  export VANILLA_FM_EXPECTED_TRAIN_NAME="${TRAIN_NAME}"
+  export VANILLA_FM_COND_PROFILE=init_only
+  export FM_USE_SEG=0
+  unset DATASET_MODE
+  export FM_FLOW_PATH=noise
+  export FM_INIT_FROM_COND=1
+  export FM_HE_PROJ_INIT=gray
+  export FM_INIT_NOISE_SIGMA=0.55
+  export FM_LAMBDA_SAMPLE_L1=30
+  export FM_SAMPLE_L1_PROB=0.4
+  export FM_TRAIN_SAMPLE_STEPS=12
+  export FM_TRAIN_SAMPLE_METHOD=heun
+  unset FM_USE_CFG FM_USE_FILM FM_USE_GAN FM_USE_ODE_TRAIN
+  unset FM_BRIDGE_X0_SIGMA FM_BRIDGE_NOISE_PROB FM_LAMBDA_VEL
+  echo "cond_init_only: init_v2 + ODE-aux@${FM_TRAIN_SAMPLE_STEPS}, no seg (81→130)" >&2
+}
+
+# Phase A @ 130: seg concat only (fair epoch match vs joint_seg @ 100).
+vanilla_fm_apply_cond_seg_only_env() {
+  vanilla_fm_apply_joint_perc_pins
+  export TRAIN_NAME=hemit_cond_fm_seg_only
+  export VANILLA_FM_EXPECTED_TRAIN_NAME="${TRAIN_NAME}"
+  export VANILLA_FM_COND_PROFILE=seg_only
+  export DATASET_MODE=aligned_cond
+  export FM_USE_SEG=1
+  export FM_FLOW_PATH=noise
+  export FM_INIT_FROM_COND=0
+  unset FM_INIT_NOISE_SIGMA FM_HE_PROJ_INIT
+  export FM_LAMBDA_SAMPLE_L1=0
+  unset FM_SAMPLE_L1_PROB FM_TRAIN_SAMPLE_STEPS FM_TRAIN_SAMPLE_METHOD
+  unset FM_USE_CFG FM_USE_FILM FM_USE_GAN FM_USE_ODE_TRAIN
+  unset FM_BRIDGE_X0_SIGMA FM_BRIDGE_NOISE_PROB FM_LAMBDA_VEL
+  echo "cond_seg_only: seg concat, perc core, 81→130 (no init/ODE-aux)" >&2
+}
+
 # Alias (old sbatch name)
 vanilla_fm_apply_joint_fm_opt_env() {
   vanilla_fm_apply_cond_consistent_env
   echo "NOTE: joint_fm_opt -> hemit_cond_fm_consistent (see HEMIT_cond_beating_pix2pix.md)" >&2
+}
+
+# Mentor track: joint_perc core + ONE change. Finetune 81→100 from joint_perc/80.
+
+vanilla_fm_apply_joint_perc_cellpose_env() {
+  vanilla_fm_apply_joint_perc_pins
+  export TRAIN_NAME=hemit_vanilla_fm_joint_perc_cellpose
+  export VANILLA_FM_EXPECTED_TRAIN_NAME="${TRAIN_NAME}"
+  export VANILLA_FM_COND_PROFILE=mentor_cellpose
+  export DATASET_MODE=aligned_cond
+  export FM_USE_SEG=1
+  export FM_SEG_SUFFIX=_cellpose
+  export FM_FLOW_PATH=noise
+  export FM_INIT_FROM_COND=0
+  unset FM_USE_PATCHNCE FM_LAMBDA_NCE
+  echo "mentor_cellpose: joint_perc + Cellpose seg (trainSeg_cellpose)" >&2
+}
+
+vanilla_fm_apply_joint_perc_patchnce_env() {
+  vanilla_fm_apply_joint_perc_pins
+  export TRAIN_NAME=hemit_vanilla_fm_joint_perc_patchnce
+  export VANILLA_FM_EXPECTED_TRAIN_NAME="${TRAIN_NAME}"
+  export VANILLA_FM_COND_PROFILE=mentor_patchnce
+  unset DATASET_MODE
+  export FM_USE_SEG=0
+  export FM_USE_PATCHNCE=1
+  export FM_LAMBDA_NCE=1.0
+  export FM_NCE_PATCHES=256
+  export FM_FLOW_PATH=noise
+  export FM_INIT_FROM_COND=0
+  echo "mentor_patchnce: joint_perc + PatchNCE on H&E vs x1_hat" >&2
+}
+
+vanilla_fm_apply_joint_perc_res3_env() {
+  vanilla_fm_apply_joint_perc_pins
+  export TRAIN_NAME=hemit_vanilla_fm_joint_perc_res3
+  export VANILLA_FM_EXPECTED_TRAIN_NAME="${TRAIN_NAME}"
+  export VANILLA_FM_COND_PROFILE=mentor_res3
+  export FM_RESBLOCKS=3
+  export FM_UP_MODE=conv_transpose
+  unset DATASET_MODE
+  export FM_USE_SEG=0
+  export FM_INIT_FROM_COND=0
+  unset FM_USE_PATCHNCE
+  echo "mentor_res3: joint_perc + 3 res blocks/level (strict=False load)" >&2
+}
+
+# MONAI UNet @ 512² + mid attention — new backbone, NOT finetune from joint_perc/80.
+vanilla_fm_apply_monai512_env() {
+  vanilla_fm_clear_stale_env
+  vanilla_fm_apply_train_env
+  export TRAIN_NAME=hemit_vanilla_fm_monai512
+  export VANILLA_FM_EXPECTED_TRAIN_NAME="${TRAIN_NAME}"
+  export VANILLA_FM_COND_PROFILE=monai512
+  export FM_BACKBONE=monai
+  export FM_CHANNELS=64,128,192
+  export FM_ATTN=0,0,1
+  export FM_CROP_SIZE=512
+  export FM_LAMBDA_PERC=0.1
+  export FM_CHANNEL_WEIGHTS=1,1,1
+  export FM_STEPS=25
+  export FM_VAL_STEPS=8
+  export FM_SAMPLE_METHOD=heun
+  export FM_TIME_DIST=logit_normal
+  export FM_LAMBDA_L1=0
+  export FM_LAMBDA_SAMPLE_L1=0
+  unset FM_USE_SEG FM_USE_PATCHNCE FM_INIT_FROM_COND
+  echo "mentor_monai512: MONAI UNet 512² crop + attn level 2 (train from scratch)" >&2
 }
 
 # Shared joint_perc recipe (baseline checkpoint hemit_vanilla_fm_joint_perc/80).
@@ -431,6 +574,15 @@ vanilla_fm_print_train_env() {
   fi
   if [[ "${FM_LAMBDA_SAMPLE_L1:-0}" != "0" ]]; then
     echo "  ODE-aux L1: lambda=${FM_LAMBDA_SAMPLE_L1} prob=${FM_SAMPLE_L1_PROB:-1} steps=${FM_TRAIN_SAMPLE_STEPS:-?} ${FM_TRAIN_SAMPLE_METHOD:-heun}"
+  fi
+  if [[ "${FM_USE_PATCHNCE:-0}" == "1" ]]; then
+    echo "  PatchNCE: lambda=${FM_LAMBDA_NCE:-1} patches=${FM_NCE_PATCHES:-256}"
+  fi
+  if [[ -n "${FM_SEG_SUFFIX:-}" ]]; then
+    echo "  seg_suffix=${FM_SEG_SUFFIX} (dirs=*Seg${FM_SEG_SUFFIX})"
+  fi
+  if [[ -n "${FM_CROP_SIZE:-}" ]]; then
+    echo "  monai_crop=${FM_CROP_SIZE} backbone=${FM_BACKBONE:-custom}"
   fi
   if [[ -n "${VANILLA_FM_COND_PROFILE:-}" ]]; then
     echo "  cond_profile=${VANILLA_FM_COND_PROFILE} (verified when locked=1)"

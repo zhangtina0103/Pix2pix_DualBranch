@@ -12,11 +12,18 @@ class AlignedCondDataset(AlignedDataset):
     @staticmethod
     def modify_commandline_options(parser, is_train):
         parser.set_defaults(dataset_mode="aligned_cond")
+        parser.add_argument(
+            "--fm_seg_suffix",
+            type=str,
+            default="",
+            help="Seg folder suffix: '' -> trainSeg; '_cellpose' -> trainSeg_cellpose",
+        )
         return parser
 
     def __init__(self, opt):
         AlignedDataset.__init__(self, opt)
-        self.dir_Seg = os.path.join(opt.dataroot, opt.phase + "Seg")
+        suffix = str(getattr(opt, "fm_seg_suffix", "") or "")
+        self.dir_Seg = os.path.join(opt.dataroot, f"{opt.phase}Seg{suffix}")
         self.transform_Seg = transforms.Compose([
             transforms.Resize([opt.load_size, opt.load_size], interpolation=Image.NEAREST),
             transforms.ToTensor(),

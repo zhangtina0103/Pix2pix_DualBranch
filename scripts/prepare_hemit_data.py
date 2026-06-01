@@ -5,6 +5,8 @@ Convert HEMIT layout (train/input, train/label) → pix2pix layout (trainA, trai
 Usage:
   python scripts/prepare_hemit_data.py --src /path/to/data/hemit
   python scripts/prepare_hemit_data.py --src ../vs_v2/data/hemit --dst ./datasets/hemit
+
+To revert A/B → official layout, see scripts/restore_hemit_data.py
 """
 
 from __future__ import annotations

@@ -158,3 +158,8 @@ logs/
 eval/
 composite_rgb/
 datasets/hemit/
+# Restored official HEMIT layout (restore_hemit_data.py → repo root)
+/train/
+/val/
+/test/
+/HEMIT/

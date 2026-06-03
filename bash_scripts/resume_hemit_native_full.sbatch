@@ -7,9 +7,9 @@
 #SBATCH --output=logs/hemit_resume_%x_%j.out
 #SBATCH --error=logs/hemit_resume_%x_%j.err
 #SBATCH --partition=mit_normal_gpu
-#SBATCH --gres=gpu:4
-#SBATCH --cpus-per-task=32
-#SBATCH --mem=192G
+#SBATCH --gres=gpu:2
+#SBATCH --cpus-per-task=16
+#SBATCH --mem=128G
 #SBATCH --time=06:00:00
 
 set -euo pipefail

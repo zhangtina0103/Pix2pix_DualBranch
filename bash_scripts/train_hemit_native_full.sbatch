@@ -4,8 +4,8 @@
 #   export HEMIT_SRC=/home/zhangtin/HEMIT
 #   MODEL=pix2pix sbatch bash_scripts/train_hemit_native_full.sbatch
 #   GPU_IDS is set from SLURM_GPUS_ON_NODE (ignores stale export GPU_IDS=0 on login node).
-#   4 GPU default below; pix2pix often tolerates BATCH_SIZE=8 (set on cmdline if OOM use 4).
-#   Override GPU list: HEMIT_NO_GPU_SYNC=1 GPU_IDS=0,1 sbatch ...
+#   mit_normal_gpu: typically max 2 GPUs/job. BATCH_SIZE=4 default; try 8 if memory allows.
+#   Override GPU list: HEMIT_NO_GPU_SYNC=1 GPU_IDS=0 sbatch ...
 #   MODEL=pix2pixhd  sbatch bash_scripts/train_hemit_native_full.sbatch
 #   MODEL=cut        sbatch bash_scripts/train_hemit_native_full.sbatch
 #   MODEL=asp        sbatch bash_scripts/train_hemit_native_full.sbatch
@@ -15,9 +15,9 @@
 #SBATCH --output=logs/hemit_train_%x_%j.out
 #SBATCH --error=logs/hemit_train_%x_%j.err
 #SBATCH --partition=mit_normal_gpu
-#SBATCH --gres=gpu:4
-#SBATCH --cpus-per-task=32
-#SBATCH --mem=192G
+#SBATCH --gres=gpu:2
+#SBATCH --cpus-per-task=16
+#SBATCH --mem=128G
 #SBATCH --time=06:00:00
 
 set -euo pipefail

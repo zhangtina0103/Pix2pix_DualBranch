@@ -16,10 +16,26 @@ import os
 from pathlib import Path
 
 
+def _dst_ok(dst: Path, src: Path, use_symlink: bool) -> bool:
+    """True if dst already links/copies to src and target data is readable."""
+    if not dst.exists() and not dst.is_symlink():
+        return False
+    try:
+        if dst.is_symlink():
+            return dst.resolve() == src.resolve() and src.is_file() and src.stat().st_size > 0
+        if use_symlink:
+            return False
+        return dst.resolve() == src.resolve() and dst.stat().st_size > 0
+    except OSError:
+        return False
+
+
 def link_or_copy(src: Path, dst: Path, use_symlink: bool) -> None:
     dst.parent.mkdir(parents=True, exist_ok=True)
-    if dst.exists() or dst.is_symlink():
+    if _dst_ok(dst, src, use_symlink):
         return
+    if dst.exists() or dst.is_symlink():
+        dst.unlink()
     if use_symlink:
         os.symlink(src.resolve(), dst)
     else:

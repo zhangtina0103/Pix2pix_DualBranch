@@ -1,7 +1,8 @@
 #!/bin/bash
 # Build datasets/hemit from full HEMIT (trainA/B). Run once after copying full data to HEMIT_SRC.
 #
-#   export HEMIT_SRC=/home/zhangtin/HEMIT_full
+#   export HEMIT_SRC=/home/zhangtin/HEMIT
+#   export PREPARE_COPY=0
 #   sbatch bash_scripts/prepare_hemit_full.sbatch
 #SBATCH --job-name=hemit_prep
 #SBATCH --output=logs/hemit_prepare_%j.out
@@ -15,9 +16,9 @@ set -euo pipefail
 source "${SLURM_SUBMIT_DIR:-$PWD}/bash_scripts/_common.sh"
 mkdir -p logs
 
-export HEMIT_SRC="${HEMIT_SRC:-/home/zhangtin/HEMIT_full}"
+export HEMIT_SRC="${HEMIT_SRC:-/home/zhangtin/HEMIT}"
 export DATAROOT="${DATAROOT:-./datasets/hemit}"
-export PREPARE_COPY="${PREPARE_COPY:-1}"
+export PREPARE_COPY="${PREPARE_COPY:-0}"
 
 echo "HEMIT_SRC=${HEMIT_SRC}"
 echo "DATAROOT=${DATAROOT}"

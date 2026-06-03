@@ -4,7 +4,8 @@
 #   export HEMIT_SRC=/home/zhangtin/HEMIT
 #   MODEL=pix2pix sbatch bash_scripts/train_hemit_native_full.sbatch
 #   GPU_IDS is set from SLURM_GPUS_ON_NODE (ignores stale export GPU_IDS=0 on login node).
-#   mit_normal_gpu: typically max 2 GPUs/job. BATCH_SIZE=4 default; try 8 if memory allows.
+#   Default HEMIT_TRAIN_SIZE=512 (all models, ~930 steps/ep). Full res: HEMIT_TRAIN_SIZE=1024
+#   Checkpoints: hemit_*_512 (e.g. hemit_cut_joint_512). mit_normal_gpu: max 2 GPUs/job.
 #   Override GPU list: HEMIT_NO_GPU_SYNC=1 GPU_IDS=0 sbatch ...
 #   MODEL=pix2pixhd  sbatch bash_scripts/train_hemit_native_full.sbatch
 #   MODEL=cut        sbatch ...   # CUT/ASP default BATCH_SIZE=1 (PatchNCE OOM at 1024²)

@@ -150,13 +150,30 @@ esac
 
 N_EPOCHS="${N_EPOCHS:-50}"
 N_EPOCHS_DECAY="${N_EPOCHS_DECAY:-30}"
+
+# Fair HEMIT sweep default: 512² (~930 steps/epoch @ bs=4). Full res: HEMIT_TRAIN_SIZE=1024
+HEMIT_TRAIN_SIZE="${HEMIT_TRAIN_SIZE:-512}"
+LOAD_SIZE="${LOAD_SIZE:-${HEMIT_TRAIN_SIZE}}"
+CROP_SIZE="${CROP_SIZE:-${HEMIT_TRAIN_SIZE}}"
+if [[ "${HEMIT_TRAIN_SIZE}" != "1024" ]]; then
+  TRAIN_NAME="${TRAIN_NAME}_${HEMIT_TRAIN_SIZE}"
+  PRETRAINED_NAME="${PRETRAINED_NAME}_${HEMIT_TRAIN_SIZE}"
+fi
+export HEMIT_TRAIN_SIZE LOAD_SIZE CROP_SIZE
+
 # Per-model batch defaults (only if BATCH_SIZE unset on sbatch cmdline).
 case "${MODEL}" in
   pix2pix|resnet9) BATCH_SIZE="${BATCH_SIZE:-4}" ;;
   pix2pixhd) BATCH_SIZE="${BATCH_SIZE:-1}" ;;
-  cut|asp) BATCH_SIZE="${BATCH_SIZE:-1}" ;;   # PatchNCE encoder hooks @ 1024²
-  cyclegan) BATCH_SIZE="${BATCH_SIZE:-2}" ;;
-  vanilla_fm) BATCH_SIZE="${BATCH_SIZE:-1}" ;;
+  cut|asp)
+    if [[ "${CROP_SIZE}" -ge 1024 ]]; then
+      BATCH_SIZE="${BATCH_SIZE:-1}"
+    else
+      BATCH_SIZE="${BATCH_SIZE:-4}"
+    fi
+    ;;
+  cyclegan) BATCH_SIZE="${BATCH_SIZE:-4}" ;;
+  vanilla_fm) BATCH_SIZE="${BATCH_SIZE:-2}" ;;
   *) BATCH_SIZE="${BATCH_SIZE:-2}" ;;
 esac
 PRETRAINED_EPOCH="${PRETRAINED_EPOCH:-20}"

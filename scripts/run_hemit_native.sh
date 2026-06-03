@@ -70,7 +70,7 @@ prepare() {
 train() {
   local netg_label="${NETG:-(none)}"
   assert_py_model
-  echo "==> [native] MODEL=${MODEL} PY_MODEL=${PY_MODEL} netG=${netg_label} name=${TRAIN_NAME}"
+  echo "==> [native] MODEL=${MODEL} PY_MODEL=${PY_MODEL} netG=${netg_label} name=${TRAIN_NAME} size=${CROP_SIZE:-?}²"
   if [[ "${PY_MODEL}" == "vanilla_fm" ]]; then
     echo "    backbone=${FM_BACKBONE:-monai} loss=${FM_LOSS:-x1} channels=${FM_CHANNELS} attn=${FM_ATTN:-0,0,1} (monai: widths multiple of 32)"
     echo "    perc=${FM_LAMBDA_PERC:-0.1} FM_LAMBDA_L1=${FM_LAMBDA_L1} FM_LAMBDA_SAMPLE_L1=${FM_LAMBDA_SAMPLE_L1}"
@@ -79,7 +79,7 @@ train() {
   elif [[ "${MODEL}" == "pix2pix" || "${MODEL}" == "resnet9" || "${MODEL}" == "cut" || "${MODEL}" == "asp" || "${MODEL}" == "cyclegan" ]]; then
     echo "    netG=${NETG} ngf=${NGF:-64} (~11.38M generator; python scripts/count_hemit_g_params.py --model ${MODEL})"
     if [[ "${MODEL}" == "cut" || "${MODEL}" == "asp" ]]; then
-      echo "    batch_size=${BATCH_SIZE} (CUT/ASP PatchNCE @ 1024²: default 1; try 2 only if memory allows)"
+      echo "    batch_size=${BATCH_SIZE} (CUT/ASP: bs=4 @ 512²; bs=1 if HEMIT_TRAIN_SIZE=1024)"
     elif [[ "${MODEL}" == "cyclegan" ]]; then
       echo "    batch_size=${BATCH_SIZE} (2x G + 2x D; use LAMBDA_IDENTITY=0 if still OOM)"
     fi
@@ -90,9 +90,9 @@ train() {
   # or: srun --partition=mit_normal_gpu --gres=gpu:1 --mem=64G --time=06:00:00 --pty bash"
   fi
   python -c "import torch; n=torch.cuda.device_count(); print(f'CUDA devices visible: {n}'); [print(f'  [{i}]', torch.cuda.get_device_name(i)) for i in range(n)]"
-  if [[ "${MODEL}" == "cut" || "${MODEL}" == "asp" ]]; then
+  if [[ "${MODEL}" == "cut" || "${MODEL}" == "asp" ]] && [[ "${CROP_SIZE:-512}" -ge 1024 ]]; then
     if [[ "${BATCH_SIZE}" != "1" ]]; then
-      echo "==> CUT/ASP: forcing BATCH_SIZE=1 (was ${BATCH_SIZE}; 1024² PatchNCE OOMs above 1)"
+      echo "==> CUT/ASP @ 1024²: forcing BATCH_SIZE=1 (was ${BATCH_SIZE})"
       BATCH_SIZE=1
     fi
   fi
@@ -210,6 +210,7 @@ train() {
     --dataroot "${DATAROOT}" --name "${TRAIN_NAME}"
     --model "${PY_MODEL}" --direction AtoB --display_id "${DISPLAY_ID:-0}"
     --gpu_ids "${GPU_IDS}"
+    --load_size "${LOAD_SIZE:-512}" --crop_size "${CROP_SIZE:-512}"
     --lr "${TRAIN_LR}" --no_flip --verbose
     --n_epochs "${N_EPOCHS}" --n_epochs_decay "${N_EPOCHS_DECAY}"
     --lr_policy step --batch_size "${BATCH_SIZE}"
@@ -304,6 +305,7 @@ test_one() {
     --dataroot "${DATAROOT}" --name "${name}"
     --model "${PY_MODEL}" --direction AtoB
     --gpu_ids "${GPU_IDS}"
+    --load_size "${LOAD_SIZE:-512}" --crop_size "${CROP_SIZE:-512}"
     --epoch "${epoch}" --num_test "${num_test}" --eval --verbose
     "${extra[@]}"
   )

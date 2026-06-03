@@ -34,12 +34,15 @@ case "${RESUME_PROFILE}" in
   cross_attn) vanilla_fm_apply_fm_cross_attn_scratch_env ;;
   perc_strong) vanilla_fm_apply_perc_strong_scratch_env ;;
   res3) vanilla_fm_apply_joint_perc_res3_scratch_env ;;
-  joint_perc) vanilla_fm_apply_joint_perc_scratch_env ;;
+  joint_perc) vanilla_fm_apply_joint_perc_env ;;
+  joint_perc_scratch) vanilla_fm_apply_joint_perc_scratch_env ;;
+  joint_perc_full) vanilla_fm_apply_joint_perc_fulldata_env ;;
   consistent) vanilla_fm_apply_cond_consistent_env ;;
   *) echo "ERROR: unknown RESUME_PROFILE=${RESUME_PROFILE}" >&2; exit 1 ;;
 esac
 
 export VANILLA_FM_ENV_LOCKED=1
+export CONTINUE_TRAIN=1
 export TRAIN_NAME="${TRAIN_NAME:?TRAIN_NAME unset after profile}"
 
 ckpt_dir="${ROOT}/checkpoints/${TRAIN_NAME}"

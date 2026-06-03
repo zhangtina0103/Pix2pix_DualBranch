@@ -380,6 +380,21 @@ vanilla_fm_apply_cond_consistent_v2_env() {
   echo "cond_consistent_v2: perc=${FM_LAMBDA_PERC} ODE-aux@${FM_TRAIN_SAMPLE_STEPS} p=${FM_SAMPLE_L1_PROB}" >&2
 }
 
+# Baseline joint_perc (subset or full HEMIT): x1 + perc 0.1, epochs 1→80 (matches pix2pix).
+vanilla_fm_apply_joint_perc_env() {
+  vanilla_fm_apply_joint_perc_pins
+  export TRAIN_NAME=hemit_vanilla_fm_joint_perc
+  export VANILLA_FM_EXPECTED_TRAIN_NAME="${TRAIN_NAME}"
+  unset DATASET_MODE FM_USE_SEG FM_INIT_FROM_COND
+  export FM_FLOW_PATH=noise
+  unset CONTINUE_TRAIN RESUME_FROM_EPOCH PRETRAINED_NAME
+  export EPOCH_COUNT=1
+  export N_EPOCHS="${N_EPOCHS:-50}"
+  export N_EPOCHS_DECAY="${N_EPOCHS_DECAY:-30}"
+  export TRAIN_LR="${TRAIN_LR:-0.0002}"
+  echo "joint_perc: x1+perc, epochs ${EPOCH_COUNT}..$((N_EPOCHS + N_EPOCHS_DECAY)) TRAIN_NAME=${TRAIN_NAME}" >&2
+}
+
 # Fast arch track: joint_perc speed (no ODE in train loop). Scratch 1→130 unless noted.
 
 vanilla_fm_apply_joint_perc_scratch_env() {

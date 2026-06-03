@@ -1,15 +1,14 @@
 #!/bin/bash
-# Test then post_process metrics (two steps; do not use MODE=test|metrics).
+# joint_perc: test @ 80 then metrics (two steps).
 #
-#   export HEMIT_SRC=/home/zhangtin/HEMIT
-#   MODEL=pix2pix TEST_EPOCH=80 sbatch bash_scripts/eval_hemit_native_full.sbatch
-#SBATCH --job-name=hemit_ev
-#SBATCH --output=logs/hemit_eval_%x_%j.out
-#SBATCH --error=logs/hemit_eval_%x_%j.err
+#   sbatch bash_scripts/eval_hemit_vanilla_fm_joint_perc.sbatch
+#SBATCH --job-name=hemit_vfm_jp_ev
+#SBATCH --output=logs/hemit_vfm_joint_perc_eval_%j.out
+#SBATCH --error=logs/hemit_vfm_joint_perc_eval_%j.err
 #SBATCH --partition=mit_normal_gpu
 #SBATCH --gres=gpu:1
-#SBATCH --cpus-per-task=4
-#SBATCH --mem=32G
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=64G
 #SBATCH --time=06:00:00
 
 set -euo pipefail
@@ -20,26 +19,28 @@ source /home/zhangtin/miniforge3/etc/profile.d/conda.sh
 conda activate "${CONDA_ENV:-pix2pix_cuda}"
 source "${REPO_ROOT}/bash_scripts/_cuda.sh"
 
-export MODEL="${MODEL:?Set MODEL=pix2pix|pix2pixhd|cut|asp|cyclegan before sbatch}"
 export HEMIT_SRC="${HEMIT_SRC:-/home/zhangtin/HEMIT}"
 export DATAROOT="${DATAROOT:-./datasets/hemit}"
 export TEST_EPOCH="${TEST_EPOCH:-80}"
 export NUM_TEST="${NUM_TEST:-945}"
 export GPU_IDS=0
+export DISPLAY_ID=-1
 
-# shellcheck source=/dev/null
-source "${REPO_ROOT}/scripts/hemit_model_profiles.sh"
+source "${REPO_ROOT}/bash_scripts/_vanilla_fm_sbatch_preamble.sh"
+vanilla_fm_apply_joint_perc_env
+export VANILLA_FM_ENV_LOCKED=1
+vanilla_fm_print_train_env
+
 CKPT="${REPO_ROOT}/checkpoints/${TRAIN_NAME}/${TEST_EPOCH}_net_G.pth"
-echo "MODEL=${MODEL} TRAIN_NAME=${TRAIN_NAME} TEST_EPOCH=${TEST_EPOCH}"
-echo "checkpoint: ${CKPT}"
-[[ -f "${CKPT}" ]] || { echo "ERROR: missing checkpoint — train first"; exit 1; }
+echo "TRAIN_NAME=${TRAIN_NAME} TEST_EPOCH=${TEST_EPOCH}"
+[[ -f "${CKPT}" ]] || { echo "ERROR: train first: sbatch bash_scripts/train_hemit_vanilla_fm_joint_perc.sbatch"; exit 1; }
 
 echo "===== test ====="
 export MODE=test
-bash scripts/run_hemit_all.sh
+bash scripts/run_hemit_vanilla_fm.sh
 
 echo "===== metrics ====="
 export MODE=metrics
-bash scripts/run_hemit_all.sh
+bash scripts/run_hemit_vanilla_fm.sh
 
 echo "Done. See results/${TRAIN_NAME}/test_${TEST_EPOCH}/images/score.csv"

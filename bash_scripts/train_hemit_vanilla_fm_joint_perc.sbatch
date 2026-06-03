@@ -1,16 +1,15 @@
 #!/bin/bash
-# OPTIONAL alias: same recipe as joint_perc but TRAIN_NAME=..._full and 1→130 epochs.
-# If you used plain joint_perc @ 80 before, use train_hemit_vanilla_fm_joint_perc.sbatch instead.
-# After timeout: RESUME_PROFILE=joint_perc_full sbatch bash_scripts/resume_hemit_fm_scratch.sbatch
-# Fair compare: same load_size/crop_size as pix2pix (1024). custom U-Net, FM_ATTN=0, batch=1.
+# Vanilla FM joint_perc (x1 + perc 0.1) @ 1024² — same recipe you used before.
+# Checkpoint: hemit_vanilla_fm_joint_perc, epochs 1→80 (matches pix2pix baselines).
 #
 #   export HEMIT_SRC=/home/zhangtin/HEMIT
 #   sbatch bash_scripts/prepare_hemit_full.sbatch
-#   sbatch bash_scripts/train_hemit_vanilla_fm_joint_perc_full.sbatch
-#   sbatch bash_scripts/eval_hemit_vanilla_fm_joint_perc_full.sbatch
+#   sbatch bash_scripts/train_hemit_vanilla_fm_joint_perc.sbatch
+# After 6h timeout: RESUME_PROFILE=joint_perc sbatch bash_scripts/resume_hemit_fm_scratch.sbatch
+# Eval: sbatch bash_scripts/eval_hemit_vanilla_fm_joint_perc.sbatch
 #SBATCH --job-name=hemit_vfm_jp
-#SBATCH --output=logs/hemit_vfm_joint_perc_full_%j.out
-#SBATCH --error=logs/hemit_vfm_joint_perc_full_%j.err
+#SBATCH --output=logs/hemit_vfm_joint_perc_%j.out
+#SBATCH --error=logs/hemit_vfm_joint_perc_%j.err
 #SBATCH --partition=mit_normal_gpu
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
@@ -32,7 +31,7 @@ export BATCH_SIZE=1
 export DISPLAY_ID=-1
 
 source "${REPO_ROOT}/bash_scripts/_vanilla_fm_sbatch_preamble.sh"
-vanilla_fm_apply_joint_perc_fulldata_env
+vanilla_fm_apply_joint_perc_env
 export VANILLA_FM_ENV_LOCKED=1
 vanilla_fm_print_train_env
 bash scripts/run_hemit_vanilla_fm.sh

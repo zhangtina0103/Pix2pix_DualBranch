@@ -1,5 +1,5 @@
 #!/bin/bash
-# Train one native HEMIT baseline on full data (1024², joint 3ch).
+# Train one native HEMIT baseline on full data (1024², joint 3ch). Max walltime 6h — re-submit resume if needed.
 #
 #   export HEMIT_SRC=/home/zhangtin/HEMIT
 #   MODEL=pix2pix    sbatch bash_scripts/train_hemit_native_full.sbatch
@@ -7,6 +7,7 @@
 #   MODEL=cut        sbatch bash_scripts/train_hemit_native_full.sbatch
 #   MODEL=asp        sbatch bash_scripts/train_hemit_native_full.sbatch
 #   MODEL=cyclegan   sbatch bash_scripts/train_hemit_native_full.sbatch
+# If 6h times out before epoch 80: MODEL=pix2pix sbatch bash_scripts/resume_hemit_native_full.sbatch
 #SBATCH --job-name=hemit_tr
 #SBATCH --output=logs/hemit_train_%x_%j.out
 #SBATCH --error=logs/hemit_train_%x_%j.err
@@ -14,7 +15,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
-#SBATCH --time=12:00:00
+#SBATCH --time=06:00:00
 
 set -euo pipefail
 source "${SLURM_SUBMIT_DIR:-$PWD}/bash_scripts/_common.sh"

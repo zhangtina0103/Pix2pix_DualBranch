@@ -1,5 +1,7 @@
 #!/bin/bash
 # Resume scratch FM in 6h chunks (re-submit until epoch 130).
+# joint_perc @ 80: RESUME_PROFILE=joint_perc sbatch bash_scripts/resume_hemit_fm_scratch.sbatch
+# joint_perc_full @ 130: RESUME_PROFILE=joint_perc_full sbatch ...
 #
 #   export RESUME_PROFILE=advanced
 #   export RESUME_FROM_EPOCH=25   # optional; auto = latest numbered ckpt

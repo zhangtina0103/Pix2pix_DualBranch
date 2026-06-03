@@ -39,7 +39,11 @@ else
   export GPU_IDS="${GPU_IDS:-0}"
 fi
 
-echo "MODEL=${MODEL} MODE=${MODE} HEMIT_SRC=${HEMIT_SRC} GPU_IDS=${GPU_IDS} BATCH_SIZE=${BATCH_SIZE}"
+# BATCH_SIZE/TRAIN_NAME come from hemit_model_profiles.sh (not set until profile is sourced).
+# shellcheck source=/dev/null
+source "${REPO_ROOT}/scripts/hemit_model_profiles.sh"
+
+echo "MODEL=${MODEL} MODE=${MODE} TRAIN_NAME=${TRAIN_NAME} HEMIT_SRC=${HEMIT_SRC} GPU_IDS=${GPU_IDS} BATCH_SIZE=${BATCH_SIZE}"
 echo "SLURM_GPUS_ON_NODE=${SLURM_GPUS_ON_NODE:-?}"
 _n_train="$(ls -1 "${DATAROOT}/trainA" 2>/dev/null | wc -l | tr -d ' ')"
 echo "trainA images: ${_n_train} (steps/epoch ≈ ceil(n / batch_size))"

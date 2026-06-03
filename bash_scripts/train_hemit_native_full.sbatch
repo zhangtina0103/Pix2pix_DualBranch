@@ -42,6 +42,6 @@ fi
 
 echo "MODEL=${MODEL} MODE=${MODE} HEMIT_SRC=${HEMIT_SRC} GPU_IDS=${GPU_IDS} BATCH_SIZE=${BATCH_SIZE}"
 echo "SLURM_GPUS_ON_NODE=${SLURM_GPUS_ON_NODE:-?}"
-echo -n "trainA images: "; wc -l < "${DATAROOT}/trainA"
-echo "(steps/epoch ≈ ceil(images / batch_size); pix2pix @512 bs=4 → ~930)"
+_n_train="$(find "${DATAROOT}/trainA" -maxdepth 1 -type f 2>/dev/null | wc -l | tr -d ' ')"
+echo "trainA images: ${_n_train} (steps/epoch ≈ ceil(n / batch_size))"
 bash scripts/run_hemit_all.sh

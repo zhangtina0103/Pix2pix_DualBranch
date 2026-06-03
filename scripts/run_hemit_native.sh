@@ -70,7 +70,8 @@ prepare() {
 train() {
   local netg_label="${NETG:-(none)}"
   assert_py_model
-  echo "==> [native] MODEL=${MODEL} PY_MODEL=${PY_MODEL} netG=${netg_label} name=${TRAIN_NAME} size=${CROP_SIZE:-?}²"
+  echo "==> [native] MODEL=${MODEL} PY_MODEL=${PY_MODEL} netG=${netg_label} name=${TRAIN_NAME}"
+  echo "    train ${LOAD_SIZE:-512}→${CROP_SIZE:-512} preprocess=${PREPROCESS:-resize_and_crop}"
   if [[ "${PY_MODEL}" == "vanilla_fm" ]]; then
     echo "    backbone=${FM_BACKBONE:-monai} loss=${FM_LOSS:-x1} channels=${FM_CHANNELS} attn=${FM_ATTN:-0,0,1} (monai: widths multiple of 32)"
     echo "    perc=${FM_LAMBDA_PERC:-0.1} FM_LAMBDA_L1=${FM_LAMBDA_L1} FM_LAMBDA_SAMPLE_L1=${FM_LAMBDA_SAMPLE_L1}"
@@ -214,6 +215,7 @@ train() {
     --model "${PY_MODEL}" --direction AtoB --display_id "${DISPLAY_ID:-0}"
     --gpu_ids "${GPU_IDS}"
     --load_size "${LOAD_SIZE:-512}" --crop_size "${CROP_SIZE:-512}"
+    --preprocess "${PREPROCESS:-resize_and_crop}"
     --num_threads "${NUM_THREADS:-8}"
     --lr "${TRAIN_LR}" --no_flip --verbose
     --n_epochs "${N_EPOCHS}" --n_epochs_decay "${N_EPOCHS_DECAY}"
@@ -310,6 +312,7 @@ test_one() {
     --model "${PY_MODEL}" --direction AtoB
     --gpu_ids "${GPU_IDS}"
     --load_size "${LOAD_SIZE:-512}" --crop_size "${CROP_SIZE:-512}"
+    --preprocess "${PREPROCESS:-resize_and_crop}"
     --epoch "${epoch}" --num_test "${num_test}" --eval --verbose
     "${extra[@]}"
   )

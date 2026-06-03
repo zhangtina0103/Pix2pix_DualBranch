@@ -117,7 +117,6 @@ if __name__ == '__main__':
             model.eval()
             with torch.no_grad():
                 for i, data_val in tqdm(enumerate(dataset_val), total=len(dataset_val), desc="Validating Epoch %d" % epoch):
-                    print('VALIDATION')
                     imgs = data_val['A']
                     truemasks = data_val['B']
                     imgs = imgs.to(device='cuda',dtype=torch.float)

@@ -75,17 +75,18 @@ class CUTModel(BaseModel):
     def forward(self):
         self.fake_B = self.netG(self.real_A)
 
-    def _nce_spatial_inputs(self):
-        """Downsample for PatchNCE hooks — full 1024² through netF OOMs on L40S."""
+    def _nce_tensors(self, fake_b, real_a):
+        """Spatial tensors for PatchNCE hooks (optional downsample)."""
         if self.nce_size <= 0:
-            return self.fake_B, self.real_A
+            return fake_b, real_a
         s = self.nce_size
-        fake = F.interpolate(self.fake_B, size=(s, s), mode='bilinear', align_corners=False)
-        real = F.interpolate(self.real_A, size=(s, s), mode='bilinear', align_corners=False)
-        return fake, real
+        fake_n = F.interpolate(fake_b, size=(s, s), mode='bilinear', align_corners=False)
+        real_n = F.interpolate(real_a, size=(s, s), mode='bilinear', align_corners=False)
+        return fake_n, real_n
 
-    def _nce_loss(self):
-        fake_n, real_n = self._nce_spatial_inputs()
+    def _nce_loss_batch(self, fake_b, real_a):
+        """PatchNCE on one micro-batch (bs=1) to avoid a second full-batch encoder forward."""
+        fake_n, real_n = self._nce_tensors(fake_b, real_a)
         n_p = self.nce_patches
         with torch.no_grad():
             feats_real, _ = self.netF.get_features(real_n, n_patches=n_p)
@@ -94,6 +95,17 @@ class CUTModel(BaseModel):
             return torch.tensor(0.0, device=self.device)
         losses = [self.criterionNCE(fq, fk) for fq, fk in zip(feats_fake, feats_real)]
         return sum(losses) / len(losses)
+
+    def _nce_loss(self):
+        b = self.fake_B.size(0)
+        if b <= 1:
+            return self._nce_loss_batch(self.fake_B, self.real_A)
+        loss = torch.tensor(0.0, device=self.device)
+        for i in range(b):
+            loss = loss + self._nce_loss_batch(self.fake_B[i:i + 1], self.real_A[i:i + 1])
+            if torch.cuda.is_available() and i + 1 < b:
+                torch.cuda.empty_cache()
+        return loss / b
 
     def backward_D(self):
         fake_AB = torch.cat((self.real_A, self.fake_B), 1)

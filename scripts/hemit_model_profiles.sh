@@ -169,7 +169,7 @@ case "${MODEL}" in
     if [[ "${CROP_SIZE}" -ge 1024 ]]; then
       BATCH_SIZE="${BATCH_SIZE:-1}"
     else
-      BATCH_SIZE="${BATCH_SIZE:-4}"
+      BATCH_SIZE="${BATCH_SIZE:-2}"   # bs=4 + PatchNCE OOMs on L40S even @ 512²
     fi
     ;;
   cyclegan) BATCH_SIZE="${BATCH_SIZE:-4}" ;;

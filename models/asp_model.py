@@ -20,28 +20,39 @@ class ASPModel(CUTModel):
         if self.isTrain:
             self.criterionNCE = AdaptivePatchNCELoss()
 
-    def _nce_loss(self):
-        fake_n, real_n = self._nce_spatial_inputs()
+    def _nce_loss_batch(self, fake_b, real_a, real_gt):
+        fake_n, real_n = self._nce_tensors(fake_b, real_a)
         n_p = self.nce_patches
         feats_fake, patch_idx = self.netF.get_features(fake_n, n_patches=n_p)
         with torch.no_grad():
             feats_real, _ = self.netF.get_features(real_n, n_patches=n_p)
         if not feats_fake:
             return torch.tensor(0.0, device=self.device)
+        fake_w, real_w = fake_b, real_gt
         if self.nce_size > 0:
             s = self.nce_size
-            real_b = torch.nn.functional.interpolate(
-                self.real_B, size=(s, s), mode='bilinear', align_corners=False)
-            fake_b = torch.nn.functional.interpolate(
-                self.fake_B, size=(s, s), mode='bilinear', align_corners=False)
-        else:
-            real_b, fake_b = self.real_B, self.fake_B
-        l1_weights = get_patch_l1_weights(real_b, fake_b, patch_idx)
+            real_w = torch.nn.functional.interpolate(
+                real_gt, size=(s, s), mode='bilinear', align_corners=False)
+            fake_w = torch.nn.functional.interpolate(
+                fake_b, size=(s, s), mode='bilinear', align_corners=False)
+        l1_weights = get_patch_l1_weights(real_w, fake_w, patch_idx)
         losses = [
             self.criterionNCE(fq, fk, w)
             for fq, fk, w in zip(feats_fake, feats_real, l1_weights)
         ]
         return sum(losses) / len(losses)
+
+    def _nce_loss(self):
+        b = self.fake_B.size(0)
+        if b <= 1:
+            return self._nce_loss_batch(self.fake_B, self.real_A, self.real_B)
+        loss = torch.tensor(0.0, device=self.device)
+        for i in range(b):
+            loss = loss + self._nce_loss_batch(
+                self.fake_B[i:i + 1], self.real_A[i:i + 1], self.real_B[i:i + 1])
+            if torch.cuda.is_available() and i + 1 < b:
+                torch.cuda.empty_cache()
+        return loss / b
 
     def backward_G(self):
         fake_AB = torch.cat((self.real_A, self.fake_B), 1)

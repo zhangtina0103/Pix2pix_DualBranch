@@ -79,7 +79,7 @@ train() {
   elif [[ "${MODEL}" == "pix2pix" || "${MODEL}" == "resnet9" || "${MODEL}" == "cut" || "${MODEL}" == "asp" || "${MODEL}" == "cyclegan" ]]; then
     echo "    netG=${NETG} ngf=${NGF:-64} (~11.38M generator; python scripts/count_hemit_g_params.py --model ${MODEL})"
     if [[ "${MODEL}" == "cut" || "${MODEL}" == "asp" ]]; then
-      echo "    batch_size=${BATCH_SIZE} (CUT/ASP: bs=4 @ 512²; bs=1 if HEMIT_TRAIN_SIZE=1024)"
+      echo "    batch_size=${BATCH_SIZE} (CUT/ASP: bs=2 @ 512² + microbatch NCE; bs=1 @ 1024²)"
     elif [[ "${MODEL}" == "cyclegan" ]]; then
       echo "    batch_size=${BATCH_SIZE} (2x G + 2x D; use LAMBDA_IDENTITY=0 if still OOM)"
     fi
@@ -90,10 +90,13 @@ train() {
   # or: srun --partition=mit_normal_gpu --gres=gpu:1 --mem=64G --time=06:00:00 --pty bash"
   fi
   python -c "import torch; n=torch.cuda.device_count(); print(f'CUDA devices visible: {n}'); [print(f'  [{i}]', torch.cuda.get_device_name(i)) for i in range(n)]"
-  if [[ "${MODEL}" == "cut" || "${MODEL}" == "asp" ]] && [[ "${CROP_SIZE:-512}" -ge 1024 ]]; then
-    if [[ "${BATCH_SIZE}" != "1" ]]; then
+  if [[ "${MODEL}" == "cut" || "${MODEL}" == "asp" ]]; then
+    if [[ "${CROP_SIZE:-512}" -ge 1024 ]] && [[ "${BATCH_SIZE}" != "1" ]]; then
       echo "==> CUT/ASP @ 1024²: forcing BATCH_SIZE=1 (was ${BATCH_SIZE})"
       BATCH_SIZE=1
+    elif [[ "${CROP_SIZE:-512}" -lt 1024 ]] && [[ "${BATCH_SIZE}" -gt 2 ]]; then
+      echo "==> CUT/ASP @ ${CROP_SIZE}²: capping BATCH_SIZE=2 (was ${BATCH_SIZE}; PatchNCE VRAM)"
+      BATCH_SIZE=2
     fi
   fi
   echo "==> train.py batch_size=${BATCH_SIZE} gpu_ids=${GPU_IDS}"

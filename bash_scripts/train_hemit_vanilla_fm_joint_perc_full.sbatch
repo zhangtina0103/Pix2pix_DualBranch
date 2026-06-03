@@ -1,10 +1,11 @@
 #!/bin/bash
-# Vanilla FM joint_perc (x1 + perc 0.1) on FULL HEMIT — scratch 1→130.
+# Vanilla FM joint_perc (x1 + perc 0.1) on FULL HEMIT @ 1024² — scratch 1→130.
+# Fair compare: same load_size/crop_size as pix2pix (1024). custom U-Net, FM_ATTN=0, batch=1.
 #
-#   export HEMIT_SRC=/home/zhangtin/HEMIT_full
+#   export HEMIT_SRC=/home/zhangtin/HEMIT
 #   sbatch bash_scripts/prepare_hemit_full.sbatch
 #   sbatch bash_scripts/train_hemit_vanilla_fm_joint_perc_full.sbatch
-#   MODEL=vanilla_fm MODE=test|metrics TEST_EPOCH=130 sbatch bash_scripts/run_hemit_all.sbatch
+#   sbatch bash_scripts/eval_hemit_vanilla_fm_joint_perc_full.sbatch
 #SBATCH --job-name=hemit_vfm_jp
 #SBATCH --output=logs/hemit_vfm_joint_perc_full_%j.out
 #SBATCH --error=logs/hemit_vfm_joint_perc_full_%j.err
@@ -23,7 +24,7 @@ conda activate "${CONDA_ENV:-pix2pix_cuda}"
 source "${REPO_ROOT}/bash_scripts/_cuda.sh"
 
 export MODE=train
-export HEMIT_SRC="${HEMIT_SRC:-/home/zhangtin/HEMIT_full}"
+export HEMIT_SRC="${HEMIT_SRC:-/home/zhangtin/HEMIT}"
 export DATAROOT="${DATAROOT:-./datasets/hemit}"
 export BATCH_SIZE=1
 export DISPLAY_ID=-1

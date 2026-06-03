@@ -1,7 +1,7 @@
 #!/bin/bash
 # Train native HEMIT baselines on FULL data (one model per array task).
 #
-#   export HEMIT_SRC=/home/zhangtin/HEMIT_full
+#   export HEMIT_SRC=/home/zhangtin/HEMIT
 #   sbatch bash_scripts/prepare_hemit_full.sbatch
 #   sbatch bash_scripts/run_hemit_native_train_array.sbatch
 #
@@ -27,7 +27,7 @@ source "${REPO_ROOT}/bash_scripts/_cuda.sh"
 MODELS=(dualbranch pix2pix pix2pixhd cut asp cyclegan)
 export MODEL="${MODELS[$SLURM_ARRAY_TASK_ID]}"
 export MODE=train
-export HEMIT_SRC="${HEMIT_SRC:-/home/zhangtin/HEMIT_full}"
+export HEMIT_SRC="${HEMIT_SRC:-/home/zhangtin/HEMIT}"
 export DATAROOT="${DATAROOT:-./datasets/hemit}"
 export GPU_IDS=0
 

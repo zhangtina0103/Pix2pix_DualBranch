@@ -90,6 +90,13 @@ train() {
   # or: srun --partition=mit_normal_gpu --gres=gpu:1 --mem=64G --time=06:00:00 --pty bash"
   fi
   python -c "import torch; n=torch.cuda.device_count(); print(f'CUDA devices visible: {n}'); [print(f'  [{i}]', torch.cuda.get_device_name(i)) for i in range(n)]"
+  if [[ "${MODEL}" == "cut" || "${MODEL}" == "asp" ]]; then
+    if [[ "${BATCH_SIZE}" != "1" ]]; then
+      echo "==> CUT/ASP: forcing BATCH_SIZE=1 (was ${BATCH_SIZE}; 1024² PatchNCE OOMs above 1)"
+      BATCH_SIZE=1
+    fi
+  fi
+  echo "==> train.py batch_size=${BATCH_SIZE} gpu_ids=${GPU_IDS}"
   local extra=()
   [[ -n "${DATASET_MODE:-}" ]] && extra+=(--dataset_mode "${DATASET_MODE}")
   case "${PY_MODEL}" in
@@ -97,10 +104,12 @@ train() {
       extra+=(--loss_type L1)
       ;;
     cut)
-      extra+=(--lambda_NCE "${LAMBDA_NCE:-1.0}")
+      extra+=(--lambda_NCE "${LAMBDA_NCE:-1.0}" --nce_patches "${NCE_PATCHES:-64}")
+      [[ -n "${NCE_SIZE:-}" ]] && extra+=(--nce_size "${NCE_SIZE}")
       ;;
     asp)
-      extra+=(--lambda_ASP "${LAMBDA_ASP:-1.0}")
+      extra+=(--lambda_ASP "${LAMBDA_ASP:-1.0}" --nce_patches "${NCE_PATCHES:-64}")
+      [[ -n "${NCE_SIZE:-}" ]] && extra+=(--nce_size "${NCE_SIZE}")
       ;;
     cycle_gan)
       extra+=(

@@ -21,12 +21,22 @@ class ASPModel(CUTModel):
             self.criterionNCE = AdaptivePatchNCELoss()
 
     def _nce_loss(self):
-        feats_fake, patch_idx = self.netF.get_features(self.fake_B)
+        fake_n, real_n = self._nce_spatial_inputs()
+        n_p = self.nce_patches
+        feats_fake, patch_idx = self.netF.get_features(fake_n, n_patches=n_p)
         with torch.no_grad():
-            feats_real, _ = self.netF.get_features(self.real_A)
+            feats_real, _ = self.netF.get_features(real_n, n_patches=n_p)
         if not feats_fake:
             return torch.tensor(0.0, device=self.device)
-        l1_weights = get_patch_l1_weights(self.real_B, self.fake_B, patch_idx)
+        if self.nce_size > 0:
+            s = self.nce_size
+            real_b = torch.nn.functional.interpolate(
+                self.real_B, size=(s, s), mode='bilinear', align_corners=False)
+            fake_b = torch.nn.functional.interpolate(
+                self.fake_B, size=(s, s), mode='bilinear', align_corners=False)
+        else:
+            real_b, fake_b = self.real_B, self.fake_B
+        l1_weights = get_patch_l1_weights(real_b, fake_b, patch_idx)
         losses = [
             self.criterionNCE(fq, fk, w)
             for fq, fk, w in zip(feats_fake, feats_real, l1_weights)

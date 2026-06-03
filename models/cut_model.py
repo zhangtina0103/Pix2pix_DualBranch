@@ -1,5 +1,6 @@
 """CUT on paired HEMIT: joint 3-channel output, same train/test/post_process as pix2pix."""
 import torch
+import torch.nn.functional as F
 from .base_model import BaseModel
 from . import networks
 from .nce_losses import (
@@ -24,10 +25,20 @@ class CUTModel(BaseModel):
             parser.set_defaults(pool_size=0, gan_mode='lsgan')
             parser.add_argument('--lambda_L1', type=float, default=100.0, help='L1 weight on fake vs real B')
             parser.add_argument('--lambda_NCE', type=float, default=1.0, help='PatchNCE weight')
+            parser.add_argument('--nce_patches', type=int, default=64,
+                                help='PatchNCE samples per layer (lower = less VRAM)')
+            parser.add_argument('--nce_size', type=int, default=0,
+                                help='PatchNCE hook resolution; 0=same as train (1024²). '
+                                     '512 only if OOM (set NCE_SIZE=512 on sbatch).')
         return parser
 
     def __init__(self, opt):
         BaseModel.__init__(self, opt)
+        self.nce_size = int(getattr(opt, 'nce_size', 0) or 0)
+        self.nce_patches = int(getattr(opt, 'nce_patches', 64))
+        if self.isTrain:
+            res = self.nce_size if self.nce_size > 0 else 'full'
+            print(f'CUT PatchNCE: nce_size={res} nce_patches={self.nce_patches}')
         self.loss_names = ['G_GAN', 'G_L1', 'G_NCE', 'D_real', 'D_fake']
         self.visual_names = ['real_A', 'fake_B', 'real_B']
         if self.isTrain:
@@ -64,11 +75,21 @@ class CUTModel(BaseModel):
     def forward(self):
         self.fake_B = self.netG(self.real_A)
 
+    def _nce_spatial_inputs(self):
+        """Downsample for PatchNCE hooks — full 1024² through netF OOMs on L40S."""
+        if self.nce_size <= 0:
+            return self.fake_B, self.real_A
+        s = self.nce_size
+        fake = F.interpolate(self.fake_B, size=(s, s), mode='bilinear', align_corners=False)
+        real = F.interpolate(self.real_A, size=(s, s), mode='bilinear', align_corners=False)
+        return fake, real
+
     def _nce_loss(self):
-        # real_A is the cond image — no grad through NCE keys (saves ~half the hook memory).
+        fake_n, real_n = self._nce_spatial_inputs()
+        n_p = self.nce_patches
         with torch.no_grad():
-            feats_real, _ = self.netF.get_features(self.real_A)
-        feats_fake, _ = self.netF.get_features(self.fake_B)
+            feats_real, _ = self.netF.get_features(real_n, n_patches=n_p)
+        feats_fake, _ = self.netF.get_features(fake_n, n_patches=n_p)
         if not feats_fake:
             return torch.tensor(0.0, device=self.device)
         losses = [self.criterionNCE(fq, fk) for fq, fk in zip(feats_fake, feats_real)]
@@ -100,6 +121,8 @@ class CUTModel(BaseModel):
         self.backward_D()
         self.optimizer_D.step()
         self.set_requires_grad(self.netD, False)
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
         self.optimizer_G.zero_grad()
         self.backward_G()
         self.optimizer_G.step()

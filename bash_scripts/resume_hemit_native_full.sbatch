@@ -7,9 +7,9 @@
 #SBATCH --output=logs/hemit_resume_%x_%j.out
 #SBATCH --error=logs/hemit_resume_%x_%j.err
 #SBATCH --partition=mit_normal_gpu
-#SBATCH --gres=gpu:1
-#SBATCH --cpus-per-task=8
-#SBATCH --mem=64G
+#SBATCH --gres=gpu:2
+#SBATCH --cpus-per-task=16
+#SBATCH --mem=128G
 #SBATCH --time=06:00:00
 
 set -euo pipefail
@@ -23,6 +23,7 @@ source "${REPO_ROOT}/bash_scripts/_cuda.sh"
 export MODEL="${MODEL:?Set MODEL before sbatch}"
 export HEMIT_SRC="${HEMIT_SRC:-/home/zhangtin/HEMIT}"
 export DATAROOT="${DATAROOT:-./datasets/hemit}"
-export GPU_IDS=0
+export GPU_IDS="${GPU_IDS:-0,1}"
+export BATCH_SIZE="${BATCH_SIZE:-4}"
 
 bash scripts/resume_hemit_native_full.sh

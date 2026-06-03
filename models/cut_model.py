@@ -65,8 +65,10 @@ class CUTModel(BaseModel):
         self.fake_B = self.netG(self.real_A)
 
     def _nce_loss(self):
+        # real_A is the cond image — no grad through NCE keys (saves ~half the hook memory).
+        with torch.no_grad():
+            feats_real, _ = self.netF.get_features(self.real_A)
         feats_fake, _ = self.netF.get_features(self.fake_B)
-        feats_real, _ = self.netF.get_features(self.real_A)
         if not feats_fake:
             return torch.tensor(0.0, device=self.device)
         losses = [self.criterionNCE(fq, fk) for fq, fk in zip(feats_fake, feats_real)]

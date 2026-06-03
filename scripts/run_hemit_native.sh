@@ -78,7 +78,9 @@ train() {
     echo "    batch_size=${BATCH_SIZE} (set BATCH_SIZE=1 if OOM)"
   elif [[ "${MODEL}" == "pix2pix" || "${MODEL}" == "resnet9" || "${MODEL}" == "cut" || "${MODEL}" == "asp" || "${MODEL}" == "cyclegan" ]]; then
     echo "    netG=${NETG} ngf=${NGF:-64} (~11.38M generator; python scripts/count_hemit_g_params.py --model ${MODEL})"
-    if [[ "${MODEL}" == "cyclegan" ]]; then
+    if [[ "${MODEL}" == "cut" || "${MODEL}" == "asp" ]]; then
+      echo "    batch_size=${BATCH_SIZE} (CUT/ASP PatchNCE @ 1024²: default 1; try 2 only if memory allows)"
+    elif [[ "${MODEL}" == "cyclegan" ]]; then
       echo "    batch_size=${BATCH_SIZE} (2x G + 2x D; use LAMBDA_IDENTITY=0 if still OOM)"
     fi
   fi

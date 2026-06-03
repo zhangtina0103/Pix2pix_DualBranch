@@ -150,14 +150,15 @@ esac
 
 N_EPOCHS="${N_EPOCHS:-50}"
 N_EPOCHS_DECAY="${N_EPOCHS_DECAY:-30}"
-# CycleGAN: 2×G+2×D @ 1024². vanilla_fm: 1 forward/step — match pix2pix batch unless OOM.
-if [[ "${MODEL}" == "cyclegan" ]]; then
-  BATCH_SIZE="${BATCH_SIZE:-1}"
-elif [[ "${MODEL}" == "vanilla_fm" ]]; then
-  BATCH_SIZE="${BATCH_SIZE:-1}"
-else
-  BATCH_SIZE="${BATCH_SIZE:-2}"
-fi
+# Per-model batch defaults (only if BATCH_SIZE unset on sbatch cmdline).
+case "${MODEL}" in
+  pix2pix|resnet9) BATCH_SIZE="${BATCH_SIZE:-4}" ;;
+  pix2pixhd) BATCH_SIZE="${BATCH_SIZE:-1}" ;;
+  cut|asp) BATCH_SIZE="${BATCH_SIZE:-1}" ;;   # PatchNCE encoder hooks @ 1024²
+  cyclegan) BATCH_SIZE="${BATCH_SIZE:-2}" ;;
+  vanilla_fm) BATCH_SIZE="${BATCH_SIZE:-1}" ;;
+  *) BATCH_SIZE="${BATCH_SIZE:-2}" ;;
+esac
 PRETRAINED_EPOCH="${PRETRAINED_EPOCH:-20}"
 TEST_EPOCH="${TEST_EPOCH:-$((N_EPOCHS + N_EPOCHS_DECAY))}"
 NUM_TEST="${NUM_TEST:-945}"

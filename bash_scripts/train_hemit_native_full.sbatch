@@ -7,7 +7,7 @@
 #   mit_normal_gpu: typically max 2 GPUs/job. BATCH_SIZE=4 default; try 8 if memory allows.
 #   Override GPU list: HEMIT_NO_GPU_SYNC=1 GPU_IDS=0 sbatch ...
 #   MODEL=pix2pixhd  sbatch bash_scripts/train_hemit_native_full.sbatch
-#   MODEL=cut        sbatch bash_scripts/train_hemit_native_full.sbatch
+#   MODEL=cut        sbatch ...   # CUT/ASP default BATCH_SIZE=1 (PatchNCE OOM at 1024²)
 #   MODEL=asp        sbatch bash_scripts/train_hemit_native_full.sbatch
 #   MODEL=cyclegan   sbatch bash_scripts/train_hemit_native_full.sbatch
 # If 6h times out before epoch 80: MODEL=pix2pix sbatch bash_scripts/resume_hemit_native_full.sbatch
@@ -37,7 +37,6 @@ if [[ "${HEMIT_NO_GPU_SYNC:-0}" != "1" ]]; then
   hemit_sync_gpu_env
 else
   export GPU_IDS="${GPU_IDS:-0}"
-  export BATCH_SIZE="${BATCH_SIZE:-4}"
 fi
 
 echo "MODEL=${MODEL} MODE=${MODE} HEMIT_SRC=${HEMIT_SRC} GPU_IDS=${GPU_IDS} BATCH_SIZE=${BATCH_SIZE}"

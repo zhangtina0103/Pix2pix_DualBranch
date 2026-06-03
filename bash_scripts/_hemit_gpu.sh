@@ -5,7 +5,6 @@
 hemit_sync_gpu_env() {
   if [[ "${HEMIT_NO_GPU_SYNC:-0}" == "1" ]]; then
     export GPU_IDS="${GPU_IDS:-0}"
-    export BATCH_SIZE="${BATCH_SIZE:-4}"
     return
   fi
   local n="${SLURM_GPUS_ON_NODE:-0}"
@@ -17,5 +16,4 @@ hemit_sync_gpu_env() {
   elif [[ -z "${GPU_IDS:-}" ]]; then
     export GPU_IDS=0
   fi
-  export BATCH_SIZE="${BATCH_SIZE:-4}"
 }

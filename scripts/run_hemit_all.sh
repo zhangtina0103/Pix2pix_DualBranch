@@ -22,9 +22,6 @@ export HEMIT_SRC="${HEMIT_SRC:-/home/zhangtin/virtual-staining/data/hemit}"
 export DATAROOT="${DATAROOT:-./datasets/hemit}"
 export VS_DATA_ROOT="${VS_DATA_ROOT:-${HEMIT_SRC}}"
 export REPO_ROOT="${ROOT}"
-# shellcheck source=/dev/null
-[[ -f "${ROOT}/bash_scripts/_hemit_gpu.sh" ]] && source "${ROOT}/bash_scripts/_hemit_gpu.sh" && hemit_sync_gpu_env
-export GPU_IDS="${GPU_IDS:-0}"
 
 die() { echo "ERROR: $*" >&2; exit 1; }
 
@@ -77,8 +74,11 @@ if is_native; then
     vanilla_fm_verify_locked_env
     vanilla_fm_print_train_env
   else
-    echo "Profile: PY_MODEL=${PY_MODEL} TRAIN_NAME=${TRAIN_NAME}"
+    echo "Profile: PY_MODEL=${PY_MODEL} TRAIN_NAME=${TRAIN_NAME} BATCH_SIZE=${BATCH_SIZE}"
   fi
+  # shellcheck source=/dev/null
+  [[ -f "${ROOT}/bash_scripts/_hemit_gpu.sh" ]] && source "${ROOT}/bash_scripts/_hemit_gpu.sh" && hemit_sync_gpu_env
+  export GPU_IDS="${GPU_IDS:-0}"
 fi
 
 if [[ "${MODEL}" == "comparison" ]]; then

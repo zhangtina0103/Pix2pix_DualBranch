@@ -22,7 +22,8 @@ class ASPModel(CUTModel):
 
     def _nce_loss(self):
         feats_fake, patch_idx = self.netF.get_features(self.fake_B)
-        feats_real, _ = self.netF.get_features(self.real_A)
+        with torch.no_grad():
+            feats_real, _ = self.netF.get_features(self.real_A)
         if not feats_fake:
             return torch.tensor(0.0, device=self.device)
         l1_weights = get_patch_l1_weights(self.real_B, self.fake_B, patch_idx)

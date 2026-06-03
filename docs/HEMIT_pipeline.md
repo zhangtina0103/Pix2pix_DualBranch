@@ -10,6 +10,7 @@ Joint **3-channel** multiplex out. Same pipeline you used for dual-branch.
 |---------|-----------|
 | `dualbranch` | `SwinTResnet` (paper) |
 | `pix2pix` | `resnet_9blocks` (classic pix2pix baseline) |
+| `pix2pixhd` | `unet_1024` (high-res U-Net; not NVIDIA multi-scale HD) |
 | `cut`, `asp`, `cyclegan` | same `train.py` / `test.py` / `post_process.py`, joint 3ch |
 | `resnet6`, `unet256`, … | other `--netG` in `networks.py` |
 

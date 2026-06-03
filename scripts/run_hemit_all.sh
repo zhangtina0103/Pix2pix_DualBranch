@@ -28,7 +28,7 @@ die() { echo "ERROR: $*" >&2; exit 1; }
 
 is_native() {
   case "${MODEL}" in
-    dualbranch|pix2pix|resnet9|resnet6|unet256|unet128|unet1024|swint|swint_unet|cut|asp|cyclegan|vanilla_fm) return 0 ;;
+    dualbranch|pix2pix|pix2pixhd|resnet9|resnet6|unet256|unet128|unet1024|swint|swint_unet|cut|asp|cyclegan|vanilla_fm) return 0 ;;
     *) return 1 ;;
   esac
 }

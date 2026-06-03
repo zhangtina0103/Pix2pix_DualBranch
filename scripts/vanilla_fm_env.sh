@@ -392,6 +392,17 @@ vanilla_fm_apply_joint_perc_scratch_env() {
   echo "joint_perc_scratch: same as baseline recipe, train 1→130 (speed reference)" >&2
 }
 
+# Full HEMIT (~3717 train): x1 + perc 0.1, 1→130. Use after prepare_hemit_data on full dataset.
+vanilla_fm_apply_joint_perc_fulldata_env() {
+  vanilla_fm_apply_joint_perc_pins
+  export TRAIN_NAME=hemit_vanilla_fm_joint_perc_full
+  export VANILLA_FM_EXPECTED_TRAIN_NAME="${TRAIN_NAME}"
+  unset DATASET_MODE FM_USE_SEG FM_INIT_FROM_COND
+  export FM_FLOW_PATH=noise
+  vanilla_fm_apply_fm_scratch_schedule
+  echo "joint_perc_full: x1+perc on full HEMIT, epochs 1→130" >&2
+}
+
 vanilla_fm_apply_joint_perc_res3_scratch_env() {
   vanilla_fm_apply_joint_perc_pins
   export TRAIN_NAME=hemit_vanilla_fm_joint_perc_res3_scratch

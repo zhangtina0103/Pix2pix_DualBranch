@@ -214,6 +214,7 @@ train() {
     --model "${PY_MODEL}" --direction AtoB --display_id "${DISPLAY_ID:-0}"
     --gpu_ids "${GPU_IDS}"
     --load_size "${LOAD_SIZE:-512}" --crop_size "${CROP_SIZE:-512}"
+    --num_threads "${NUM_THREADS:-8}"
     --lr "${TRAIN_LR}" --no_flip --verbose
     --n_epochs "${N_EPOCHS}" --n_epochs_decay "${N_EPOCHS_DECAY}"
     --lr_policy step --batch_size "${BATCH_SIZE}"

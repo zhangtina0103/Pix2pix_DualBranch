@@ -27,6 +27,11 @@ def resnet9_g(ngf: int = 64, norm: str = "instance") -> int:
     return count_module(g)
 
 
+def unet_g(netg: str, ngf: int = 64, norm: str = "batch") -> int:
+    g = networks.define_G(3, 3, ngf, netg, norm, True, "normal", 0.02, [])
+    return count_module(g)
+
+
 def cut_nce_projectors(ngf: int = 64, norm: str = "instance") -> int:
     g = networks.define_G(
         3, 3, ngf, "resnet_9blocks", norm, True, "normal", 0.02, []
@@ -51,7 +56,7 @@ def main():
     p = argparse.ArgumentParser(description="HEMIT generator parameter counts")
     p.add_argument(
         "--model",
-        choices=["pix2pix", "cut", "asp", "cyclegan", "vanilla_fm", "all"],
+        choices=["pix2pix", "pix2pixhd", "cut", "asp", "cyclegan", "vanilla_fm", "all"],
         default="all",
     )
     p.add_argument("--ngf", type=int, default=64)
@@ -69,6 +74,14 @@ def main():
     if args.model in ("pix2pix", "all"):
         n_batch = resnet9_g(args.ngf, "batch")
         add("pix2pix (netG, batch norm)", n_batch, "MODEL=pix2pix|resnet9")
+    if args.model in ("pix2pixhd", "all"):
+        for netg in ("unet_1024", "unet_256"):
+            for ngf in (64, 32, 24, 20, 16):
+                try:
+                    n = unet_g(netg, ngf, "batch")
+                    add(f"pix2pixhd {netg} ngf={ngf}", n, "MODEL=pix2pixhd")
+                except Exception as e:
+                    add(f"pix2pixhd {netg} ngf={ngf}", -1, f"error: {e}")
     if args.model in ("cut", "asp", "all"):
         n_inst = resnet9_g(args.ngf, "instance")
         n_f = cut_nce_projectors(args.ngf, "instance")

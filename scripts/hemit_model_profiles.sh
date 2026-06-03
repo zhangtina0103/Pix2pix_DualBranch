@@ -15,12 +15,13 @@ case "${MODEL}" in
     LAMBDA_L1="${LAMBDA_L1:-100}"
     ;;
   pix2pixhd)
-    # High-res U-Net generator (1024²). Not NVIDIA pix2pixHD multi-scale D — closest in-repo baseline.
+    # U-Net @ 1024². ngf=64 is ~50–80M G — NOT param-matched. Default ngf=24 targets ~11M (verify on cluster).
+    # Fair ResNet baseline = MODEL=pix2pix (resnet_9blocks ngf=64).
     PY_MODEL=pix2pix
     NETG="${NETG:-unet_1024}"
-    NGF="${NGF:-64}"
-    TRAIN_NAME="${TRAIN_NAME:-hemit_pix2pixhd_unet1024}"
-    PRETRAINED_NAME="${PRETRAINED_NAME:-hemit_pix2pixhd_unet1024}"
+    NGF="${NGF:-24}"
+    TRAIN_NAME="${TRAIN_NAME:-hemit_pix2pixhd_unet1024_ngf24}"
+    PRETRAINED_NAME="${PRETRAINED_NAME:-hemit_pix2pixhd_unet1024_ngf24}"
     TRAIN_LR="${TRAIN_LR:-0.0002}"
     LAMBDA_L1="${LAMBDA_L1:-100}"
     BATCH_SIZE="${BATCH_SIZE:-1}"

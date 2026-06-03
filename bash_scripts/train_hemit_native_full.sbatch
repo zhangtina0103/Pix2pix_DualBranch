@@ -2,7 +2,10 @@
 # Train one native HEMIT baseline on full data (1024², joint 3ch). Max walltime 6h — re-submit resume if needed.
 #
 #   export HEMIT_SRC=/home/zhangtin/HEMIT
-#   MODEL=pix2pix GPU_IDS=0,1 BATCH_SIZE=4 sbatch --gres=gpu:2 bash_scripts/train_hemit_native_full.sbatch
+#   MODEL=pix2pix GPU_IDS=0,1 BATCH_SIZE=4 sbatch bash_scripts/train_hemit_native_full.sbatch
+#   (git pull required: run_hemit_native.sh passes --gpu_ids to train.py; without it only GPU 0 trains.)
+# 4-GPU smoke (often little gain vs 2 for DataParallel @ 1024²):
+#   #SBATCH --gres=gpu:4  GPU_IDS=0,1,2,3 BATCH_SIZE=8 sbatch ...
 #   MODEL=pix2pixhd  sbatch bash_scripts/train_hemit_native_full.sbatch
 #   MODEL=cut        sbatch bash_scripts/train_hemit_native_full.sbatch
 #   MODEL=asp        sbatch bash_scripts/train_hemit_native_full.sbatch

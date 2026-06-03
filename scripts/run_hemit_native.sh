@@ -87,7 +87,7 @@ train() {
   MODEL=cut MODE=train sbatch bash_scripts/run_hemit_all.sbatch
   # or: srun --partition=mit_normal_gpu --gres=gpu:1 --mem=64G --time=06:00:00 --pty bash"
   fi
-  python -c "import torch; print('GPU:', torch.cuda.get_device_name(0))"
+  python -c "import torch; n=torch.cuda.device_count(); print(f'CUDA devices visible: {n}'); [print(f'  [{i}]', torch.cuda.get_device_name(i)) for i in range(n)]"
   local extra=()
   [[ -n "${DATASET_MODE:-}" ]] && extra+=(--dataset_mode "${DATASET_MODE}")
   case "${PY_MODEL}" in
@@ -198,6 +198,7 @@ train() {
   local train_args=(
     --dataroot "${DATAROOT}" --name "${TRAIN_NAME}"
     --model "${PY_MODEL}" --direction AtoB --display_id "${DISPLAY_ID:-0}"
+    --gpu_ids "${GPU_IDS}"
     --lr "${TRAIN_LR}" --no_flip --verbose
     --n_epochs "${N_EPOCHS}" --n_epochs_decay "${N_EPOCHS_DECAY}"
     --lr_policy step --batch_size "${BATCH_SIZE}"
@@ -291,6 +292,7 @@ test_one() {
   local test_args=(
     --dataroot "${DATAROOT}" --name "${name}"
     --model "${PY_MODEL}" --direction AtoB
+    --gpu_ids "${GPU_IDS}"
     --epoch "${epoch}" --num_test "${num_test}" --eval --verbose
     "${extra[@]}"
   )

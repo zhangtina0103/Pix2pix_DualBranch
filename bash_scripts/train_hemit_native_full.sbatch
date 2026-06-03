@@ -10,6 +10,7 @@
 #   MODEL=cut        sbatch ...   # CUT/ASP default BATCH_SIZE=1 (PatchNCE OOM at 1024²)
 #   MODEL=asp        sbatch bash_scripts/train_hemit_native_full.sbatch
 #   MODEL=cyclegan   sbatch bash_scripts/train_hemit_native_full.sbatch
+#                    # default BATCH_SIZE=4 @ 512²; export BATCH_SIZE=2 if OOM
 # If 6h times out before epoch 80: MODEL=pix2pix sbatch bash_scripts/resume_hemit_native_full.sbatch
 #SBATCH --job-name=hemit_tr
 #SBATCH --output=logs/hemit_train_%x_%j.out

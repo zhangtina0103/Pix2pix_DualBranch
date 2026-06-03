@@ -21,8 +21,10 @@ export MODE="${MODE:-all}"
 export HEMIT_SRC="${HEMIT_SRC:-/home/zhangtin/virtual-staining/data/hemit}"
 export DATAROOT="${DATAROOT:-./datasets/hemit}"
 export VS_DATA_ROOT="${VS_DATA_ROOT:-${HEMIT_SRC}}"
-export GPU_IDS="${GPU_IDS:-0}"
 export REPO_ROOT="${ROOT}"
+# shellcheck source=/dev/null
+[[ -f "${ROOT}/bash_scripts/_hemit_gpu.sh" ]] && source "${ROOT}/bash_scripts/_hemit_gpu.sh" && hemit_sync_gpu_env
+export GPU_IDS="${GPU_IDS:-0}"
 
 die() { echo "ERROR: $*" >&2; exit 1; }
 

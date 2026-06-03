@@ -18,7 +18,9 @@ _end=$((N_EPOCHS + N_EPOCHS_DECAY))
 export MODEL="${MODEL:?Set MODEL=pix2pix|pix2pixhd|cut|asp|cyclegan}"
 export HEMIT_SRC="${HEMIT_SRC:-/home/zhangtin/HEMIT}"
 export DATAROOT="${DATAROOT:-./datasets/hemit}"
-export GPU_IDS="${GPU_IDS:-0,1}"
+# shellcheck source=/dev/null
+source "${ROOT}/bash_scripts/_hemit_gpu.sh"
+hemit_sync_gpu_env
 
 # shellcheck source=/dev/null
 source "${ROOT}/scripts/hemit_model_profiles.sh"

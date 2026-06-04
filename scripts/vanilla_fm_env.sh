@@ -316,12 +316,16 @@ vanilla_fm_apply_joint_cfg_env() {
 
 # Fresh train 1→130 (no joint_perc/80 seed). Use for cond_consistent / beat_p2p scratch jobs.
 vanilla_fm_apply_fm_scratch_schedule() {
-  unset CONTINUE_TRAIN RESUME_FROM_EPOCH PRETRAINED_NAME
-  export EPOCH_COUNT=1
   export N_EPOCHS="${N_EPOCHS:-100}"
   export N_EPOCHS_DECAY="${N_EPOCHS_DECAY:-30}"
   export TRAIN_LR="${TRAIN_LR:-0.0002}"
-  echo "scratch schedule: epochs ${EPOCH_COUNT}..$((N_EPOCHS + N_EPOCHS_DECAY)) TRAIN_LR=${TRAIN_LR}" >&2
+  if [[ "${CONTINUE_TRAIN:-0}" == "1" ]]; then
+    echo "scratch schedule resume: target $((N_EPOCHS + N_EPOCHS_DECAY)) epochs TRAIN_LR=${TRAIN_LR}" >&2
+  else
+    unset CONTINUE_TRAIN RESUME_FROM_EPOCH PRETRAINED_NAME
+    export EPOCH_COUNT=1
+    echo "scratch schedule: epochs ${EPOCH_COUNT}..$((N_EPOCHS + N_EPOCHS_DECAY)) TRAIN_LR=${TRAIN_LR}" >&2
+  fi
 }
 
 # Consistent conditioning (hypothesis to beat pix2pix): seg in UNet + same ODE start at train & test.
@@ -387,12 +391,16 @@ vanilla_fm_apply_joint_perc_env() {
   export VANILLA_FM_EXPECTED_TRAIN_NAME="${TRAIN_NAME}"
   unset DATASET_MODE FM_USE_SEG FM_INIT_FROM_COND
   export FM_FLOW_PATH=noise
-  unset CONTINUE_TRAIN RESUME_FROM_EPOCH PRETRAINED_NAME
-  export EPOCH_COUNT=1
   export N_EPOCHS="${N_EPOCHS:-50}"
   export N_EPOCHS_DECAY="${N_EPOCHS_DECAY:-30}"
   export TRAIN_LR="${TRAIN_LR:-0.0002}"
-  echo "joint_perc: x1+perc, epochs ${EPOCH_COUNT}..$((N_EPOCHS + N_EPOCHS_DECAY)) TRAIN_NAME=${TRAIN_NAME}" >&2
+  if [[ "${CONTINUE_TRAIN:-0}" == "1" ]]; then
+    echo "joint_perc resume: TRAIN_NAME=${TRAIN_NAME} target $((N_EPOCHS + N_EPOCHS_DECAY)) epochs (ckpt epoch set by resume script)" >&2
+  else
+    unset CONTINUE_TRAIN RESUME_FROM_EPOCH PRETRAINED_NAME
+    export EPOCH_COUNT=1
+    echo "joint_perc: x1+perc, epochs 1..$((N_EPOCHS + N_EPOCHS_DECAY)) TRAIN_NAME=${TRAIN_NAME}" >&2
+  fi
 }
 
 # Fast arch track: joint_perc speed (no ODE in train loop). Scratch 1→130 unless noted.

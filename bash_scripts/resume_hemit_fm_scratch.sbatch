@@ -1,7 +1,7 @@
 #!/bin/bash
-# Resume scratch FM in 6h chunks (re-submit until epoch 130).
+# Resume FM in 6h chunks until profile end epoch.
 # joint_perc @ 80: RESUME_PROFILE=joint_perc sbatch bash_scripts/resume_hemit_fm_scratch.sbatch
-# joint_perc_full @ 130: RESUME_PROFILE=joint_perc_full sbatch ...
+# scratch profiles @ 130: RESUME_PROFILE=joint_perc_scratch|advanced|... sbatch ...
 #
 #   export RESUME_PROFILE=advanced
 #   export RESUME_FROM_EPOCH=25   # optional; auto = latest numbered ckpt
@@ -23,7 +23,7 @@ conda activate "${CONDA_ENV:-pix2pix_cuda}"
 source "${REPO_ROOT}/bash_scripts/_cuda.sh"
 
 export DISPLAY_ID=-1
-export BATCH_SIZE=1
+# BATCH_SIZE from hemit_model_profiles (4 @ 512²). OOM: BATCH_SIZE=2 sbatch ...
 export DATAROOT="${DATAROOT:-./datasets/hemit}"
 
 source "${REPO_ROOT}/bash_scripts/_vanilla_fm_sbatch_preamble.sh"

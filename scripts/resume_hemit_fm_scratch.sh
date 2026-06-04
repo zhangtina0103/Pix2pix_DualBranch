@@ -15,11 +15,8 @@ cd "$ROOT"
 export MODEL=vanilla_fm
 export MODE=train
 export CONTINUE_TRAIN=1
-export N_EPOCHS="${N_EPOCHS:-100}"
-export N_EPOCHS_DECAY="${N_EPOCHS_DECAY:-30}"
-_end=$((N_EPOCHS + N_EPOCHS_DECAY))
 
-export RESUME_PROFILE="${RESUME_PROFILE:?Set RESUME_PROFILE (advanced|v2|consistent_scratch|tri_head|cross_attn|light|perc_strong|res3|joint_perc_scratch|...)}"
+export RESUME_PROFILE="${RESUME_PROFILE:?Set RESUME_PROFILE (joint_perc|joint_perc_scratch|advanced|...)}"
 
 # shellcheck source=/dev/null
 source "${ROOT}/scripts/vanilla_fm_env.sh"
@@ -67,10 +64,13 @@ if [[ -z "${RESUME_FROM_EPOCH:-}" ]]; then
 fi
 
 export RESUME_FROM_EPOCH
+export CONTINUE_TRAIN=1
 export EPOCH_COUNT="${EPOCH_COUNT:-$((RESUME_FROM_EPOCH + 1))}"
+_end=$((N_EPOCHS + N_EPOCHS_DECAY))
+
 if (( EPOCH_COUNT > _end )); then
-  echo "ERROR: EPOCH_COUNT=${EPOCH_COUNT} > ${_end} (training complete)" >&2
-  exit 1
+  echo "Training complete: ${TRAIN_NAME} @ epoch ${_end}"
+  exit 0
 fi
 
 if (( RESUME_FROM_EPOCH >= N_EPOCHS )); then
@@ -80,6 +80,6 @@ else
 fi
 
 vanilla_fm_print_train_env
-echo "===== resume scratch FM: ${TRAIN_NAME} load@${RESUME_FROM_EPOCH} train ${EPOCH_COUNT}..${_end} ====="
+echo "===== resume FM: ${TRAIN_NAME} load@${RESUME_FROM_EPOCH} train epochs ${EPOCH_COUNT}..${_end} (N_EPOCHS=${N_EPOCHS}+decay=${N_EPOCHS_DECAY}) ====="
 
 exec bash "${ROOT}/scripts/run_hemit_vanilla_fm.sh"

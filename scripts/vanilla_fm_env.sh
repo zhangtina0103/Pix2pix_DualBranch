@@ -139,7 +139,7 @@ vanilla_fm_apply_train_env() {
   export FM_CHANNELS="${FM_CHANNELS:-64,128,192}"
   # Attention at 1024² can request 100+ GiB; default off for HEMIT native train.
   export FM_ATTN="${FM_ATTN:-0,0,0}"
-  export BATCH_SIZE="${BATCH_SIZE:-1}"
+  # BATCH_SIZE: hemit_model_profiles.sh (vanilla_fm @512² → 4; @1024² → 1)
   export FM_RESBLOCKS="${FM_RESBLOCKS:-2}"
   export FM_NUM_HEAD_CHANNELS="${FM_NUM_HEAD_CHANNELS:-32}"
   export FM_LAMBDA_PERC="${FM_LAMBDA_PERC:-0.1}"

@@ -180,7 +180,13 @@ case "${MODEL}" in
     fi
     ;;
   cyclegan) BATCH_SIZE="${BATCH_SIZE:-4}" ;;
-  vanilla_fm) BATCH_SIZE="${BATCH_SIZE:-2}" ;;
+  vanilla_fm)
+    if [[ "${CROP_SIZE}" -ge 1024 ]]; then
+      BATCH_SIZE="${BATCH_SIZE:-1}"
+    else
+      BATCH_SIZE="${BATCH_SIZE:-4}"   # 512² ~930 steps/ep; OOM → BATCH_SIZE=2
+    fi
+    ;;
   *) BATCH_SIZE="${BATCH_SIZE:-2}" ;;
 esac
 PRETRAINED_EPOCH="${PRETRAINED_EPOCH:-20}"

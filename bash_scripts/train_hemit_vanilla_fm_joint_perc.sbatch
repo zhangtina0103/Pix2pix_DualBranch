@@ -27,7 +27,7 @@ source "${REPO_ROOT}/bash_scripts/_cuda.sh"
 export MODE=train
 export HEMIT_SRC="${HEMIT_SRC:-/home/zhangtin/HEMIT}"
 export DATAROOT="${DATAROOT:-./datasets/hemit}"
-export BATCH_SIZE=1
+# BATCH_SIZE from hemit_model_profiles (default 4 @ 512²). OOM: BATCH_SIZE=2 sbatch ...
 export DISPLAY_ID=-1
 
 source "${REPO_ROOT}/bash_scripts/_vanilla_fm_sbatch_preamble.sh"

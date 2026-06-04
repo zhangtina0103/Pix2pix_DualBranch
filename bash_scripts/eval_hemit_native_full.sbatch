@@ -29,7 +29,11 @@ export GPU_IDS=0
 
 # shellcheck source=/dev/null
 source "${REPO_ROOT}/scripts/hemit_model_profiles.sh"
-CKPT="${REPO_ROOT}/checkpoints/${TRAIN_NAME}/${TEST_EPOCH}_net_G.pth"
+if [[ "${MODEL}" == "cyclegan" ]]; then
+  CKPT="${REPO_ROOT}/checkpoints/${TRAIN_NAME}/${TEST_EPOCH}_net_G_A.pth"
+else
+  CKPT="${REPO_ROOT}/checkpoints/${TRAIN_NAME}/${TEST_EPOCH}_net_G.pth"
+fi
 echo "MODEL=${MODEL} TRAIN_NAME=${TRAIN_NAME} TEST_EPOCH=${TEST_EPOCH}"
 echo "checkpoint: ${CKPT}"
 [[ -f "${CKPT}" ]] || { echo "ERROR: missing checkpoint — train first"; exit 1; }

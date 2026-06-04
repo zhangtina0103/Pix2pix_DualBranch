@@ -29,11 +29,20 @@ ckpt_dir="${ROOT}/checkpoints/${TRAIN_NAME}"
 [[ -d "${ckpt_dir}" ]] || { echo "ERROR: missing ${ckpt_dir} — run train sbatch first" >&2; exit 1; }
 
 if [[ -z "${RESUME_FROM_EPOCH:-}" ]]; then
+  # pix2pix/cut/asp: N_net_G.pth — cyclegan: N_net_G_A.pth (and G_B, D_A, D_B)
   RESUME_FROM_EPOCH="$(
-    find "${ckpt_dir}" -maxdepth 1 -name '*_net_G.pth' ! -name 'latest_net_G.pth' -printf '%f\n' 2>/dev/null \
-      | sed -n 's/^\([0-9][0-9]*\)_net_G\.pth$/\1/p' | sort -n | tail -1
+    find "${ckpt_dir}" -maxdepth 1 -name '[0-9]*_net_*.pth' ! -name 'latest_*' -printf '%f\n' 2>/dev/null \
+      | sed -n 's/^\([0-9][0-9]*\)_net_.*\.pth$/\1/p' | sort -n | tail -1
   )"
-  [[ -n "${RESUME_FROM_EPOCH}" ]] || { echo "ERROR: no numbered checkpoint in ${ckpt_dir}" >&2; exit 1; }
+  if [[ -z "${RESUME_FROM_EPOCH}" && -f "${ckpt_dir}/latest_net_G_A.pth" ]]; then
+    echo "WARN: only latest_net_G_A.pth found — set RESUME_FROM_EPOCH=5 (or last save_epoch_freq) manually" >&2
+  fi
+  [[ -n "${RESUME_FROM_EPOCH}" ]] || {
+    echo "ERROR: no numbered checkpoint in ${ckpt_dir}" >&2
+    echo "  ls -la ${ckpt_dir}" >&2
+    echo "  CycleGAN saves 5_net_G_A.pth not 5_net_G.pth — train must reach save_epoch_freq (default 5)" >&2
+    exit 1
+  }
 fi
 
 export RESUME_FROM_EPOCH

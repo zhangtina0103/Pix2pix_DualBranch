@@ -43,7 +43,11 @@ esac
 
 export VANILLA_FM_ENV_LOCKED=1
 export CONTINUE_TRAIN=1
-export TRAIN_NAME="${TRAIN_NAME:?TRAIN_NAME unset after profile}"
+
+# shellcheck source=/dev/null
+source "${ROOT}/scripts/hemit_model_profiles.sh"
+export VANILLA_FM_EXPECTED_TRAIN_NAME="${TRAIN_NAME}"
+vanilla_fm_verify_locked_env
 
 ckpt_dir="${ROOT}/checkpoints/${TRAIN_NAME}"
 if [[ ! -d "${ckpt_dir}" ]]; then
@@ -75,9 +79,6 @@ else
   export TRAIN_LR="${TRAIN_LR:-0.0002}"
 fi
 
-# shellcheck source=/dev/null
-source "${ROOT}/scripts/hemit_model_profiles.sh"
-vanilla_fm_verify_locked_env
 vanilla_fm_print_train_env
 echo "===== resume scratch FM: ${TRAIN_NAME} load@${RESUME_FROM_EPOCH} train ${EPOCH_COUNT}..${_end} ====="
 

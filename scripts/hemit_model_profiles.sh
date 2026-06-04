@@ -156,10 +156,17 @@ HEMIT_TRAIN_SIZE="${HEMIT_TRAIN_SIZE:-512}"
 LOAD_SIZE="${LOAD_SIZE:-${HEMIT_TRAIN_SIZE}}"
 CROP_SIZE="${CROP_SIZE:-${HEMIT_TRAIN_SIZE}}"
 if [[ "${HEMIT_TRAIN_SIZE}" != "1024" ]]; then
-  TRAIN_NAME="${TRAIN_NAME}_${HEMIT_TRAIN_SIZE}"
-  PRETRAINED_NAME="${PRETRAINED_NAME}_${HEMIT_TRAIN_SIZE}"
+  if [[ "${TRAIN_NAME}" != *"_${HEMIT_TRAIN_SIZE}" ]]; then
+    TRAIN_NAME="${TRAIN_NAME}_${HEMIT_TRAIN_SIZE}"
+    PRETRAINED_NAME="${PRETRAINED_NAME}_${HEMIT_TRAIN_SIZE}"
+  fi
 fi
 export HEMIT_TRAIN_SIZE LOAD_SIZE CROP_SIZE
+
+# vanilla_fm_apply_* sets VANILLA_FM_EXPECTED_TRAIN_NAME before this suffix runs
+if [[ "${MODEL}" == "vanilla_fm" && "${VANILLA_FM_ENV_LOCKED:-0}" == "1" ]]; then
+  export VANILLA_FM_EXPECTED_TRAIN_NAME="${TRAIN_NAME}"
+fi
 
 # Per-model batch defaults (only if BATCH_SIZE unset on sbatch cmdline).
 case "${MODEL}" in

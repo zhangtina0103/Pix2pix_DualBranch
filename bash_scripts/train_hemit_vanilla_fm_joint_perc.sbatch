@@ -1,6 +1,6 @@
 #!/bin/bash
-# Vanilla FM joint_perc (x1 + perc 0.1) @ 1024² — same recipe you used before.
-# Checkpoint: hemit_vanilla_fm_joint_perc, epochs 1→80 (matches pix2pix baselines).
+# Vanilla FM joint_perc (x1 + perc 0.1) @ 512² (HEMIT_TRAIN_SIZE default).
+# Checkpoint: hemit_vanilla_fm_joint_perc_512, epochs 1→80.
 #
 #   export HEMIT_SRC=/home/zhangtin/HEMIT
 #   sbatch bash_scripts/prepare_hemit_full.sbatch

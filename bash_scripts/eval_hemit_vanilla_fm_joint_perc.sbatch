@@ -29,6 +29,11 @@ export DISPLAY_ID=-1
 source "${REPO_ROOT}/bash_scripts/_vanilla_fm_sbatch_preamble.sh"
 vanilla_fm_apply_joint_perc_env
 export VANILLA_FM_ENV_LOCKED=1
+export MODEL=vanilla_fm
+# shellcheck source=/dev/null
+source "${REPO_ROOT}/scripts/hemit_model_profiles.sh"
+export VANILLA_FM_EXPECTED_TRAIN_NAME="${TRAIN_NAME}"
+vanilla_fm_verify_locked_env
 vanilla_fm_print_train_env
 
 CKPT="${REPO_ROOT}/checkpoints/${TRAIN_NAME}/${TEST_EPOCH}_net_G.pth"

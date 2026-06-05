@@ -67,13 +67,12 @@ test_infer() {
   local ckpt="${DVST_EVAL_CKPT:-${DVST_CKPT}}"
   [[ -f "${ckpt}" ]] || die "missing checkpoint: ${ckpt}"
   # Patch checkpoint into generated yaml via env override in Python script
+  # Single-GPU eval: plain python (no DeepSpeed — avoids CUDA_HOME / op compile on cluster).
   (
     cd "${DVST_ROOT}"
+    export PYTHONPATH="${DVST_ROOT}:${PYTHONPATH:-}"
     DVST_EVAL_CKPT="${ckpt}" \
-    accelerate launch --config_file ./configs/accelerate_deepspeed.yaml \
-      --main_process_port "${MAIN_PROCESS_PORT:-29512}" \
-      --num_processes "${NUM_PROCESSES:-1}" \
-      eval.py --config "${EVAL_YAML}"
+    python eval.py --config "${EVAL_YAML}"
   )
 }
 

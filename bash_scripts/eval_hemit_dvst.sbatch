@@ -18,6 +18,7 @@ mkdir -p logs results/diffusion
 
 source /home/zhangtin/miniforge3/etc/profile.d/conda.sh
 conda activate "${CONDA_ENV:-D_VST}"
+source "${REPO_ROOT}/bash_scripts/_cuda.sh"
 
 export MODEL=dvst
 export MODE="test|metrics"

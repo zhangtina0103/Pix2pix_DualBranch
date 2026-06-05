@@ -225,6 +225,7 @@ train() {
     --save_epoch_freq "${SAVE_EPOCH_FREQ:-5}"
     "${extra[@]}"
   )
+  [[ -n "${MAX_DATASET_SIZE:-}" ]] && train_args+=(--max_dataset_size "${MAX_DATASET_SIZE}")
   case "${PY_MODEL}" in
     pix2pix|cut|asp) train_args+=(--lambda_L1 "${LAMBDA_L1:-100}") ;;
   esac

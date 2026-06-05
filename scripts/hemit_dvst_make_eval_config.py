@@ -72,7 +72,7 @@ def main() -> None:
         "model_type": "dvst_modules",
         "motion_module": "",
         "pretrained_model_path": "./weights/dvst_pretrained",
-        "pretrained_vae_path": "./weights/dvst_pretrained",
+        "pretrained_vae_path": "",
         "checkpoint_path": args.checkpoint or "./weights/dvst_pretrained/HE2mIHC.ckpt",
         "valid_seed": 42,
         "unet_additional_kwargs": {

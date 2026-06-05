@@ -66,6 +66,12 @@ test_infer() {
     --reference-mode "${DVST_REF_MODE:-paired_gt}"
   local ckpt="${DVST_EVAL_CKPT:-${DVST_CKPT}}"
   [[ -f "${ckpt}" ]] || die "missing checkpoint: ${ckpt}"
+  for req in \
+    "${DVST_ROOT}/weights/dvst_pretrained/transformer/config.json" \
+    "${DVST_ROOT}/weights/dvst_pretrained/vae/config.json" \
+    "${DVST_ROOT}/weights/dvst_pretrained/image_encoder/config.json"; do
+    [[ -f "${req}" ]] || die "missing D-VST weight: ${req} — run PixArt + CLIP hf downloads (see docs/HEMIT_diffusion_baselines.md)"
+  done
   # Patch checkpoint into generated yaml via env override in Python script
   # Single-GPU eval: plain python (no DeepSpeed — avoids CUDA_HOME / op compile on cluster).
   (

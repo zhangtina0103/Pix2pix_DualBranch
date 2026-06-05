@@ -95,6 +95,9 @@ def prepare_dvst(src_root: Path, dst_root: Path, use_symlink: bool, from_ab: boo
             slide = slide_id_from_name(name)
             link_or_copy(inp, dst_root / "HE" / slide / name, use_symlink)
             link_or_copy(lab, dst_root / "mIHC" / slide / name, use_symlink)
+            # Per-split input/label for eval (test-only metrics vs other baselines).
+            link_or_copy(inp, dst_root / split / "input" / name, use_symlink)
+            link_or_copy(lab, dst_root / split / "label" / name, use_symlink)
             n += 1
         print(f"  dvst {split}: {len(pairs)} pairs")
     return n

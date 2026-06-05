@@ -29,7 +29,7 @@ source "${REPO_ROOT}/bash_scripts/_vanilla_fm_sbatch_preamble.sh"
 source "${REPO_ROOT}/scripts/vanilla_fm_env.sh"
 vanilla_fm_apply_cond_light_scratch_env
 export VANILLA_FM_ENV_LOCKED=1
-python "${REPO_ROOT}/scripts/generate_hemit_seg_masks.py" --dataroot "${REPO_ROOT}/${DATAROOT}"
+hemit_maybe_generate_seg_masks "${DATAROOT}"
 vanilla_fm_print_train_env
 echo "Screen train → epoch $((N_EPOCHS + N_EPOCHS_DECAY)); then test with TEST_EPOCH=30 NUM_TEST=100"
 bash "${REPO_ROOT}/scripts/run_hemit_vanilla_fm.sh"

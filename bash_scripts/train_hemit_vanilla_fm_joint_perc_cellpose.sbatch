@@ -28,8 +28,7 @@ source "${REPO_ROOT}/bash_scripts/_vanilla_fm_sbatch_preamble.sh"
 source "${REPO_ROOT}/scripts/vanilla_fm_env.sh"
 vanilla_fm_apply_joint_perc_cellpose_env
 export VANILLA_FM_ENV_LOCKED=1
-python "${REPO_ROOT}/scripts/generate_hemit_seg_masks.py" \
-  --dataroot "${REPO_ROOT}/${DATAROOT}" --method cellpose --suffix _cellpose
+hemit_require_seg_masks "${DATAROOT}"
 source "${REPO_ROOT}/bash_scripts/_vanilla_fm_finetune_from_joint_perc.sh"
 vanilla_fm_finetune_from_joint_perc_80
 vanilla_fm_print_train_env

@@ -15,30 +15,54 @@ fi
 cd "$REPO_ROOT"
 export PYTHONUNBUFFERED=1
 
-# Skip generate_hemit_seg_masks.py when train/val/test Seg dirs match A counts.
-# FORCE_HEMIT_SEG=1 to always regenerate.
+# Seg masks: verify only in train/test jobs — never auto-regenerate.
+# One-time prep: python scripts/generate_hemit_seg_masks.py --dataroot ./datasets/hemit
+# Force regen:    FORCE_HEMIT_SEG=1 sbatch ...
 hemit_seg_masks_ready() {
   local dataroot="$1"
-  local split n_a n_seg
+  local suffix="${2:-${FM_SEG_SUFFIX:-}}"
+  local split n_a n_seg seg_dir
   for split in train val test; do
-    [[ -d "${dataroot}/${split}A" && -d "${dataroot}/${split}Seg" ]] || return 1
-    n_a=$(find "${dataroot}/${split}A" -maxdepth 1 -type f \
-      \( -iname '*.tif' -o -iname '*.tiff' -o -iname '*.png' \) 2>/dev/null | wc -l | tr -d ' ')
-    n_seg=$(find "${dataroot}/${split}Seg" -maxdepth 1 -type f 2>/dev/null | wc -l | tr -d ' ')
+    seg_dir="${dataroot}/${split}Seg${suffix}"
+    [[ -d "${dataroot}/${split}A" && -d "${seg_dir}" ]] || return 1
+    n_a=$(ls -1 "${dataroot}/${split}A" 2>/dev/null | wc -l | tr -d ' ')
+    n_seg=$(ls -1 "${seg_dir}" 2>/dev/null | wc -l | tr -d ' ')
     [[ "${n_a}" -gt 0 && "${n_seg}" -ge "${n_a}" ]] || return 1
   done
   return 0
 }
 
-hemit_maybe_generate_seg_masks() {
+hemit_require_seg_masks() {
   local dataroot="${1:-./datasets/hemit}"
+  local suffix="${2:-${FM_SEG_SUFFIX:-}}"
   dataroot="${REPO_ROOT}/${dataroot#./}"
+  local seg_label="Seg${suffix}"
   if [[ "${FORCE_HEMIT_SEG:-0}" == "1" ]]; then
-    echo "FORCE_HEMIT_SEG=1: regenerating seg masks"
-    python "${REPO_ROOT}/scripts/generate_hemit_seg_masks.py" --dataroot "${dataroot}"
-  elif hemit_seg_masks_ready "${dataroot}"; then
-    echo "Seg masks ready under ${dataroot} — skipping generate_hemit_seg_masks.py (FORCE_HEMIT_SEG=1 to regen)"
-  else
-    python "${REPO_ROOT}/scripts/generate_hemit_seg_masks.py" --dataroot "${dataroot}"
+    echo "FORCE_HEMIT_SEG=1: regenerating *${seg_label} under ${dataroot}"
+    local gen_args=(--dataroot "${dataroot}")
+    [[ -n "${suffix}" ]] && gen_args+=(--suffix "${suffix}")
+    [[ "${FM_SEG_METHOD:-}" == "cellpose" || "${suffix}" == "_cellpose" ]] && gen_args+=(--method cellpose)
+    python "${REPO_ROOT}/scripts/generate_hemit_seg_masks.py" "${gen_args[@]}"
+    return 0
   fi
+  if hemit_seg_masks_ready "${dataroot}" "${suffix}"; then
+    echo "Seg masks OK (${dataroot}, *${seg_label}): train/val/test match *A — no regeneration"
+    return 0
+  fi
+  echo "ERROR: seg masks missing or incomplete under ${dataroot} (*${seg_label})" >&2
+  echo "  Generate once:" >&2
+  echo "    python scripts/generate_hemit_seg_masks.py --dataroot ${dataroot}${suffix:+ --suffix ${suffix}}" >&2
+  echo "  Intentional regen only: FORCE_HEMIT_SEG=1 sbatch ..." >&2
+  for split in train val test; do
+    local n_a n_seg
+    n_a=$(ls -1 "${dataroot}/${split}A" 2>/dev/null | wc -l | tr -d ' ')
+    n_seg=$(ls -1 "${dataroot}/${split}Seg${suffix}" 2>/dev/null | wc -l | tr -d ' ')
+    echo "    ${split}: A=${n_a}  ${seg_label}=${n_seg}" >&2
+  done
+  exit 1
+}
+
+# Deprecated alias — same as hemit_require_seg_masks (never auto-regenerates).
+hemit_maybe_generate_seg_masks() {
+  hemit_require_seg_masks "$@"
 }

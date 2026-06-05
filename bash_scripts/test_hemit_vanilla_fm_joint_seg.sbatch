@@ -31,7 +31,7 @@ source "${REPO_ROOT}/bash_scripts/_vanilla_fm_sbatch_preamble.sh"
 source "${REPO_ROOT}/scripts/vanilla_fm_env.sh"
 vanilla_fm_apply_joint_seg_env
 export VANILLA_FM_ENV_LOCKED=1
-python "${REPO_ROOT}/scripts/generate_hemit_seg_masks.py" --dataroot "${REPO_ROOT}/${DATAROOT}"
+hemit_require_seg_masks "${DATAROOT}"
 [[ -f "${REPO_ROOT}/checkpoints/${TRAIN_NAME}/${TEST_EPOCH}_net_G.pth" ]] || {
   echo "ERROR: train joint_seg first" >&2
   exit 1

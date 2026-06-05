@@ -21,7 +21,8 @@ source "${REPO_ROOT}/bash_scripts/_cuda.sh"
 
 export MODEL=vanilla_fm MODE=train
 export DATAROOT="${DATAROOT:-./datasets/hemit}"
-export BATCH_SIZE=1 DISPLAY_ID=-1
+export DISPLAY_ID=-1 NUM_THREADS=8
+export BATCH_SIZE="${BATCH_SIZE:-4}"
 export N_EPOCHS=25
 export N_EPOCHS_DECAY=5
 
@@ -29,6 +30,6 @@ source "${REPO_ROOT}/bash_scripts/_vanilla_fm_sbatch_preamble.sh"
 source "${REPO_ROOT}/scripts/vanilla_fm_env.sh"
 vanilla_fm_apply_cond_consistent_v2_env
 export VANILLA_FM_ENV_LOCKED=1
-hemit_maybe_generate_seg_masks "${DATAROOT}"
+hemit_require_seg_masks "${DATAROOT}"
 vanilla_fm_print_train_env
 bash "${REPO_ROOT}/scripts/run_hemit_vanilla_fm.sh"

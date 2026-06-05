@@ -31,6 +31,10 @@ source "${REPO_ROOT}/bash_scripts/_vanilla_fm_sbatch_preamble.sh"
 source "${REPO_ROOT}/scripts/vanilla_fm_env.sh"
 vanilla_fm_apply_cond_seg_only_scratch_env
 export VANILLA_FM_ENV_LOCKED=1
+export MODEL=vanilla_fm
+source "${REPO_ROOT}/scripts/hemit_model_profiles.sh"
+export VANILLA_FM_EXPECTED_TRAIN_NAME="${TRAIN_NAME}"
+vanilla_fm_verify_locked_env
 hemit_require_seg_masks "${DATAROOT}"
 CKPT_G="${REPO_ROOT}/checkpoints/${TRAIN_NAME}/${TEST_EPOCH}_net_G.pth"
 [[ -f "${CKPT_G}" ]] || {

@@ -6,6 +6,8 @@
 #
 #   B) hemit/ flow matching only: MODEL=fm | fm_plus
 #
+#   C) External diffusion repos: MODEL=diffvs | dvst
+#
 # Examples:
 #   MODEL=dualbranch MODE=all bash scripts/run_hemit_all.sh
 #   MODEL=cut MODE=train|test|metrics bash scripts/run_hemit_all.sh
@@ -39,6 +41,13 @@ is_hemit_fm() {
   esac
 }
 
+is_diffusion() {
+  case "${MODEL}" in
+    diffvs|dvst) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 run_hemit_comparison() {
   export MODEL
   case "$1" in
@@ -62,7 +71,9 @@ run_hemit_comparison() {
 }
 
 echo "===== HEMIT  MODEL=${MODEL}  MODE=${MODE} ====="
-if is_native; then
+if is_diffusion; then
+  echo "Diffusion backend: ${MODEL} (see docs/HEMIT_diffusion_baselines.md)"
+elif is_native; then
   # shellcheck source=/dev/null
   source "${ROOT}/scripts/hemit_model_profiles.sh"
   if [[ "${MODEL}" == "vanilla_fm" ]]; then
@@ -89,8 +100,16 @@ elif is_native; then
 elif is_hemit_fm; then
   IFS='|' read -r -a _modes <<< "${MODE}"
   for m in "${_modes[@]}"; do run_hemit_comparison "${m}"; done
+elif is_diffusion; then
+  IFS='|' read -r -a _modes <<< "${MODE}"
+  for _m in "${_modes[@]}"; do
+    case "${MODEL}" in
+      diffvs) MODE="${_m}" bash "${ROOT}/scripts/run_hemit_diffvs.sh" ;;
+      dvst) MODE="${_m}" bash "${ROOT}/scripts/run_hemit_dvst.sh" ;;
+    esac
+  done
 else
-  die "Unknown MODEL=${MODEL}. Native: dualbranch|pix2pix|cut|asp|cyclegan|...  FM: fm|fm_plus"
+  die "Unknown MODEL=${MODEL}. Native: dualbranch|pix2pix|cut|asp|cyclegan|...  FM: fm|fm_plus  Diffusion: diffvs|dvst"
 fi
 
 echo "Done."

@@ -23,9 +23,10 @@ STAGE2_YAML="${DVST_CONFIG_DIR}/train2_HEMIT.yaml"
 EVAL_YAML="${DVST_CONFIG_DIR}/infer_HEMIT_test.yaml"
 
 prepare() {
-  echo "==> [dvst] prepare data → ${DVST_DATA_ROOT}"
+  echo "==> [dvst] prepare data → ${DVST_DATA_ROOT} @ ${IMAGE_SIZE}²"
   python scripts/prepare_hemit_for_diffusion.py \
-    --src "${HEMIT_SRC}" --format dvst --dst "${DVST_DATA_ROOT}"
+    --src "${HEMIT_SRC}" --format dvst --dst "${DVST_DATA_ROOT}" \
+    --resize "${IMAGE_SIZE}"
   mkdir -p "${DVST_ROOT}/data"
   ln -sfn "${DVST_DATA_ROOT}" "${DVST_ROOT}/data/HEMIT"
   echo "Linked ${DVST_ROOT}/data/HEMIT → ${DVST_DATA_ROOT}"
@@ -89,7 +90,8 @@ metrics() {
       --src "${HEMIT_SRC}" --format diffvs --dst "${DIFFVS_DATA_ROOT}"
   fi
   local gt_root="${DIFFVS_DATA_ROOT}"
-  [[ -d "${HEMIT_SRC}/test/label" ]] && gt_root="${HEMIT_SRC}"
+  [[ -d "${DVST_DATA_ROOT}/test/label" ]] && gt_root="${DVST_DATA_ROOT}"
+  [[ -d "${HEMIT_SRC}/test/label" && ! -d "${DVST_DATA_ROOT}/test/label" ]] && gt_root="${HEMIT_SRC}"
   python "${ROOT}/scripts/hemit_dvst_export_metrics.py" \
     --dvst-root "${DVST_ROOT}" \
     --pix2pix-root "${ROOT}" \

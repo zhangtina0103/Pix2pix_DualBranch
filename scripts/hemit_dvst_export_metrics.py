@@ -4,13 +4,16 @@
 from __future__ import annotations
 
 import argparse
-import glob
 import os
+import re
 from pathlib import Path
 
 import numpy as np
 from PIL import Image
 from skimage.io import imread
+
+# eval.py: {source_name}_{pose_name}-2026-06-04T22-02-59.png
+_TIMESTAMP_SUFFIX = re.compile(r"-\d{4}-\d{2}-\d{2}T[\d-]+$")
 
 
 def load_rgb(path: Path) -> np.ndarray:
@@ -40,16 +43,31 @@ def latest_sample_dir(dvst_root: Path) -> Path:
     return sample_dirs[-1]
 
 
-def gt_path_for_pose(pose_path: Path, data_root: Path, split: str) -> Path | None:
-    name = pose_path.name
-    lab = data_root / split / "label" / name
-    if lab.is_file():
-        return lab
-    stem = pose_path.stem
-    for ext in (".tif", ".tiff", ".png"):
-        p = data_root / split / "label" / (stem + ext)
-        if p.is_file():
-            return p
+def pose_stem_from_png(stem: str) -> str | None:
+    """Recover HE patch stem from D-VST eval PNG name."""
+    base = _TIMESTAMP_SUFFIX.sub("", stem)
+    # HEMIT paired_gt: source_name == pose_name → "{name}_{name}"
+    n = len(base)
+    for i in range(1, n):
+        if base[i] != "_":
+            continue
+        left, right = base[:i], base[i + 1 :]
+        if left == right:
+            return left
+    # Different source/pose: pose (HE) is the suffix after the last underscore block
+    if "_" in base:
+        return base.rsplit("_", 1)[-1]
+    return base or None
+
+
+def gt_for_png(stem: str, labels: dict[str, Path]) -> Path | None:
+    pose = pose_stem_from_png(stem)
+    if pose and pose in labels:
+        return labels[pose]
+    base = _TIMESTAMP_SUFFIX.sub("", stem)
+    for lab_stem, path in labels.items():
+        if base == f"{lab_stem}_{lab_stem}":
+            return path
     return None
 
 
@@ -71,22 +89,20 @@ def main() -> None:
     sample_dir = Path(args.sample_dir).resolve() if args.sample_dir else latest_sample_dir(dvst_root)
     print(f"Using samples: {sample_dir}")
 
+    label_dir = data_root / args.split / "label"
+    labels = {p.stem: p for p in label_dir.glob("*") if p.is_file()}
+    if not labels:
+        raise SystemExit(f"No labels under {label_dir}")
+
     pngs = sorted(sample_dir.glob("*.png"))
     n = 0
+    skipped = 0
     for pred_png in pngs:
-        # eval.py saves {source_name}_{pose_name}-timestamp.png
-        base = pred_png.stem.split("-")[0]
-        if "_" not in base:
-            continue
-        pose_name = base.rsplit("_", 1)[-1]
-        # Find matching GT by scanning test/label
-        gt = None
-        for lab in (data_root / args.split / "label").glob("*"):
-            if lab.stem == pose_name or pose_name in lab.stem:
-                gt = lab
-                break
+        gt = gt_for_png(pred_png.stem, labels)
         if gt is None:
-            print(f"[warn] no GT for {pred_png.name}")
+            skipped += 1
+            if skipped <= 5:
+                print(f"[warn] no GT for {pred_png.name} (parsed pose={pose_stem_from_png(pred_png.stem)!r})")
             continue
         stem = gt.stem
         fake = load_rgb(pred_png)
@@ -97,7 +113,9 @@ def main() -> None:
         Image.fromarray(real).save(out_dir / f"{stem}_real_B.tif")
         Image.fromarray(fake).save(out_dir / f"{stem}_fake_B.tif")
         n += 1
-    print(f"Exported {n} pairs → {out_dir}")
+    if skipped > 5:
+        print(f"[warn] ... and {skipped - 5} more PNGs without GT match")
+    print(f"Exported {n}/{len(pngs)} pairs → {out_dir}")
 
 
 if __name__ == "__main__":

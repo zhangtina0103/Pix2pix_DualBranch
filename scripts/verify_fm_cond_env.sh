@@ -22,7 +22,8 @@ case "${PROFILE}" in
   seg_only) vanilla_fm_apply_cond_seg_only_env ;;
   consistent|opt) vanilla_fm_apply_cond_consistent_env ;;
   consistent_scratch) vanilla_fm_apply_cond_consistent_scratch_env ;;
-  consistent_v2) vanilla_fm_apply_cond_consistent_v2_env ;;
+  consistent_v2|v2) vanilla_fm_apply_cond_consistent_v2_env ;;
+  light|cond_light) vanilla_fm_apply_cond_light_scratch_env ;;
   cellpose|mentor_cellpose) vanilla_fm_apply_joint_perc_cellpose_env ;;
   patchnce|mentor_patchnce) vanilla_fm_apply_joint_perc_patchnce_env ;;
   res3|mentor_res3) vanilla_fm_apply_joint_perc_res3_env ;;

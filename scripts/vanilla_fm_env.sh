@@ -105,6 +105,14 @@ vanilla_fm_verify_cond_profile() {
       [[ "${FM_HE_PROJ_INIT:-gray}" == "gray" ]] || _fm_cond_fail "FM_HE_PROJ_INIT must be gray"
       [[ "${FM_LAMBDA_SAMPLE_L1:-0}" != "0" ]] || _fm_cond_fail "FM_LAMBDA_SAMPLE_L1 required (train/test consistency)"
       ;;
+    seg_init_scratch)
+      [[ "${FM_USE_SEG:-0}" == "1" ]] || _fm_cond_fail "FM_USE_SEG=1 required"
+      [[ "${DATASET_MODE:-}" == "aligned_cond" ]] || _fm_cond_fail "DATASET_MODE=aligned_cond required"
+      [[ "${FM_FLOW_PATH:-noise}" == "noise" ]] || _fm_cond_fail "FM_FLOW_PATH must be noise"
+      [[ "${FM_INIT_FROM_COND:-0}" == "1" ]] || _fm_cond_fail "FM_INIT_FROM_COND=1 required"
+      [[ "${FM_HE_PROJ_INIT:-gray}" == "gray" ]] || _fm_cond_fail "FM_HE_PROJ_INIT must be gray"
+      [[ "${FM_LAMBDA_SAMPLE_L1:-0}" == "0" ]] || _fm_cond_fail "FM_LAMBDA_SAMPLE_L1 must be 0 (no ODE-aux)"
+      ;;
     advanced|advanced_scratch|advanced_ode)
       [[ "${FM_USE_SEG:-0}" == "1" ]] || _fm_cond_fail "FM_USE_SEG=1 required"
       [[ "${DATASET_MODE:-}" == "aligned_cond" ]] || _fm_cond_fail "DATASET_MODE=aligned_cond required"
@@ -468,6 +476,25 @@ vanilla_fm_apply_cond_light_scratch_env() {
   unset FM_USE_CFG FM_USE_FILM FM_USE_GAN FM_USE_ODE_TRAIN
   vanilla_fm_apply_fm_scratch_schedule
   echo "cond_light_scratch: seg+init, ODE-aux 4-step p=0.2 (fast cond)" >&2
+}
+
+# seg + informed init @ test, no ODE-aux — joint_perc train speed, portable cond.
+vanilla_fm_apply_cond_seg_init_scratch_env() {
+  vanilla_fm_apply_joint_perc_pins
+  export TRAIN_NAME=hemit_cond_fm_seg_init_scratch
+  export VANILLA_FM_EXPECTED_TRAIN_NAME="${TRAIN_NAME}"
+  export VANILLA_FM_COND_PROFILE=seg_init_scratch
+  export DATASET_MODE=aligned_cond
+  export FM_USE_SEG=1
+  export FM_FLOW_PATH=noise
+  export FM_INIT_FROM_COND=1
+  export FM_HE_PROJ_INIT=gray
+  export FM_INIT_NOISE_SIGMA=0.55
+  export FM_LAMBDA_SAMPLE_L1=0
+  unset FM_SAMPLE_L1_PROB FM_TRAIN_SAMPLE_STEPS FM_TRAIN_SAMPLE_METHOD
+  unset FM_USE_CFG FM_USE_FILM FM_USE_GAN FM_USE_ODE_TRAIN
+  vanilla_fm_apply_fm_scratch_schedule
+  echo "cond_seg_init_scratch: seg+init, no ODE-aux (joint_perc speed)" >&2
 }
 
 # Flagship: tri-head + multi-scale H&E cross-attn + seg + informed init + light ODE-aux.

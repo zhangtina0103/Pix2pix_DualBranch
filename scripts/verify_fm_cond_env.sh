@@ -20,6 +20,7 @@ case "${PROFILE}" in
   init_cond) vanilla_fm_apply_joint_init_cond_env ;;
   init_only) vanilla_fm_apply_cond_init_only_env ;;
   seg_only) vanilla_fm_apply_cond_seg_only_env ;;
+  seg_only_scratch) vanilla_fm_apply_cond_seg_only_scratch_env ;;
   consistent|opt) vanilla_fm_apply_cond_consistent_env ;;
   consistent_scratch) vanilla_fm_apply_cond_consistent_scratch_env ;;
   consistent_v2|v2) vanilla_fm_apply_cond_consistent_v2_env ;;

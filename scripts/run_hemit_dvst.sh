@@ -23,16 +23,25 @@ STAGE2_YAML="${DVST_CONFIG_DIR}/train2_HEMIT.yaml"
 EVAL_YAML="${DVST_CONFIG_DIR}/infer_HEMIT_test.yaml"
 
 prepare() {
-  echo "==> [dvst] prepare data → ${DVST_DATA_ROOT} @ ${IMAGE_SIZE}²"
-  python scripts/prepare_hemit_for_diffusion.py \
-    --src "${HEMIT_SRC}" --format dvst --dst "${DVST_DATA_ROOT}" \
-    --resize "${IMAGE_SIZE}"
+  local splits="${DVST_PREPARE_SPLITS:-test}"
+  local eval_only="${DVST_EVAL_PREPARE_ONLY:-1}"
+  echo "==> [dvst] prepare data → ${DVST_DATA_ROOT} @ ${IMAGE_SIZE}² (splits=${splits})"
+  local prep_args=(
+    --src "${HEMIT_SRC}" --format dvst --dst "${DVST_DATA_ROOT}"
+    --resize "${IMAGE_SIZE}" --splits "${splits}"
+  )
+  if [[ "${eval_only}" == "1" && "${splits}" == "test" ]]; then
+    prep_args+=(--eval-only)
+  fi
+  python scripts/prepare_hemit_for_diffusion.py "${prep_args[@]}"
   mkdir -p "${DVST_ROOT}/data"
   ln -sfn "${DVST_DATA_ROOT}" "${DVST_ROOT}/data/HEMIT"
   echo "Linked ${DVST_ROOT}/data/HEMIT → ${DVST_DATA_ROOT}"
 }
 
 train() {
+  DVST_PREPARE_SPLITS="${DVST_PREPARE_SPLITS:-train,val,test}"
+  DVST_EVAL_PREPARE_ONLY=0
   prepare
   [[ -f "${STAGE1_YAML}" ]] || die "missing ${STAGE1_YAML}"
   echo "==> [dvst] stage-1 (full DiT) from ${DVST_CKPT:-PixArt init}"

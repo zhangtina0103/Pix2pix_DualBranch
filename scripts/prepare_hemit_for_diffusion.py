@@ -47,7 +47,8 @@ def materialize_image(src: Path, dst: Path, use_symlink: bool, resize_to: int | 
         img = img.resize((resize_to, resize_to), Image.BICUBIC)
     suffix = dst.suffix.lower()
     if suffix in (".tif", ".tiff"):
-        img.save(dst, compression="tiff_lzw")
+        # Uncompressed TIFF — faster prep; metrics export rewrites anyway.
+        img.save(dst, compression="raw")
     else:
         img.save(dst)
 
@@ -93,34 +94,47 @@ def iter_pairs(src_root: Path, split: str, from_ab: bool) -> list[tuple[Path, Pa
 
 
 def prepare_diffvs(
-    src_root: Path, dst_root: Path, use_symlink: bool, from_ab: bool, resize_to: int | None
+    src_root: Path,
+    dst_root: Path,
+    use_symlink: bool,
+    from_ab: bool,
+    resize_to: int | None,
+    splits: tuple[str, ...],
 ) -> int:
     n = 0
-    for split in ("train", "val", "test"):
+    for split in splits:
         pairs = iter_pairs(src_root, split, from_ab)
         for inp, lab, name in pairs:
             link_or_copy(inp, dst_root / split / "input" / name, use_symlink, resize_to)
             link_or_copy(lab, dst_root / split / "label" / name, use_symlink, resize_to)
             n += 1
-        print(f"  diffvs {split}: {len(pairs)} pairs")
+        print(f"  diffvs {split}: {len(pairs)} pairs", flush=True)
     return n
 
 
 def prepare_dvst(
-    src_root: Path, dst_root: Path, use_symlink: bool, from_ab: bool, resize_to: int | None
+    src_root: Path,
+    dst_root: Path,
+    use_symlink: bool,
+    from_ab: bool,
+    resize_to: int | None,
+    splits: tuple[str, ...],
+    eval_only: bool,
 ) -> int:
     n = 0
-    for split in ("train", "val", "test"):
+    for split in splits:
         pairs = iter_pairs(src_root, split, from_ab)
-        for inp, lab, name in pairs:
-            slide = slide_id_from_name(name)
-            link_or_copy(inp, dst_root / "HE" / slide / name, use_symlink, resize_to)
-            link_or_copy(lab, dst_root / "mIHC" / slide / name, use_symlink, resize_to)
-            # Per-split input/label for eval (test-only metrics vs other baselines).
+        for i, (inp, lab, name) in enumerate(pairs, start=1):
+            if not eval_only:
+                slide = slide_id_from_name(name)
+                link_or_copy(inp, dst_root / "HE" / slide / name, use_symlink, resize_to)
+                link_or_copy(lab, dst_root / "mIHC" / slide / name, use_symlink, resize_to)
             link_or_copy(inp, dst_root / split / "input" / name, use_symlink, resize_to)
             link_or_copy(lab, dst_root / split / "label" / name, use_symlink, resize_to)
-            n += 1
-        print(f"  dvst {split}: {len(pairs)} pairs")
+            if resize_to and i % 100 == 0:
+                print(f"  dvst {split}: {i}/{len(pairs)} ...", flush=True)
+        print(f"  dvst {split}: {len(pairs)} pairs", flush=True)
+        n += len(pairs)
     return n
 
 
@@ -138,24 +152,40 @@ def main() -> None:
         metavar="N",
         help="Bicubic resize all patches to NxN (for 512² eval vs pix2pix baselines)",
     )
+    p.add_argument(
+        "--splits",
+        type=str,
+        default="train,val,test",
+        help="Comma-separated splits to prepare (e.g. test for zero-shot eval only)",
+    )
+    p.add_argument(
+        "--eval-only",
+        action="store_true",
+        help="D-VST: only write {split}/input|label (skip HE/mIHC train layout)",
+    )
     args = p.parse_args()
+
+    splits = tuple(s.strip() for s in args.splits.split(",") if s.strip())
+    if not splits:
+        raise SystemExit("No splits specified")
 
     src = Path(args.src).expanduser().resolve()
     use_symlink = not args.copy and args.resize is None
     if args.resize:
-        print(f"Resizing patches to {args.resize}x{args.resize} (bicubic)")
+        print(f"Resizing patches to {args.resize}x{args.resize} (bicubic)", flush=True)
+    print(f"Splits: {', '.join(splits)}", flush=True)
 
     if args.format in ("diffvs", "both"):
         dst = Path(args.dst or "./datasets/hemit_diffvs").expanduser().resolve()
-        print(f"DiffVS → {dst}")
-        prepare_diffvs(src, dst, use_symlink, args.from_ab, args.resize)
+        print(f"DiffVS → {dst}", flush=True)
+        prepare_diffvs(src, dst, use_symlink, args.from_ab, args.resize, splits)
 
     if args.format in ("dvst", "both"):
         dst = Path(args.dst or "./datasets/hemit_dvst").expanduser().resolve()
         if args.format == "both" and args.dst:
             dst = dst.parent / "hemit_dvst"
-        print(f"D-VST → {dst}")
-        prepare_dvst(src, dst, use_symlink, args.from_ab, args.resize)
+        print(f"D-VST → {dst}", flush=True)
+        prepare_dvst(src, dst, use_symlink, args.from_ab, args.resize, splits, args.eval_only)
 
     print("Done.")
 

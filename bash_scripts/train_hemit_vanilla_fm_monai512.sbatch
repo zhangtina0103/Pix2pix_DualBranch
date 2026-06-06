@@ -1,5 +1,5 @@
 #!/bin/bash
-# MONAI UNet @ 512² + mid attention — noise path only, scratch 1→130 (backbone ablation vs custom joint_perc).
+# MONAI UNet @ 512² + mid attention — noise path only, scratch 1→130 (6h chunks).
 #
 #   sbatch bash_scripts/train_hemit_vanilla_fm_monai512.sbatch
 # Resume (6h chunks; keep BATCH_SIZE=2 for MONAI attn):
@@ -16,7 +16,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
-#SBATCH --time=24:00:00
+#SBATCH --time=06:00:00
 
 set -euo pipefail
 source "${SLURM_SUBMIT_DIR:-$PWD}/bash_scripts/_common.sh"

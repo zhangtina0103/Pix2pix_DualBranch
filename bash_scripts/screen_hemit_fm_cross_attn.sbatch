@@ -1,11 +1,13 @@
 #!/bin/bash
-# Ablation: H&E cross-attn only (single head). Scratch 1→130.
-#   sbatch bash_scripts/train_hemit_fm_cross_attn_scratch.sbatch
-# Speed: BATCH_SIZE=4 @ 512² (~8–10 min/ep). OOM → BATCH_SIZE=2 + unset FM_CROSS_ATTN_DECODER
-# Fast screen: sbatch bash_scripts/screen_hemit_fm_cross_attn.sbatch
-#SBATCH --job-name=hemit_xattn
-#SBATCH --output=logs/hemit_fm_cross_attn_scratch_%j.out
-#SBATCH --error=logs/hemit_fm_cross_attn_scratch_%j.err
+# Screen: cross-attn scratch 30 epochs @ 512² bs=4 (~8–10 min/ep).
+# Bottleneck cross-attn only (no decoder MHA) — fits L40S without bs=1.
+#
+#   sbatch bash_scripts/screen_hemit_fm_cross_attn.sbatch
+#   export TEST_EPOCH=30 && sbatch bash_scripts/test_hemit_fm_cross_attn_scratch.sbatch
+# OOM → export BATCH_SIZE=2 before sbatch (expect ~14–16 min/ep)
+#SBATCH --job-name=hemit_xattn_sc
+#SBATCH --output=logs/hemit_fm_cross_attn_screen_%j.out
+#SBATCH --error=logs/hemit_fm_cross_attn_screen_%j.err
 #SBATCH --partition=mit_normal_gpu
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
@@ -21,13 +23,17 @@ source "${REPO_ROOT}/bash_scripts/_cuda.sh"
 
 export MODEL=vanilla_fm MODE=train
 export DATAROOT="${DATAROOT:-./datasets/hemit}"
-export HEMIT_TRAIN_SIZE="${HEMIT_TRAIN_SIZE:-512}"
+export HEMIT_TRAIN_SIZE=512
 export BATCH_SIZE="${BATCH_SIZE:-4}"
+export FM_CROSS_ATTN_HEADS="${FM_CROSS_ATTN_HEADS:-4}"
 export DISPLAY_ID=-1
+export N_EPOCHS=25
+export N_EPOCHS_DECAY=5
 
 source "${REPO_ROOT}/bash_scripts/_vanilla_fm_sbatch_preamble.sh"
 source "${REPO_ROOT}/scripts/vanilla_fm_env.sh"
 vanilla_fm_apply_fm_cross_attn_scratch_env
+unset FM_CROSS_ATTN_DECODER
 export VANILLA_FM_ENV_LOCKED=1
 vanilla_fm_print_train_env
 bash "${REPO_ROOT}/scripts/run_hemit_vanilla_fm.sh"

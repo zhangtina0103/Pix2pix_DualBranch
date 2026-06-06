@@ -707,7 +707,7 @@ vanilla_fm_apply_monai512_env() {
   export VANILLA_FM_COND_PROFILE=monai512
   export FM_BACKBONE=monai
   export FM_CHANNELS=64,128,192
-  export FM_ATTN=0,0,1
+  export FM_ATTN=0,0,0
   export FM_CROP_SIZE=512
   export FM_LAMBDA_PERC=0.1
   export FM_CHANNEL_WEIGHTS=1,1,1
@@ -720,7 +720,7 @@ vanilla_fm_apply_monai512_env() {
   unset FM_USE_SEG FM_USE_PATCHNCE FM_INIT_FROM_COND
   export BATCH_SIZE="${BATCH_SIZE:-1}"
   vanilla_fm_apply_fm_scratch_schedule
-  echo "mentor_monai512: MONAI UNet 512² + attn level 2, bs=1 (attn OOM @ bs≥2), scratch 1→130" >&2
+  echo "mentor_monai512: MONAI UNet 512² attn=0,0,0 (mid-block only; 128² attn OOMs), bs=1, scratch 1→130" >&2
 }
 
 # Shared joint_perc recipe (baseline checkpoint hemit_vanilla_fm_joint_perc/80).

@@ -89,6 +89,10 @@ def _diffusion_unet_kwargs(
         raise TypeError(
             f"{unet_cls.__module__}.{unet_cls.__name__} has no channels/num_channels argument"
         )
+    if "use_flash_attention" in params:
+        kw["use_flash_attention"] = True
+    if "use_checkpoint" in params:
+        kw["use_checkpoint"] = True
     return kw
 
 

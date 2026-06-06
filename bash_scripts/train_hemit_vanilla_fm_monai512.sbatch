@@ -1,5 +1,6 @@
 #!/bin/bash
-# MONAI UNet @ 512² + mid attention — noise path only, scratch 1→130 (6h chunks).
+# MONAI UNet @ 512² — noise path, scratch 1→130 (6h chunks).
+# FM_ATTN=0,0,0: skip 128² self-attn (OOM on L40S); MONAI middle-block attn @ 64² remains.
 #
 #   sbatch bash_scripts/train_hemit_vanilla_fm_monai512.sbatch
 # Resume (6h chunks; keep BATCH_SIZE=1 — bs=2 OOMs on MONAI attn @ 512²):

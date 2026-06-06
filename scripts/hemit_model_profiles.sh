@@ -183,6 +183,8 @@ case "${MODEL}" in
   vanilla_fm)
     if [[ "${CROP_SIZE}" -ge 1024 ]]; then
       BATCH_SIZE="${BATCH_SIZE:-1}"
+    elif [[ "${FM_BACKBONE:-custom}" == "monai" ]]; then
+      BATCH_SIZE="${BATCH_SIZE:-1}"   # MONAI self-attn @ 512²; bs=2 OOMs on L40S
     else
       BATCH_SIZE="${BATCH_SIZE:-4}"   # 512² ~930 steps/ep; OOM → BATCH_SIZE=2
     fi

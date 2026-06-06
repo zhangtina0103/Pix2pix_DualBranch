@@ -2,9 +2,9 @@
 # MONAI UNet @ 512² + mid attention — noise path only, scratch 1→130 (6h chunks).
 #
 #   sbatch bash_scripts/train_hemit_vanilla_fm_monai512.sbatch
-# Resume (6h chunks; keep BATCH_SIZE=2 for MONAI attn):
+# Resume (6h chunks; keep BATCH_SIZE=1 — bs=2 OOMs on MONAI attn @ 512²):
 #   unset RESUME_FROM_EPOCH EPOCH_COUNT
-#   export RESUME_PROFILE=monai512 BATCH_SIZE=2
+#   export RESUME_PROFILE=monai512 BATCH_SIZE=1
 #   sbatch bash_scripts/resume_hemit_fm_scratch.sbatch
 # Eval @ 945:
 #   export TEST_EPOCH=130
@@ -28,7 +28,7 @@ source "${REPO_ROOT}/bash_scripts/_cuda.sh"
 export MODEL=vanilla_fm
 export MODE=train
 export DATAROOT="${DATAROOT:-./datasets/hemit}"
-export BATCH_SIZE="${BATCH_SIZE:-2}"
+export BATCH_SIZE="${BATCH_SIZE:-1}"
 export DISPLAY_ID=-1
 export NUM_THREADS=8
 

@@ -718,8 +718,9 @@ vanilla_fm_apply_monai512_env() {
   export FM_LAMBDA_L1=0
   export FM_LAMBDA_SAMPLE_L1=0
   unset FM_USE_SEG FM_USE_PATCHNCE FM_INIT_FROM_COND
+  export BATCH_SIZE="${BATCH_SIZE:-1}"
   vanilla_fm_apply_fm_scratch_schedule
-  echo "mentor_monai512: MONAI UNet 512² + attn level 2, scratch 1→130 (same loss as joint_perc)" >&2
+  echo "mentor_monai512: MONAI UNet 512² + attn level 2, bs=1 (attn OOM @ bs≥2), scratch 1→130" >&2
 }
 
 # Shared joint_perc recipe (baseline checkpoint hemit_vanilla_fm_joint_perc/80).

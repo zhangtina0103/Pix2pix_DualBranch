@@ -33,6 +33,25 @@ print('OK: generative DiffusionModelUNet + monai PerceptualLoss')
 echo "==> optional: LPIPS perceptual (if monai PerceptualLoss missing)"
 pip install --no-cache-dir "lpips>=0.1.4" || true
 
+echo "==> optional: xformers (MONAI use_flash_attention; must match torch/CUDA)"
+TORCH_VER="$("${PY}" -c "import torch; print('.'.join(torch.__version__.split('.')[:2]))")"
+case "${TORCH_VER}" in
+  2.0) XFORMERS_VER="0.0.22" ;;
+  2.1) XFORMERS_VER="0.0.23.post1" ;;
+  2.2) XFORMERS_VER="0.0.25.post1" ;;
+  *)
+    echo "WARN: no pinned xformers wheel for torch ${TORCH_VER}; skip or pick version manually" >&2
+    XFORMERS_VER=""
+    ;;
+esac
+if [[ -n "${XFORMERS_VER}" ]]; then
+  if ! "${PY}" -c "import xformers" 2>/dev/null; then
+    pip install --no-cache-dir "xformers==${XFORMERS_VER}" || \
+      echo "WARN: xformers install failed — MONAI falls back to use_flash_attention=False" >&2
+  fi
+  "${PY}" -c "import xformers; print('xformers', xformers.__version__)" 2>/dev/null || true
+fi
+
 echo ""
-echo "Done. Train with: sbatch bash_scripts/train_hemit_vanilla_fm.sbatch"
+echo "Done. Train with: sbatch bash_scripts/train_hemit_vanilla_fm_monai512.sbatch"
 echo "Log should show: FM perceptual: backend=monai|lpips|vgg ..."

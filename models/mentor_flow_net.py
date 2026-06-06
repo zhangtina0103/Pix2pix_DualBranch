@@ -60,6 +60,14 @@ def _validate_unet_channels(channels: Tuple[int, ...], norm_num_groups: int = 32
     )
 
 
+def _xformers_available() -> bool:
+    try:
+        import xformers  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
 def _diffusion_unet_kwargs(
     unet_cls: Type[nn.Module],
     *,
@@ -90,7 +98,7 @@ def _diffusion_unet_kwargs(
             f"{unet_cls.__module__}.{unet_cls.__name__} has no channels/num_channels argument"
         )
     if "use_flash_attention" in params:
-        kw["use_flash_attention"] = True
+        kw["use_flash_attention"] = _xformers_available()
     if "use_checkpoint" in params:
         kw["use_checkpoint"] = True
     return kw

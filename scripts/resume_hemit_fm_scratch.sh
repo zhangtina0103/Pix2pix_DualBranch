@@ -33,6 +33,7 @@ case "${RESUME_PROFILE}" in
   cross_attn) vanilla_fm_apply_fm_cross_attn_scratch_env ;;
   perc_strong) vanilla_fm_apply_perc_strong_scratch_env ;;
   res3) vanilla_fm_apply_joint_perc_res3_scratch_env ;;
+  monai512) vanilla_fm_apply_monai512_env ;;
   joint_perc) vanilla_fm_apply_joint_perc_env ;;
   joint_perc_scratch) vanilla_fm_apply_joint_perc_scratch_env ;;
   joint_perc_full) vanilla_fm_apply_joint_perc_fulldata_env ;;

@@ -1,6 +1,14 @@
 #!/bin/bash
-# Mentor: MONAI UNet @ 512² + attention (no joint_perc checkpoint — train from scratch).
+# MONAI UNet @ 512² + mid attention — noise path only, scratch 1→130 (backbone ablation vs custom joint_perc).
+#
 #   sbatch bash_scripts/train_hemit_vanilla_fm_monai512.sbatch
+# Resume (6h chunks; keep BATCH_SIZE=2 for MONAI attn):
+#   unset RESUME_FROM_EPOCH EPOCH_COUNT
+#   export RESUME_PROFILE=monai512 BATCH_SIZE=2
+#   sbatch bash_scripts/resume_hemit_fm_scratch.sbatch
+# Eval @ 945:
+#   export TEST_EPOCH=130
+#   sbatch bash_scripts/eval_hemit_vanilla_fm_monai512.sbatch
 #SBATCH --job-name=hemit_monai512
 #SBATCH --output=logs/hemit_monai512_%j.out
 #SBATCH --error=logs/hemit_monai512_%j.err
@@ -8,7 +16,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
-#SBATCH --time=12:00:00
+#SBATCH --time=24:00:00
 
 set -euo pipefail
 source "${SLURM_SUBMIT_DIR:-$PWD}/bash_scripts/_common.sh"
@@ -20,11 +28,9 @@ source "${REPO_ROOT}/bash_scripts/_cuda.sh"
 export MODEL=vanilla_fm
 export MODE=train
 export DATAROOT="${DATAROOT:-./datasets/hemit}"
-export BATCH_SIZE=2
+export BATCH_SIZE="${BATCH_SIZE:-2}"
 export DISPLAY_ID=-1
-export TRAIN_LR=0.0002
-export N_EPOCHS=80
-export N_EPOCHS_DECAY=20
+export NUM_THREADS=8
 
 source "${REPO_ROOT}/bash_scripts/_vanilla_fm_sbatch_preamble.sh"
 source "${REPO_ROOT}/scripts/vanilla_fm_env.sh"

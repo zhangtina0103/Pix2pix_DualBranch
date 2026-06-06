@@ -84,6 +84,14 @@ vanilla_fm_verify_cond_profile() {
       [[ "${FM_INIT_FROM_COND:-0}" == "0" ]] || _fm_cond_fail "FM_INIT_FROM_COND must be 0"
       [[ "${FM_LAMBDA_SAMPLE_L1:-0}" == "0" ]] || _fm_cond_fail "FM_LAMBDA_SAMPLE_L1 must be 0"
       ;;
+    bridge_scratch)
+      [[ "${FM_USE_SEG:-0}" == "0" ]] || _fm_cond_fail "FM_USE_SEG must be 0"
+      [[ "${FM_FLOW_PATH:-}" == "bridge" ]] || _fm_cond_fail "FM_FLOW_PATH=bridge required"
+      [[ "${FM_INIT_FROM_COND:-0}" == "0" ]] || _fm_cond_fail "FM_INIT_FROM_COND must be 0"
+      [[ "${DATASET_MODE:-aligned}" == "aligned" ]] || _fm_cond_fail "DATASET_MODE must be aligned (or unset)"
+      [[ "${FM_HE_PROJ_INIT:-gray}" == "gray" ]] || _fm_cond_fail "FM_HE_PROJ_INIT must be gray (v2)"
+      [[ "${FM_LAMBDA_SAMPLE_L1:-0}" == "0" ]] || _fm_cond_fail "FM_LAMBDA_SAMPLE_L1 must be 0 (no ODE-aux)"
+      ;;
     mentor_cellpose)
       [[ "${FM_USE_SEG:-0}" == "1" ]] || _fm_cond_fail "FM_USE_SEG=1 required"
       [[ "${FM_SEG_SUFFIX:-}" == "_cellpose" ]] || _fm_cond_fail "FM_SEG_SUFFIX must be _cellpose"
@@ -525,6 +533,24 @@ vanilla_fm_apply_cond_seg_only_scratch_env() {
   unset FM_USE_CFG FM_USE_FILM FM_USE_GAN FM_USE_ODE_TRAIN
   vanilla_fm_apply_fm_scratch_schedule
   echo "cond_seg_only_scratch: seg concat, no init/ODE-aux (joint_perc speed)" >&2
+}
+
+# Bridge v2 scratch — gray he_proj + 35% noise x0 mix; same step cost as joint_perc.
+vanilla_fm_apply_cond_bridge_scratch_env() {
+  vanilla_fm_apply_joint_perc_pins
+  export TRAIN_NAME=hemit_cond_fm_bridge_scratch
+  export VANILLA_FM_EXPECTED_TRAIN_NAME="${TRAIN_NAME}"
+  export VANILLA_FM_COND_PROFILE=bridge_scratch
+  unset DATASET_MODE FM_USE_SEG FM_INIT_FROM_COND
+  export FM_FLOW_PATH=bridge
+  export FM_HE_PROJ_INIT=gray
+  export FM_BRIDGE_X0_SIGMA=0.05
+  export FM_BRIDGE_NOISE_PROB=0.35
+  export FM_LAMBDA_SAMPLE_L1=0
+  unset FM_SAMPLE_L1_PROB FM_TRAIN_SAMPLE_STEPS FM_TRAIN_SAMPLE_METHOD
+  unset FM_USE_CFG FM_USE_FILM FM_USE_GAN FM_USE_ODE_TRAIN
+  vanilla_fm_apply_fm_scratch_schedule
+  echo "cond_bridge_scratch: bridge v2 gray he_proj + noise_prob=${FM_BRIDGE_NOISE_PROB}, scratch 1→130" >&2
 }
 
 # Flagship: tri-head + multi-scale H&E cross-attn + seg + informed init + light ODE-aux.

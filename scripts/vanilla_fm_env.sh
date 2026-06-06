@@ -139,7 +139,12 @@ vanilla_fm_verify_locked_env() {
     echo "ERROR: TRAIN_NAME=${TRAIN_NAME:-<unset>} but locked profile expects ${VANILLA_FM_EXPECTED_TRAIN_NAME}" >&2
     exit 1
   fi
-  if [[ "${FM_BACKBONE:-}" != "custom" ]]; then
+  if [[ "${VANILLA_FM_COND_PROFILE:-}" == "monai512" ]]; then
+    if [[ "${FM_BACKBONE:-}" != "monai" ]]; then
+      echo "ERROR: FM_BACKBONE=${FM_BACKBONE:-<unset>} (monai512 profile requires monai)" >&2
+      exit 1
+    fi
+  elif [[ "${FM_BACKBONE:-}" != "custom" ]]; then
     echo "ERROR: FM_BACKBONE=${FM_BACKBONE:-<unset>} (locked HEMIT phases require custom)" >&2
     exit 1
   fi

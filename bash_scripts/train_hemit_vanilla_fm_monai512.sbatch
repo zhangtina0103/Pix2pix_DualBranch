@@ -1,6 +1,6 @@
 #!/bin/bash
-# MONAI UNet @ 512² — noise path, scratch 1→130 (6h chunks).
-# FM_ATTN=0,0,0: skip 128² self-attn (OOM on L40S); MONAI middle-block attn @ 64² remains.
+# MONAI UNet @ 512² — full scratch 1→130 (slow; prefer screen_hemit_vanilla_fm_monai512.sbatch @ 30ep).
+# attn=0,0,0 + bs=4 + no grad-checkpoint (~15–20 min/ep). OOM → BATCH_SIZE=2.
 #
 #   sbatch bash_scripts/train_hemit_vanilla_fm_monai512.sbatch
 # Resume (6h chunks; keep BATCH_SIZE=1 — bs=2 OOMs on MONAI attn @ 512²):
@@ -29,7 +29,7 @@ source "${REPO_ROOT}/bash_scripts/_cuda.sh"
 export MODEL=vanilla_fm
 export MODE=train
 export DATAROOT="${DATAROOT:-./datasets/hemit}"
-export BATCH_SIZE="${BATCH_SIZE:-1}"
+export BATCH_SIZE="${BATCH_SIZE:-4}"
 export DISPLAY_ID=-1
 export NUM_THREADS=8
 

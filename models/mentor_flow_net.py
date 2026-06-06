@@ -100,7 +100,9 @@ def _diffusion_unet_kwargs(
     if "use_flash_attention" in params:
         kw["use_flash_attention"] = _xformers_available()
     if "use_checkpoint" in params:
-        kw["use_checkpoint"] = True
+        # Checkpoint trades ~30–50% step time for VRAM; off by default (enable FM_USE_CHECKPOINT=1 if OOM).
+        import os
+        kw["use_checkpoint"] = os.environ.get("FM_USE_CHECKPOINT", "0") == "1"
     return kw
 
 

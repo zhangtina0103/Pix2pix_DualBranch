@@ -613,12 +613,12 @@ vanilla_fm_apply_fm_cross_attn_scratch_env() {
   export FM_FLOW_PATH=noise
   export FM_USE_TRI_HEAD=0
   export FM_USE_CROSS_ATTN=1
-  export FM_CROSS_ATTN_DECODER=1
-  export FM_CROSS_ATTN_HEADS="${FM_CROSS_ATTN_HEADS:-8}"
+  export FM_CROSS_ATTN_DECODER="${FM_CROSS_ATTN_DECODER:-0}"
+  export FM_CROSS_ATTN_HEADS="${FM_CROSS_ATTN_HEADS:-4}"
   unset FM_LAMBDA_SAMPLE_L1
   export FM_LAMBDA_SAMPLE_L1=0
   vanilla_fm_apply_fm_scratch_schedule
-  echo "fm_cross_attn_scratch: H&E cross-attn, single head" >&2
+  echo "fm_cross_attn_scratch: H&E cross-attn bottleneck-only (dec=${FM_CROSS_ATTN_DECODER:-0}) heads=${FM_CROSS_ATTN_HEADS}" >&2
 }
 
 # FM trained on ODE outputs (SSIM-aligned); 1,1,1 channel weights for fair vs joint_perc.

@@ -28,6 +28,8 @@ export DISPLAY_ID=-1
 source "${REPO_ROOT}/bash_scripts/_vanilla_fm_sbatch_preamble.sh"
 source "${REPO_ROOT}/scripts/vanilla_fm_env.sh"
 vanilla_fm_apply_fm_cross_attn_scratch_env
+unset FM_CROSS_ATTN_DECODER
+export FM_CROSS_ATTN_HEADS="${FM_CROSS_ATTN_HEADS:-4}"
 export VANILLA_FM_ENV_LOCKED=1
 vanilla_fm_print_train_env
 bash "${REPO_ROOT}/scripts/run_hemit_vanilla_fm.sh"

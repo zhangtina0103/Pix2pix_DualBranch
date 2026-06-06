@@ -698,12 +698,10 @@ vanilla_fm_apply_joint_perc_res3_env() {
   echo "mentor_res3: joint_perc + 3 res blocks/level (strict=False load)" >&2
 }
 
-# MONAI UNet @ 512² + mid attention — new backbone, NOT finetune from joint_perc/80.
-vanilla_fm_apply_monai512_env() {
+# MONAI UNet @ 512² — shared FM pins (full train or screen).
+_vanilla_fm_apply_monai512_pins() {
   vanilla_fm_clear_stale_env
   vanilla_fm_apply_train_env
-  export TRAIN_NAME=hemit_vanilla_fm_monai512
-  export VANILLA_FM_EXPECTED_TRAIN_NAME="${TRAIN_NAME}"
   export VANILLA_FM_COND_PROFILE=monai512
   export FM_BACKBONE=monai
   export FM_CHANNELS=64,128,192
@@ -718,21 +716,29 @@ vanilla_fm_apply_monai512_env() {
   export FM_LAMBDA_L1=0
   export FM_LAMBDA_SAMPLE_L1=0
   unset FM_USE_SEG FM_USE_PATCHNCE FM_INIT_FROM_COND
-  export BATCH_SIZE="${BATCH_SIZE:-4}"
-  vanilla_fm_apply_fm_scratch_schedule
-  echo "mentor_monai512: MONAI UNet 512² attn=0,0,0 bs=4 (OOM→BATCH_SIZE=2), no grad-checkpoint, scratch 1→130" >&2
+  export BATCH_SIZE="${BATCH_SIZE:-2}"   # bs=4 OOMs (mid-block attn); bs=1 ~3h/ep
 }
 
-# 30-epoch screen (same speed target as other FM screens; full 130 @ bs=1 is ~3h/epoch).
+# MONAI UNet @ 512² — full scratch 1→130 (slow; prefer monai512_screen @ 30ep).
+vanilla_fm_apply_monai512_env() {
+  _vanilla_fm_apply_monai512_pins
+  export TRAIN_NAME=hemit_vanilla_fm_monai512
+  export VANILLA_FM_EXPECTED_TRAIN_NAME="${TRAIN_NAME}"
+  vanilla_fm_apply_fm_scratch_schedule
+  echo "mentor_monai512: MONAI UNet 512² attn=0,0,0 bs=${BATCH_SIZE} (OOM→bs=1), scratch 1→130" >&2
+}
+
+# 30-epoch screen (backbone ablation; fits one 6h job @ bs=4).
 vanilla_fm_apply_monai512_screen_env() {
-  vanilla_fm_apply_monai512_env
+  _vanilla_fm_apply_monai512_pins
   export TRAIN_NAME=hemit_vanilla_fm_monai512_screen
   export VANILLA_FM_EXPECTED_TRAIN_NAME="${TRAIN_NAME}"
   export N_EPOCHS=25
   export N_EPOCHS_DECAY=5
+  export TRAIN_LR="${TRAIN_LR:-0.0002}"
   unset CONTINUE_TRAIN RESUME_FROM_EPOCH PRETRAINED_NAME
   export EPOCH_COUNT=1
-  echo "monai512_screen: 30 epochs (backbone ablation; not 130 — too slow @ bs≤2)" >&2
+  echo "monai512_screen: MONAI UNet 512² attn=0,0,0 bs=${BATCH_SIZE}, epochs 1→30" >&2
 }
 
 # Shared joint_perc recipe (baseline checkpoint hemit_vanilla_fm_joint_perc/80).

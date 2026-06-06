@@ -29,7 +29,7 @@ source "${REPO_ROOT}/bash_scripts/_cuda.sh"
 export MODEL=vanilla_fm
 export MODE=train
 export DATAROOT="${DATAROOT:-./datasets/hemit}"
-export BATCH_SIZE="${BATCH_SIZE:-4}"
+export BATCH_SIZE="${BATCH_SIZE:-2}"
 export DISPLAY_ID=-1
 export NUM_THREADS=8
 

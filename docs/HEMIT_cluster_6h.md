@@ -41,6 +41,7 @@ sbatch bash_scripts/resume_hemit_fm_scratch.sbatch
 | `v2` | `hemit_cond_fm_consistent_v2` |
 | `consistent_scratch` | `hemit_cond_fm_consistent_scratch` |
 | `light` | `hemit_cond_fm_light_scratch` |
+| `seg_only_scratch` | `hemit_cond_fm_seg_only_scratch` |
 | `tri_head` | `hemit_fm_tri_head_scratch` |
 | `cross_attn` | `hemit_fm_cross_attn_scratch` |
 | `perc_strong` | `hemit_vanilla_fm_perc_strong_scratch` |

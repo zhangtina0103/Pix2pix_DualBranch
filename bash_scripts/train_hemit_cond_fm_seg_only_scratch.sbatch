@@ -1,7 +1,13 @@
 #!/bin/bash
-# Full train: seg only, scratch 1→130.
+# Full train: seg only, scratch 1→130 (train=test seg concat, no init/ODE-aux).
 #
 #   sbatch bash_scripts/train_hemit_cond_fm_seg_only_scratch.sbatch
+# Resume from latest ckpt (e.g. after screen @ 30):
+#   unset RESUME_FROM_EPOCH EPOCH_COUNT
+#   export RESUME_PROFILE=seg_only_scratch
+#   sbatch bash_scripts/resume_hemit_fm_scratch.sbatch
+# Eval @ 945:
+#   export TEST_EPOCH=130
 #   sbatch bash_scripts/eval_hemit_cond_fm_seg_only_scratch.sbatch
 #SBATCH --job-name=hemit_cfm_so
 #SBATCH --output=logs/hemit_cond_fm_seg_only_scratch_%j.out

@@ -27,6 +27,8 @@ case "${RESUME_PROFILE}" in
   v2|consistent_v2) vanilla_fm_apply_cond_consistent_v2_env ;;
   consistent_scratch) vanilla_fm_apply_cond_consistent_scratch_env ;;
   light) vanilla_fm_apply_cond_light_scratch_env ;;
+  seg_only|seg_only_scratch) vanilla_fm_apply_cond_seg_only_scratch_env ;;
+  seg_init|seg_init_scratch) vanilla_fm_apply_cond_seg_init_scratch_env ;;
   tri_head) vanilla_fm_apply_fm_tri_head_scratch_env ;;
   cross_attn) vanilla_fm_apply_fm_cross_attn_scratch_env ;;
   perc_strong) vanilla_fm_apply_perc_strong_scratch_env ;;

@@ -34,6 +34,8 @@ case "${PROFILE}" in
   advanced|advanced_scratch) vanilla_fm_apply_cond_fm_advanced_scratch_env ;;
   tri_head) vanilla_fm_apply_fm_tri_head_scratch_env ;;
   cross_attn) vanilla_fm_apply_fm_cross_attn_scratch_env ;;
+  cross_attn_patchnce) vanilla_fm_apply_fm_cross_attn_patchnce_scratch_env ;;
+  cross_attn_init) vanilla_fm_apply_fm_cross_attn_init_scratch_env ;;
   *) echo "unknown profile: ${PROFILE}" >&2; exit 1 ;;
 esac
 

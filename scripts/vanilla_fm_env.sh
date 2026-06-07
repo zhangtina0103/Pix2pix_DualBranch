@@ -356,6 +356,20 @@ vanilla_fm_apply_fm_scratch_schedule() {
   fi
 }
 
+# Fair @80 ablation schedule (50+30). Use for cross-attn variant sweeps.
+vanilla_fm_apply_fm_scratch_80_schedule() {
+  export N_EPOCHS=50
+  export N_EPOCHS_DECAY=30
+  export TRAIN_LR="${TRAIN_LR:-0.0002}"
+  if [[ "${CONTINUE_TRAIN:-0}" == "1" ]]; then
+    echo "scratch_80 resume: target 80 epochs TRAIN_LR=${TRAIN_LR}" >&2
+  else
+    unset CONTINUE_TRAIN RESUME_FROM_EPOCH PRETRAINED_NAME
+    export EPOCH_COUNT=1
+    echo "scratch_80: epochs 1→80 TRAIN_LR=${TRAIN_LR}" >&2
+  fi
+}
+
 # Consistent conditioning (hypothesis to beat pix2pix): seg in UNet + same ODE start at train & test.
 # Main FM loss: noise path (joint_perc). Aux: short ODE from gray informed z0 (matches test init).
 vanilla_fm_apply_cond_consistent_env() {
@@ -619,6 +633,45 @@ vanilla_fm_apply_fm_cross_attn_scratch_env() {
   export FM_LAMBDA_SAMPLE_L1=0
   vanilla_fm_apply_fm_scratch_schedule
   echo "fm_cross_attn_scratch: H&E cross-attn bottleneck-only (dec=${FM_CROSS_ATTN_DECODER:-0}) heads=${FM_CROSS_ATTN_HEADS}" >&2
+}
+
+# Cross-attn + CUT-style PatchNCE (H&E patches ↔ x1_hat), scratch @80.
+vanilla_fm_apply_fm_cross_attn_patchnce_scratch_env() {
+  vanilla_fm_apply_joint_perc_pins
+  export TRAIN_NAME=hemit_fm_cross_attn_patchnce_scratch
+  export VANILLA_FM_EXPECTED_TRAIN_NAME="${TRAIN_NAME}"
+  unset DATASET_MODE FM_USE_SEG FM_INIT_FROM_COND
+  export FM_FLOW_PATH=noise
+  export FM_USE_TRI_HEAD=0
+  export FM_USE_CROSS_ATTN=1
+  export FM_CROSS_ATTN_DECODER="${FM_CROSS_ATTN_DECODER:-0}"
+  export FM_CROSS_ATTN_HEADS="${FM_CROSS_ATTN_HEADS:-4}"
+  export FM_USE_PATCHNCE=1
+  export FM_LAMBDA_NCE="${FM_LAMBDA_NCE:-1.0}"
+  export FM_NCE_PATCHES="${FM_NCE_PATCHES:-256}"
+  export FM_LAMBDA_SAMPLE_L1=0
+  vanilla_fm_apply_fm_scratch_80_schedule
+  echo "fm_cross_attn_patchnce_scratch: cross-attn + PatchNCE λ=${FM_LAMBDA_NCE} patches=${FM_NCE_PATCHES}" >&2
+}
+
+# Cross-attn + informed ODE init @ test (gray he_proj, noise train), scratch @80.
+vanilla_fm_apply_fm_cross_attn_init_scratch_env() {
+  vanilla_fm_apply_joint_perc_pins
+  export TRAIN_NAME=hemit_fm_cross_attn_init_scratch
+  export VANILLA_FM_EXPECTED_TRAIN_NAME="${TRAIN_NAME}"
+  unset DATASET_MODE FM_USE_SEG
+  export FM_FLOW_PATH=noise
+  export FM_USE_TRI_HEAD=0
+  export FM_USE_CROSS_ATTN=1
+  export FM_CROSS_ATTN_DECODER="${FM_CROSS_ATTN_DECODER:-0}"
+  export FM_CROSS_ATTN_HEADS="${FM_CROSS_ATTN_HEADS:-4}"
+  export FM_INIT_FROM_COND=1
+  export FM_HE_PROJ_INIT=gray
+  export FM_INIT_NOISE_SIGMA="${FM_INIT_NOISE_SIGMA:-0.55}"
+  unset FM_USE_PATCHNCE FM_LAMBDA_NCE
+  export FM_LAMBDA_SAMPLE_L1=0
+  vanilla_fm_apply_fm_scratch_80_schedule
+  echo "fm_cross_attn_init_scratch: cross-attn + informed init σ=${FM_INIT_NOISE_SIGMA} (no seg)" >&2
 }
 
 # FM trained on ODE outputs (SSIM-aligned); 1,1,1 channel weights for fair vs joint_perc.

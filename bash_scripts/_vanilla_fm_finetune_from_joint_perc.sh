@@ -27,3 +27,24 @@ vanilla_fm_finetune_joint_opt_from_perc_80() {
   export N_EPOCHS_DECAY=30
   echo "finetune schedule: epochs ${EPOCH_COUNT}..$((N_EPOCHS + N_EPOCHS_DECAY)) (long, cond_consistent)" >&2
 }
+
+# Short finetune from full-data vanilla FM @130 (~15 ep ≈ 2–3h @ bs=4 512²).
+# Usage: set TRAIN_NAME + env profile, then: vanilla_fm_finetune_from_joint_perc_full130 [extra_epochs]
+vanilla_fm_finetune_from_joint_perc_full130() {
+  local extra="${1:-15}"
+  local src="${REPO_ROOT}/checkpoints/hemit_vanilla_fm_joint_perc_full/130_net_G.pth"
+  local dst="${REPO_ROOT}/checkpoints/${TRAIN_NAME}/130_net_G.pth"
+  [[ -f "${src}" ]] || {
+    echo "ERROR: missing ${src} (train joint_perc_full to epoch 130 first)" >&2
+    exit 1
+  }
+  mkdir -p "${REPO_ROOT}/checkpoints/${TRAIN_NAME}"
+  cp -f "${src}" "${dst}"
+  export CONTINUE_TRAIN=1
+  export RESUME_FROM_EPOCH=130
+  export EPOCH_COUNT=131
+  export N_EPOCHS=$((130 + extra))
+  export N_EPOCHS_DECAY=0
+  export TRAIN_LR="${TRAIN_LR:-5e-5}"
+  echo "finetune from full/130: ${TRAIN_NAME} epochs ${EPOCH_COUNT}..$((N_EPOCHS + N_EPOCHS_DECAY)) (+${extra} ep) lr=${TRAIN_LR}" >&2
+}

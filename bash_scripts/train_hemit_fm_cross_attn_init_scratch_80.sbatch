@@ -1,8 +1,8 @@
 #!/bin/bash
-# Cross-attn + informed init (no seg), scratch 1→80 @ 512² bs=4.
+# Cross-attn + informed init (no seg), scratch 1→80 @ 512² bs=4 (6h walltime chunks).
 #
 #   sbatch bash_scripts/train_hemit_fm_cross_attn_init_scratch_80.sbatch
-# Resume:
+# Resume until epoch 80 (~25–30 ep/chunk @ ~12 min/ep):
 #   export RESUME_PROFILE=cross_attn_init
 #   sbatch bash_scripts/resume_hemit_fm_scratch.sbatch
 # Eval:
@@ -15,7 +15,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
-#SBATCH --time=24:00:00
+#SBATCH --time=06:00:00
 
 set -euo pipefail
 source "${SLURM_SUBMIT_DIR:-$PWD}/bash_scripts/_common.sh"

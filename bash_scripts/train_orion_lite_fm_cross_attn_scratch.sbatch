@@ -17,9 +17,10 @@ source /home/zhangtin/miniforge3/etc/profile.d/conda.sh
 conda activate "${CONDA_ENV:-pix2pix_cuda}"
 source "${REPO_ROOT}/bash_scripts/_cuda.sh"
 
+# shellcheck source=/dev/null
+source "${REPO_ROOT}/scripts/orion_scratch_env.sh"
+
 export MODEL=vanilla_fm MODE=train
-export DATAROOT="${DATAROOT:-./datasets/orion_lite}"
-export ORION_SRC="${ORION_SRC:-${REPO_ROOT}/data/orion/ORIONCRC_dataset_tile_20x}"
 export HEMIT_TRAIN_SIZE="${HEMIT_TRAIN_SIZE:-512}"
 export BATCH_SIZE="${BATCH_SIZE:-4}"
 export DISPLAY_ID=-1

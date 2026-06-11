@@ -45,6 +45,8 @@ MARKER_TO_IDX = {name: ORION_CHANNEL_ORDER.index(name) for name in ORION_LITE_MA
 ZENODO_ORION_URL = (
     "https://zenodo.org/records/15340874/files/ORIONCRC_dataset_tile_20x.zip?download=1"
 )
+# Zenodo md5:fdc3188206ac68576b4195cd039d9061 (~118 GiB)
+ORION_ZIP_EXPECTED_BYTES = 127_020_270_255
 
 
 def _resolve_path(root: Path, value: str) -> Path:
@@ -179,6 +181,7 @@ def find_orion_root(data_dir: Path) -> Path:
     for name in (
         "ORIONCRC_dataset_tile_20x",
         "ORION_dataset_20x",
+        "ORIONCRC_dataset_tile_20x",
         "orioncrc_dataset_tile_20x",
     ):
         cand = data_dir / name
@@ -186,33 +189,81 @@ def find_orion_root(data_dir: Path) -> Path:
             return cand
     if (data_dir / "train_dataframe.csv").exists():
         return data_dir
+    # Zip may unpack with an extra top-level folder — search shallowly.
+    for csv_path in data_dir.rglob("train_dataframe.csv"):
+        root = csv_path.parent
+        if (root / "he").is_dir() and (root / "if").is_dir():
+            return root
     raise FileNotFoundError(
-        f"No ORION tile root under {data_dir}. Expected train_dataframe.csv "
-        f"(download from https://doi.org/10.5281/zenodo.15340874)"
+        f"No ORION tile root under {data_dir}. Expected train_dataframe.csv + he/ + if/\n"
+        f"Download (~118 GiB): {ZENODO_ORION_URL}\n"
+        f"Then: unzip ORIONCRC_dataset_tile_20x.zip -d {data_dir}"
     )
 
 
-def download_orion(data_dir: Path) -> Path:
+def _zip_ok(zip_path: Path) -> bool:
+    if not zip_path.is_file():
+        return False
+    size = zip_path.stat().st_size
+    # Allow 1% tolerance; partial urllib downloads are usually much smaller.
+    if size < ORION_ZIP_EXPECTED_BYTES * 0.99:
+        print(
+            f"  [warn] zip size {size / 1e9:.2f} GB — expected ~{ORION_ZIP_EXPECTED_BYTES / 1e9:.1f} GB. "
+            "Download likely incomplete; delete zip and re-download.",
+            file=sys.stderr,
+        )
+        return False
+    return True
+
+
+def download_orion_zip(data_dir: Path) -> Path:
+    """Download only. Returns path to zip."""
     data_dir.mkdir(parents=True, exist_ok=True)
     zip_path = data_dir / "ORIONCRC_dataset_tile_20x.zip"
-    if not zip_path.exists():
-        print(f"Downloading {ZENODO_ORION_URL} → {zip_path}")
-        try:
+    if _zip_ok(zip_path):
+        print(f"Zip already complete: {zip_path}")
+        return zip_path
+    if zip_path.exists():
+        print(f"Removing incomplete zip ({zip_path.stat().st_size / 1e9:.2f} GB)")
+        zip_path.unlink()
+    print(f"Downloading (~118 GiB) → {zip_path}")
+    print("Use aria2c on login/long job; urllib is very slow for this file.")
+    try:
             subprocess.run(
-                ["aria2c", "-x", "16", "-s", "16", "-k", "10M", "-o", str(zip_path), ZENODO_ORION_URL],
+                [
+                    "aria2c", "--check-certificate=false",
+                    "-x", "16", "-s", "16", "-k", "10M",
+                    "--file-allocation=none", "--continue=true",
+                    "-o", str(zip_path.name), "-d", str(data_dir),
+                    ZENODO_ORION_URL,
+                ],
                 check=True,
             )
-        except (FileNotFoundError, subprocess.CalledProcessError):
-            import urllib.request
-            print("aria2c unavailable; using urllib (single connection)...")
-            urllib.request.urlretrieve(ZENODO_ORION_URL, zip_path)
-    root = find_orion_root(data_dir)
-    if (root / "train_dataframe.csv").exists() and (root / "he").is_dir():
-        print(f"ORION tiles already extracted at {root}")
-        return root
-    print(f"Extracting {zip_path} ...")
+    except (FileNotFoundError, subprocess.CalledProcessError) as exc:
+        import urllib.request
+        print(f"aria2c failed ({exc}); falling back to urllib...", file=sys.stderr)
+        urllib.request.urlretrieve(ZENODO_ORION_URL, zip_path)
+    if not _zip_ok(zip_path):
+        raise RuntimeError(f"Incomplete download at {zip_path}. Re-run after deleting the zip.")
+    return zip_path
+
+
+def extract_orion_zip(data_dir: Path) -> Path:
+    zip_path = data_dir / "ORIONCRC_dataset_tile_20x.zip"
+    if not _zip_ok(zip_path):
+        raise FileNotFoundError(f"Missing or incomplete zip: {zip_path}")
+    try:
+        return find_orion_root(data_dir)
+    except FileNotFoundError:
+        pass
+    print(f"Extracting {zip_path} (this takes a while)...")
     subprocess.run(["unzip", "-q", str(zip_path), "-d", str(data_dir)], check=True)
     return find_orion_root(data_dir)
+
+
+def download_orion(data_dir: Path) -> Path:
+    download_orion_zip(data_dir)
+    return extract_orion_zip(data_dir)
 
 
 def main() -> None:
@@ -223,12 +274,25 @@ def main() -> None:
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--tile-size", type=int, default=512, help="Resize tiles (MIPHEI native=256; HEMIT protocol=512)")
     p.add_argument("--symlink-he", action="store_true", help="Symlink H&E at 256² (labels still extracted)")
-    p.add_argument("--download", action="store_true", help="Download Zenodo zip into --data-dir first")
+    p.add_argument("--download", action="store_true", help="Download + unzip Zenodo zip into --data-dir")
+    p.add_argument("--download-only", action="store_true", help="Download zip only (~118 GiB); no prep")
+    p.add_argument("--extract-only", action="store_true", help="Unzip existing zip in --data-dir; no prep")
     p.add_argument("--data-dir", type=str, default="./data/orion", help="Download/extract parent when --download")
     args = p.parse_args()
 
+    data_dir = Path(args.data_dir).expanduser().resolve()
+
+    if args.download_only:
+        download_orion_zip(data_dir)
+        print(f"Done. Next: python scripts/prepare_orion_lite.py --extract-only --data-dir {data_dir}")
+        return
+    if args.extract_only:
+        src_root = extract_orion_zip(data_dir)
+        print(f"Extracted at {src_root}")
+        print(f"Next: python scripts/prepare_orion_lite.py --src {src_root}")
+        return
     if args.download:
-        src_root = download_orion(Path(args.data_dir).expanduser().resolve())
+        src_root = download_orion(data_dir)
     elif args.src:
         src_root = find_orion_root(Path(args.src).expanduser().resolve())
     else:

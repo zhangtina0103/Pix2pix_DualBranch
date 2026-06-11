@@ -19,9 +19,11 @@ source /home/zhangtin/miniforge3/etc/profile.d/conda.sh
 conda activate "${CONDA_ENV:-pix2pix_cuda}"
 source "${REPO_ROOT}/bash_scripts/_cuda.sh"
 
+# shellcheck source=/dev/null
+source "${REPO_ROOT}/scripts/orion_scratch_env.sh"
+
 MODELS=(pix2pix cut asp cyclegan)
 export MODEL="${MODELS[$SLURM_ARRAY_TASK_ID]}"
-export DATAROOT="${DATAROOT:-./datasets/orion_lite}"
 export TEST_EPOCH="${TEST_EPOCH:-80}"
 export GPU_IDS=0
 

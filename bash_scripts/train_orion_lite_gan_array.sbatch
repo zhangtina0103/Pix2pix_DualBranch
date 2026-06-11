@@ -18,11 +18,12 @@ source /home/zhangtin/miniforge3/etc/profile.d/conda.sh
 conda activate "${CONDA_ENV:-pix2pix_cuda}"
 source "${REPO_ROOT}/bash_scripts/_cuda.sh"
 
+# shellcheck source=/dev/null
+source "${REPO_ROOT}/scripts/orion_scratch_env.sh"
+
 MODELS=(pix2pix cut asp cyclegan)
 export MODEL="${MODELS[$SLURM_ARRAY_TASK_ID]}"
 export MODE=train
-export DATAROOT="${DATAROOT:-./datasets/orion_lite}"
-export ORION_SRC="${ORION_SRC:-${REPO_ROOT}/data/orion/ORIONCRC_dataset_tile_20x}"
 export N_EPOCHS=50
 export N_EPOCHS_DECAY=30
 

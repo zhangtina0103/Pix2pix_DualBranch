@@ -635,6 +635,26 @@ vanilla_fm_apply_fm_cross_attn_scratch_env() {
   echo "fm_cross_attn_scratch: H&E cross-attn bottleneck-only (dec=${FM_CROSS_ATTN_DECODER:-0}) heads=${FM_CROSS_ATTN_HEADS}" >&2
 }
 
+# Orion-Lite: same cross-attn recipe, fair @80, 1,1,1 channel weights.
+vanilla_fm_apply_orion_fm_cross_attn_scratch_env() {
+  vanilla_fm_apply_fm_cross_attn_scratch_env
+  export TRAIN_NAME="${TRAIN_NAME/hemit_/orion_lite_}"
+  export VANILLA_FM_EXPECTED_TRAIN_NAME="${TRAIN_NAME}"
+  export FM_CHANNEL_WEIGHTS=1,1,1
+  vanilla_fm_apply_fm_scratch_80_schedule
+  echo "orion_fm_cross_attn_scratch: Orion-Lite @80, ch=${FM_CHANNEL_WEIGHTS}" >&2
+}
+
+# Orion-Lite vanilla FM baseline (no cross-attn).
+vanilla_fm_apply_orion_joint_perc_scratch_env() {
+  vanilla_fm_apply_joint_perc_scratch_env
+  export TRAIN_NAME="${TRAIN_NAME/hemit_/orion_lite_}"
+  export VANILLA_FM_EXPECTED_TRAIN_NAME="${TRAIN_NAME}"
+  export FM_CHANNEL_WEIGHTS=1,1,1
+  vanilla_fm_apply_fm_scratch_80_schedule
+  echo "orion_joint_perc_scratch: vanilla FM Orion-Lite @80" >&2
+}
+
 # Cross-attn + CUT-style PatchNCE (H&E patches ↔ x1_hat), scratch @80.
 vanilla_fm_apply_fm_cross_attn_patchnce_scratch_env() {
   vanilla_fm_apply_joint_perc_pins

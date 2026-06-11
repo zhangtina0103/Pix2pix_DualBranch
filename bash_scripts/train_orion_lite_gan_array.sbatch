@@ -1,6 +1,9 @@
 #!/bin/bash
 # Orion-Lite GAN baselines @80: pix2pix, CUT, ASP, CycleGAN.
 #   sbatch bash_scripts/train_orion_lite_gan_array.sbatch
+#
+# One model only:  sbatch --array=3 bash_scripts/train_orion_lite_gan_array.sbatch
+# Resume (not full array):  sbatch --array=3 bash_scripts/resume_orion_lite_gan.sbatch
 #SBATCH --job-name=orion_gan
 #SBATCH --output=logs/orion_gan_%A_%a.out
 #SBATCH --error=logs/orion_gan_%A_%a.err

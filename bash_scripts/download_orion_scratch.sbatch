@@ -20,7 +20,12 @@ mkdir -p logs
 
 # shellcheck source=/dev/null
 source "${REPO_ROOT}/scripts/orion_scratch_env.sh"
-mkdir -p "${ORION_SCRATCH_ROOT}"
+mkdir -p "${ORION_SCRATCH_ROOT}" || {
+  echo "ERROR: cannot create ${ORION_SCRATCH_ROOT}" >&2
+  echo "ORCD scratch is ~/orcd/scratch (try: ls -la ~/orcd/scratch; cat ~/orcd/.quota)" >&2
+  echo "Override: export ORION_SCRATCH_ROOT=\${HOME}/orcd/pool/orion  # 1 TB pool fallback" >&2
+  exit 1
+}
 cd "${ORION_SCRATCH_ROOT}"
 
 echo "ORION_SCRATCH_ROOT=${ORION_SCRATCH_ROOT}"

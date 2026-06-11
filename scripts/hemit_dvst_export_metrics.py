@@ -30,12 +30,16 @@ def load_rgb(path: Path) -> np.ndarray:
     return arr
 
 
-def latest_sample_dir(dvst_root: Path) -> Path:
-    candidates = sorted(dvst_root.glob("DVST_samples/infer_HEMIT_test-*"))
+def latest_sample_dir(dvst_root: Path, infer_pattern: str = "infer_HEMIT_test-*") -> Path:
+    candidates = sorted(dvst_root.glob(f"DVST_samples/{infer_pattern}"))
     if not candidates:
-        candidates = sorted(dvst_root.glob("DVST_samples/*HEMIT*"))
+        candidates = sorted(dvst_root.glob("DVST_samples/infer_HEMIT_test-*"))
     if not candidates:
-        raise FileNotFoundError(f"No DVST_samples under {dvst_root}")
+        candidates = sorted(dvst_root.glob("DVST_samples/infer_ORION_lite_test-*"))
+    if not candidates:
+        candidates = sorted(dvst_root.glob("DVST_samples/*"))
+    if not candidates:
+        raise FileNotFoundError(f"No DVST_samples under {dvst_root} (pattern={infer_pattern})")
     latest = candidates[-1]
     sample_dirs = sorted(latest.glob("samples/sample_*"))
     if not sample_dirs:
@@ -78,6 +82,11 @@ def main() -> None:
     p.add_argument("--data-root", required=True, help="HEMIT input/label root (DiffVS layout)")
     p.add_argument("--split", default="test")
     p.add_argument("--sample-dir", default=None)
+    p.add_argument(
+        "--infer-pattern",
+        default=os.environ.get("DVST_INFER_PATTERN", "infer_HEMIT_test-*"),
+        help="Glob under DVST_samples/ when --sample-dir unset",
+    )
     p.add_argument("--output-dir", required=True)
     args = p.parse_args()
 
@@ -86,7 +95,11 @@ def main() -> None:
     out_dir = Path(args.output_dir).expanduser().resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    sample_dir = Path(args.sample_dir).resolve() if args.sample_dir else latest_sample_dir(dvst_root)
+    sample_dir = (
+        Path(args.sample_dir).resolve()
+        if args.sample_dir
+        else latest_sample_dir(dvst_root, args.infer_pattern)
+    )
     print(f"Using samples: {sample_dir}")
 
     label_dir = data_root / args.split / "label"

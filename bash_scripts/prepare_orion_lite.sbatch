@@ -25,6 +25,8 @@ conda activate "${CONDA_ENV:-pix2pix_cuda}" 2>/dev/null || true
 # shellcheck source=/dev/null
 source "${REPO_ROOT}/scripts/orion_scratch_env.sh"
 export ORION_N_TRAIN="${ORION_N_TRAIN:-1500}"
+export ORION_N_VAL="${ORION_N_VAL:-500}"
+export ORION_N_TEST="${ORION_N_TEST:-500}"
 export ORION_TILE_SIZE="${ORION_TILE_SIZE:-512}"
 
 [[ -f "${ORION_SRC}/train_dataframe.csv" ]] || {
@@ -38,6 +40,8 @@ python scripts/prepare_orion_lite.py \
   --src "${ORION_SRC}" \
   --dst "${DATAROOT}" \
   --n-train "${ORION_N_TRAIN}" \
+  --n-val "${ORION_N_VAL}" \
+  --n-test "${ORION_N_TEST}" \
   --tile-size "${ORION_TILE_SIZE}"
 
 python3 -c "import json; m=json.load(open('${DATAROOT}/meta.json')); print(m)"

@@ -59,6 +59,8 @@ prepare() {
     --src "${ORION_SRC}" \
     --dst "${DATAROOT}" \
     --n-train "${ORION_N_TRAIN:-1500}" \
+    --n-val "${ORION_N_VAL:-500}" \
+    --n-test "${ORION_N_TEST:-500}" \
     --tile-size "${ORION_TILE_SIZE:-512}" \
     --seed "${ORION_SEED:-42}"
   source "${ROOT}/scripts/orion_model_profiles.sh"

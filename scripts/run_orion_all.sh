@@ -3,6 +3,7 @@
 #
 #   MODEL=pix2pix MODE=train bash scripts/run_orion_all.sh
 #   MODEL=vanilla_fm MODE=train|test|metrics bash scripts/run_orion_all.sh
+#   MODEL=dvst MODE=prepare|test|metrics bash scripts/run_orion_all.sh  # zero-shot D-VST
 #   MODE=prepare bash scripts/run_orion_all.sh
 #
 set -euo pipefail
@@ -25,9 +26,23 @@ is_native() {
   esac
 }
 
+is_diffusion() {
+  case "${MODEL}" in
+    dvst) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 echo "===== Orion-Lite  MODEL=${MODEL}  MODE=${MODE}  DATAROOT=${DATAROOT} ====="
 
-if is_native; then
+if is_diffusion; then
+  IFS='|' read -r -a _modes <<< "${MODE}"
+  for _m in "${_modes[@]}"; do
+    case "${MODEL}" in
+      dvst) MODE="${_m}" bash "${ROOT}/scripts/run_orion_dvst.sh" ;;
+    esac
+  done
+elif is_native; then
   source "${ROOT}/scripts/orion_model_profiles.sh"
   if [[ "${MODEL}" == "vanilla_fm" ]]; then
     source "${ROOT}/scripts/vanilla_fm_env.sh"
@@ -43,7 +58,7 @@ if is_native; then
   export GPU_IDS="${GPU_IDS:-0}"
   bash "${ROOT}/scripts/run_orion_native.sh"
 else
-  die "Unknown MODEL=${MODEL}. Use: pix2pix | cut | asp | cyclegan | vanilla_fm"
+  die "Unknown MODEL=${MODEL}. Use: pix2pix | cut | asp | cyclegan | vanilla_fm | dvst"
 fi
 
 echo "Done."

@@ -15,7 +15,8 @@ Output (same as HEMIT pipeline):
 
 Usage:
   python scripts/prepare_orion_lite.py --src /path/to/ORIONCRC_dataset_tile_20x
-  python scripts/prepare_orion_lite.py --src ... --dst ./datasets/orion_lite --n-train 1500
+  python scripts/prepare_orion_lite.py --src ... --dst ./datasets/orion_lite --n-train 1500 --n-val 500 --n-test 500
+  # Each CSV row = one H&E tile → one 3ch mIF stack (Hoechst/CD3e/Pan-CK). Not 16× rows.
   python scripts/prepare_orion_lite.py --download --data-dir /path/to/data
 """
 
@@ -116,19 +117,21 @@ def _load_label_stack(if_path: Path) -> np.ndarray:
     return stack
 
 
-def sample_train_df(df: pd.DataFrame, n_train: int, seed: int) -> pd.DataFrame:
+def sample_split_df(df: pd.DataFrame, n_want: int | None, seed: int) -> pd.DataFrame:
+    """Stratified subsample by slide. n_want=None → keep all rows."""
+    if n_want is None or n_want <= 0 or len(df) <= n_want:
+        return df.reset_index(drop=True)
     slide_col = _slide_col(df)
     n_slides = df[slide_col].nunique()
-    per_slide = max(1, n_train // n_slides)
+    per_slide = max(1, n_want // n_slides)
     parts = []
     for _, group in df.groupby(slide_col, sort=True):
         k = min(per_slide, len(group))
         parts.append(group.sample(n=k, random_state=seed))
     out = pd.concat(parts, ignore_index=True)
-    if len(out) > n_train:
-        out = out.sample(n=n_train, random_state=seed).sort_index()
-    out = out.reset_index(drop=True)
-    return out
+    if len(out) > n_want:
+        out = out.sample(n=n_want, random_state=seed).sort_index()
+    return out.reset_index(drop=True)
 
 
 def write_split(
@@ -270,7 +273,26 @@ def main() -> None:
     p = argparse.ArgumentParser(description="Prepare Orion-Lite pix2pix dataroot from MIPHEI ORION tiles.")
     p.add_argument("--src", type=str, default=None, help="Path to ORIONCRC_dataset_tile_20x (with CSVs + he/ + if/)")
     p.add_argument("--dst", type=str, default="./datasets/orion_lite", help="Output dataroot (trainA/B, ...)")
-    p.add_argument("--n-train", type=int, default=1500, help="Train tiles (stratified by slide); val/test kept full")
+    p.add_argument(
+        "--n-train",
+        type=int,
+        default=1500,
+        help="Train tile pairs (stratified by slide). Each pair = 1 H&E + 1 3ch mIF stack.",
+    )
+    p.add_argument(
+        "--n-val",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Val tile pairs (stratified). Default: all official val rows (~12k).",
+    )
+    p.add_argument(
+        "--n-test",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Test tile pairs (stratified). Default: all official test rows (~11k).",
+    )
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--tile-size", type=int, default=512, help="Resize tiles (MIPHEI native=256; HEMIT protocol=512)")
     p.add_argument("--symlink-he", action="store_true", help="Symlink H&E at 256² (labels still extracted)")
@@ -309,13 +331,23 @@ def main() -> None:
     val_df = pd.read_csv(src_root / "val_dataframe.csv")
     test_df = pd.read_csv(src_root / "test_dataframe.csv")
 
-    train_sub = sample_train_df(train_df, args.n_train, args.seed)
-    manifest_path = dst_root / "train_manifest.csv"
-    train_sub.to_csv(manifest_path, index=False)
-    print(f"Train subset: {len(train_sub)} / {len(train_df)} rows (manifest → {manifest_path})")
+    train_sub = sample_split_df(train_df, args.n_train, args.seed)
+    val_sub = sample_split_df(val_df, args.n_val, args.seed + 1)
+    test_sub = sample_split_df(test_df, args.n_test, args.seed + 2)
+
+    for name, sub, full in (
+        ("train", train_sub, train_df),
+        ("val", val_sub, val_df),
+        ("test", test_sub, test_df),
+    ):
+        manifest = dst_root / f"{name}_manifest.csv"
+        sub.to_csv(manifest, index=False)
+        req = {"train": args.n_train, "val": args.n_val, "test": args.n_test}[name]
+        req_s = "all" if req is None else str(req)
+        print(f"{name} subset: {len(sub)} / {len(full)} rows (requested {req_s}) → {manifest}")
 
     counts = {}
-    for split, df in ("train", train_sub), ("val", val_df), ("test", test_df):
+    for split, df in ("train", train_sub), ("val", val_sub), ("test", test_sub):
         counts[split] = write_split(
             df, src_root, dst_root, split, args.tile_size, symlink_he=args.symlink_he
         )
@@ -325,11 +357,19 @@ def main() -> None:
         "markers": ORION_LITE_MARKERS,
         "marker_indices": MARKER_TO_IDX,
         "n_train_requested": args.n_train,
+        "n_val_requested": args.n_val,
+        "n_test_requested": args.n_test,
+        "source_csv_rows": {
+            "train": len(train_df),
+            "val": len(val_df),
+            "test": len(test_df),
+        },
         "tile_size": args.tile_size,
         "seed": args.seed,
         "splits": counts,
         "test_count": counts["test"],
         "slide_split": "MIPHEI official (37 train slides / 2 val / 2 test)",
+        "note": "One row = one tile pair; 3 markers are channels in trainB/valB/testB, not separate images.",
     }
     meta_path = dst_root / "meta.json"
     meta_path.write_text(json.dumps(meta, indent=2) + "\n")

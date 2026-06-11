@@ -637,19 +637,31 @@ vanilla_fm_apply_fm_cross_attn_scratch_env() {
 
 # Orion-Lite: same cross-attn recipe, fair @80, 1,1,1 channel weights.
 vanilla_fm_apply_orion_fm_cross_attn_scratch_env() {
-  vanilla_fm_apply_fm_cross_attn_scratch_env
+  vanilla_fm_apply_joint_perc_pins
+  export TRAIN_NAME=hemit_fm_cross_attn_scratch
   export TRAIN_NAME="${TRAIN_NAME/hemit_/orion_lite_}"
   export VANILLA_FM_EXPECTED_TRAIN_NAME="${TRAIN_NAME}"
+  unset DATASET_MODE FM_USE_SEG FM_INIT_FROM_COND
+  export FM_FLOW_PATH=noise
+  export FM_USE_TRI_HEAD=0
+  export FM_USE_CROSS_ATTN=1
+  export FM_CROSS_ATTN_DECODER="${FM_CROSS_ATTN_DECODER:-0}"
+  export FM_CROSS_ATTN_HEADS="${FM_CROSS_ATTN_HEADS:-4}"
+  unset FM_LAMBDA_SAMPLE_L1
+  export FM_LAMBDA_SAMPLE_L1=0
   export FM_CHANNEL_WEIGHTS=1,1,1
   vanilla_fm_apply_fm_scratch_80_schedule
   echo "orion_fm_cross_attn_scratch: Orion-Lite @80, ch=${FM_CHANNEL_WEIGHTS}" >&2
 }
 
-# Orion-Lite vanilla FM baseline (no cross-attn).
+# Orion-Lite vanilla FM baseline (no cross-attn). @80 only — do not use joint_perc_scratch (130ep).
 vanilla_fm_apply_orion_joint_perc_scratch_env() {
-  vanilla_fm_apply_joint_perc_scratch_env
+  vanilla_fm_apply_joint_perc_pins
+  export TRAIN_NAME=hemit_vanilla_fm_joint_perc_scratch
   export TRAIN_NAME="${TRAIN_NAME/hemit_/orion_lite_}"
   export VANILLA_FM_EXPECTED_TRAIN_NAME="${TRAIN_NAME}"
+  unset DATASET_MODE FM_USE_SEG FM_INIT_FROM_COND
+  export FM_FLOW_PATH=noise
   export FM_CHANNEL_WEIGHTS=1,1,1
   vanilla_fm_apply_fm_scratch_80_schedule
   echo "orion_joint_perc_scratch: vanilla FM Orion-Lite @80" >&2

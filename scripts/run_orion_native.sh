@@ -160,16 +160,23 @@ test_one() {
   local extra=()
   [[ -n "${DATASET_MODE:-}" ]] && extra+=(--dataset_mode "${DATASET_MODE}")
   if [[ "${PY_MODEL}" == "vanilla_fm" ]]; then
+    echo "    fm_test: backbone=${FM_BACKBONE:-custom} up=${FM_UP_MODE:-conv_transpose} steps=${FM_STEPS:-25}"
     extra+=(
       --fm_backbone "${FM_BACKBONE:-custom}"
       --fm_loss "${FM_LOSS:-x1}"
       --fm_channels "${FM_CHANNELS:-96,192,256}"
       --fm_attn_levels "${FM_ATTN:-0,0,0}"
+      --fm_num_head_channels "${FM_NUM_HEAD_CHANNELS:-32}"
+      --fm_num_res_blocks "${FM_RESBLOCKS:-2}"
+      --fm_up_mode "${FM_UP_MODE:-conv_transpose}"
+      --fm_time_dist "${FM_TIME_DIST:-logit_normal}"
       --fm_steps "${FM_STEPS:-25}"
       --fm_sample_method "${FM_SAMPLE_METHOD:-heun}"
+      --fm_channel_weights "${FM_CHANNEL_WEIGHTS:-1,1,1}"
     )
     [[ "${FM_USE_CROSS_ATTN:-0}" == "1" ]] && extra+=(--fm_use_cross_attn --fm_cross_attn_heads "${FM_CROSS_ATTN_HEADS:-4}")
     [[ "${FM_CROSS_ATTN_DECODER:-0}" == "1" ]] && extra+=(--fm_cross_attn_decoder)
+    [[ "${FM_INIT_FROM_COND:-0}" == "1" ]] && extra+=(--fm_init_from_cond --fm_he_proj_init "${FM_HE_PROJ_INIT:-gray}")
   fi
   local test_args=(
     --dataroot "${DATAROOT}" --name "${name}"

@@ -28,7 +28,11 @@ export TEST_EPOCH="${TEST_EPOCH:-80}"
 export GPU_IDS=0
 
 source "${REPO_ROOT}/scripts/orion_model_profiles.sh"
-CKPT="${REPO_ROOT}/checkpoints/${TRAIN_NAME}/${TEST_EPOCH}_net_G.pth"
+if [[ "${MODEL}" == "cyclegan" ]]; then
+  CKPT="${REPO_ROOT}/checkpoints/${TRAIN_NAME}/${TEST_EPOCH}_net_G_A.pth"
+else
+  CKPT="${REPO_ROOT}/checkpoints/${TRAIN_NAME}/${TEST_EPOCH}_net_G.pth"
+fi
 echo "MODEL=${MODEL} TRAIN_NAME=${TRAIN_NAME} NUM_TEST=${NUM_TEST}"
 [[ -f "${CKPT}" ]] || { echo "ERROR: missing ${CKPT}" >&2; exit 1; }
 

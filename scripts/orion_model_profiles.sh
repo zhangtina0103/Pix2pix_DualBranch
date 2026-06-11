@@ -5,6 +5,10 @@ REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 ORION_DATAROOT="${ORION_DATAROOT:-${DATAROOT:-./datasets/orion_lite}}"
 export DATAROOT="${ORION_DATAROOT}"
 
+# Preserve FM profile TRAIN_NAME when locked (apply_orion_* set it before this runs).
+_locked_train_name="${TRAIN_NAME:-}"
+_locked_pretrained_name="${PRETRAINED_NAME:-}"
+
 # shellcheck source=/dev/null
 source "${REPO_ROOT}/scripts/hemit_model_profiles.sh"
 
@@ -15,8 +19,13 @@ _orion_rename() {
   printf '%s' "$v"
 }
 
-TRAIN_NAME="$(_orion_rename "${TRAIN_NAME}")"
-PRETRAINED_NAME="$(_orion_rename "${PRETRAINED_NAME}")"
+if [[ "${MODEL}" == "vanilla_fm" && "${VANILLA_FM_ENV_LOCKED:-0}" == "1" && -n "${_locked_train_name}" ]]; then
+  TRAIN_NAME="${_locked_train_name}"
+  PRETRAINED_NAME="${_locked_pretrained_name:-${_locked_train_name}}"
+else
+  TRAIN_NAME="$(_orion_rename "${TRAIN_NAME}")"
+  PRETRAINED_NAME="$(_orion_rename "${PRETRAINED_NAME}")"
+fi
 
 if [[ -f "${DATAROOT}/meta.json" ]]; then
   NUM_TEST="$(python3 -c "import json; print(json.load(open('${DATAROOT}/meta.json'))['test_count'])")"

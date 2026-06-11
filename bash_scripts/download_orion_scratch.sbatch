@@ -3,7 +3,8 @@
 #
 #   sbatch bash_scripts/download_orion_scratch.sbatch
 #
-# Resume: re-submit same command (aria2c --continue=true).
+# 6h walltime cap: re-submit until zip is ~118 GiB (aria2c --continue=true resumes).
+#   while ! test $(stat -c%s ...zip) -ge 125000000000; do sbatch bash_scripts/download_orion_scratch.sbatch; sleep 30; done
 # Monitor: tail -f logs/orion_download_*.out
 #SBATCH --job-name=orion_dl
 #SBATCH --output=logs/orion_download_%j.out
@@ -11,7 +12,7 @@
 #SBATCH --partition=mit_normal
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=8G
-#SBATCH --time=48:00:00
+#SBATCH --time=06:00:00
 
 set -euo pipefail
 source "${SLURM_SUBMIT_DIR:-$PWD}/bash_scripts/_common.sh"
@@ -41,6 +42,10 @@ aria2c --check-certificate=false --file-allocation=none \
   "${ZENODO_ORION_URL}"
 
 SZ=$(stat -c%s "${ORION_ZIP}" 2>/dev/null || stat -f%z "${ORION_ZIP}")
-echo "Download finished: ${SZ} bytes"
-[[ "${SZ}" -ge 125000000000 ]] || { echo "ERROR: zip still too small; download incomplete" >&2; exit 1; }
-echo "Next: sbatch bash_scripts/extract_orion_scratch.sbatch"
+echo "Zip size: ${SZ} bytes"
+if [[ "${SZ}" -ge 125000000000 ]]; then
+  echo "Download complete. Next: sbatch bash_scripts/extract_orion_scratch.sbatch"
+else
+  echo "Incomplete (~$(( SZ / 1024 / 1024 / 1024 )) GiB / ~118 GiB). Re-submit this sbatch to resume."
+  exit 0
+fi

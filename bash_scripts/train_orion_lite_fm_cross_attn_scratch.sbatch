@@ -1,6 +1,7 @@
 #!/bin/bash
 # Orion-Lite cross-attn FM @80 (fair compare, HEMIT-matched recipe).
 #   sbatch bash_scripts/train_orion_lite_fm_cross_attn_scratch.sbatch
+# After 6h timeout: sbatch bash_scripts/resume_orion_lite_fm_cross_attn_scratch.sbatch
 #SBATCH --job-name=orion_xattn
 #SBATCH --output=logs/orion_fm_cross_attn_%j.out
 #SBATCH --error=logs/orion_fm_cross_attn_%j.err

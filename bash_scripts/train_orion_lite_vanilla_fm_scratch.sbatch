@@ -1,6 +1,7 @@
 #!/bin/bash
 # Orion-Lite vanilla FM (no cross-attn) @80.
 #   sbatch bash_scripts/train_orion_lite_vanilla_fm_scratch.sbatch
+# After 6h timeout: sbatch bash_scripts/resume_orion_lite_vanilla_fm_scratch.sbatch
 #SBATCH --job-name=orion_vfm
 #SBATCH --output=logs/orion_vanilla_fm_%j.out
 #SBATCH --error=logs/orion_vanilla_fm_%j.err

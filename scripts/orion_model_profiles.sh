@@ -27,6 +27,14 @@ else
   PRETRAINED_NAME="$(_orion_rename "${PRETRAINED_NAME}")"
 fi
 
+# hemit_model_profiles appends _512 before we restore locked FM names — re-apply here.
+if [[ "${HEMIT_TRAIN_SIZE:-512}" != "1024" ]]; then
+  if [[ "${TRAIN_NAME}" != *"_${HEMIT_TRAIN_SIZE}" ]]; then
+    TRAIN_NAME="${TRAIN_NAME}_${HEMIT_TRAIN_SIZE}"
+    PRETRAINED_NAME="${PRETRAINED_NAME}_${HEMIT_TRAIN_SIZE}"
+  fi
+fi
+
 if [[ -f "${DATAROOT}/meta.json" ]]; then
   NUM_TEST="$(python3 -c "import json; print(json.load(open('${DATAROOT}/meta.json'))['test_count'])")"
 fi

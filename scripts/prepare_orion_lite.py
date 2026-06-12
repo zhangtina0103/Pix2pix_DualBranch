@@ -18,6 +18,9 @@ Usage:
   python scripts/prepare_orion_lite.py --src ... --dst ./datasets/orion_lite --n-train 1500 --n-val 500 --n-test 500
   # Each CSV row = one H&E tile → one 3ch mIF stack (Hoechst/CD3e/Pan-CK). Not 16× rows.
   python scripts/prepare_orion_lite.py --download --data-dir /path/to/data
+  python scripts/prepare_orion_lite.py --src ... --dst .../orion_immune \\
+    --markers CD3e,CD8a,FOXP3 --n-train 1480 --n-val 500 --n-test 500
+  # Pick markers: python scripts/audit_orion_markers.py --src ...
 """
 
 from __future__ import annotations
@@ -39,9 +42,23 @@ ORION_CHANNEL_ORDER = [
     "Hoechst", "CD31", "CD45", "CD68", "CD4", "FOXP3", "CD8a", "CD45RO",
     "CD20", "PD-L1", "CD3e", "CD163", "E-cadherin", "PD-1", "Ki67", "Pan-CK", "SMA",
 ]
-# HEMIT-aligned 3-marker panel: DAPI/Hoechst, CD3/CD3e, panCK/Pan-CK
-ORION_LITE_MARKERS = ["Hoechst", "CD3e", "Pan-CK"]
+# Default: HEMIT-aligned panel. Override with --markers (see audit_orion_markers.py).
+DEFAULT_ORION_LITE_MARKERS = ["Hoechst", "CD3e", "Pan-CK"]
+ORION_LITE_MARKERS = list(DEFAULT_ORION_LITE_MARKERS)
 MARKER_TO_IDX = {name: ORION_CHANNEL_ORDER.index(name) for name in ORION_LITE_MARKERS}
+
+
+def parse_markers(markers_arg: str | None) -> tuple[list[str], dict[str, int]]:
+    if markers_arg:
+        names = [m.strip() for m in markers_arg.split(",") if m.strip()]
+    else:
+        names = list(DEFAULT_ORION_LITE_MARKERS)
+    if len(names) != 3:
+        raise ValueError(f"Exactly 3 markers required, got {len(names)}: {names}")
+    bad = [m for m in names if m not in ORION_CHANNEL_ORDER]
+    if bad:
+        raise ValueError(f"Unknown marker(s) {bad}. Valid: {ORION_CHANNEL_ORDER}")
+    return names, {m: ORION_CHANNEL_ORDER.index(m) for m in names}
 
 ZENODO_ORION_URL = (
     "https://zenodo.org/records/15340874/files/ORIONCRC_dataset_tile_20x.zip?download=1"
@@ -98,7 +115,11 @@ def _resize_label(arr: np.ndarray, size: int) -> np.ndarray:
     return out
 
 
-def _load_label_stack(if_path: Path) -> np.ndarray:
+def _load_label_stack(
+    if_path: Path,
+    marker_names: list[str],
+    marker_to_idx: dict[str, int],
+) -> np.ndarray:
     arr = tifffile.imread(if_path)
     if arr.ndim == 2:
         raise ValueError(f"Expected multi-channel mIF at {if_path}, got 2D")
@@ -106,12 +127,12 @@ def _load_label_stack(if_path: Path) -> np.ndarray:
     if arr.shape[-1] < len(ORION_CHANNEL_ORDER):
         # C×H×W fallback
         if arr.ndim == 3 and arr.shape[0] >= len(ORION_CHANNEL_ORDER):
-            channels = [arr[idx] for idx in MARKER_TO_IDX.values()]
+            channels = [arr[marker_to_idx[m]] for m in marker_names]
             stack = np.stack(channels, axis=-1)
         else:
             raise ValueError(f"Unexpected mIF shape {arr.shape} at {if_path}")
     else:
-        stack = np.stack([arr[..., MARKER_TO_IDX[m]] for m in ORION_LITE_MARKERS], axis=-1)
+        stack = np.stack([arr[..., marker_to_idx[m]] for m in marker_names], axis=-1)
     if stack.dtype != np.uint8:
         stack = np.clip(stack, 0, 255).astype(np.uint8)
     return stack
@@ -141,6 +162,8 @@ def write_split(
     split: str,
     tile_size: int,
     symlink_he: bool,
+    marker_names: list[str],
+    marker_to_idx: dict[str, int],
 ) -> int:
     phase = split if split != "val" else "val"
     dir_a = dst_root / f"{phase}A"
@@ -172,7 +195,7 @@ def write_split(
             he = _resize_rgb(Image.open(he_path).convert("RGB"), tile_size)
             he.save(out_he)
 
-        label = _load_label_stack(if_path)
+        label = _load_label_stack(if_path, marker_names, marker_to_idx)
         label = _resize_label(label, tile_size)
         tifffile.imwrite(out_if, label)
         n += 1
@@ -300,6 +323,12 @@ def main() -> None:
     p.add_argument("--download-only", action="store_true", help="Download zip only (~118 GiB); no prep")
     p.add_argument("--extract-only", action="store_true", help="Unzip existing zip in --data-dir; no prep")
     p.add_argument("--data-dir", type=str, default="./data/orion", help="Download/extract parent when --download")
+    p.add_argument(
+        "--markers",
+        type=str,
+        default=None,
+        help="Comma-separated 3 markers, e.g. CD3e,CD8a,FOXP3 (default: Hoechst,CD3e,Pan-CK)",
+    )
     args = p.parse_args()
 
     data_dir = Path(args.data_dir).expanduser().resolve()
@@ -322,6 +351,9 @@ def main() -> None:
 
     dst_root = Path(args.dst).expanduser().resolve()
     dst_root.mkdir(parents=True, exist_ok=True)
+
+    global ORION_LITE_MARKERS, MARKER_TO_IDX
+    ORION_LITE_MARKERS, MARKER_TO_IDX = parse_markers(args.markers)
 
     print(f"ORION src: {src_root}")
     print(f"pix2pix dst: {dst_root}")
@@ -349,7 +381,14 @@ def main() -> None:
     counts = {}
     for split, df in ("train", train_sub), ("val", val_sub), ("test", test_sub):
         counts[split] = write_split(
-            df, src_root, dst_root, split, args.tile_size, symlink_he=args.symlink_he
+            df,
+            src_root,
+            dst_root,
+            split,
+            args.tile_size,
+            symlink_he=args.symlink_he,
+            marker_names=ORION_LITE_MARKERS,
+            marker_to_idx=MARKER_TO_IDX,
         )
 
     meta = {

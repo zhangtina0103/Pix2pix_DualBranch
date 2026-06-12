@@ -172,7 +172,6 @@ test_one() {
       --fm_time_dist "${FM_TIME_DIST:-logit_normal}"
       --fm_steps "${FM_STEPS:-25}"
       --fm_sample_method "${FM_SAMPLE_METHOD:-heun}"
-      --fm_channel_weights "${FM_CHANNEL_WEIGHTS:-1,1,1}"
     )
     [[ "${FM_USE_CROSS_ATTN:-0}" == "1" ]] && extra+=(--fm_use_cross_attn --fm_cross_attn_heads "${FM_CROSS_ATTN_HEADS:-4}")
     [[ "${FM_CROSS_ATTN_DECODER:-0}" == "1" ]] && extra+=(--fm_cross_attn_decoder)

@@ -35,6 +35,17 @@ if [[ "${HEMIT_TRAIN_SIZE:-512}" != "1024" ]]; then
   fi
 fi
 
+# Immune panel (CD3e,CD8a,FOXP3): distinct checkpoints from HEMIT-matched orion_lite_* runs.
+if [[ "${ORION_PANEL:-hemit}" == "immune" && "${TRAIN_NAME}" != *"_immune"* ]]; then
+  if [[ "${TRAIN_NAME}" == *_512 ]]; then
+    TRAIN_NAME="${TRAIN_NAME%_512}_immune_512"
+    PRETRAINED_NAME="${PRETRAINED_NAME%_512}_immune_512"
+  else
+    TRAIN_NAME="${TRAIN_NAME}_immune"
+    PRETRAINED_NAME="${PRETRAINED_NAME}_immune"
+  fi
+fi
+
 if [[ -f "${DATAROOT}/meta.json" ]]; then
   NUM_TEST="$(python3 -c "import json; print(json.load(open('${DATAROOT}/meta.json'))['test_count'])")"
 fi

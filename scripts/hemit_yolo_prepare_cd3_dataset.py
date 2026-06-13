@@ -21,8 +21,8 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import tifffile
 from PIL import Image
-from skimage.io import imread
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -36,7 +36,11 @@ from hemit_eval.yolo_cd3 import cd3_positive_boxes, stack_to_cd3_uint8
 
 
 def _load_stack(path: Path) -> np.ndarray:
-    arr = imread(path)
+    suffix = path.suffix.lower()
+    if suffix in (".tif", ".tiff"):
+        arr = tifffile.imread(path)
+    else:
+        arr = np.array(Image.open(path).convert("RGB"))
     if arr.ndim == 2:
         arr = np.stack([arr, arr, arr], axis=-1)
     arr = arr[..., :3].astype(np.float32)

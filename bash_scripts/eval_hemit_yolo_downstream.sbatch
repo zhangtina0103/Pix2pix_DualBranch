@@ -21,7 +21,7 @@ mkdir -p logs eval/hemit/yolo_downstream
 source /home/zhangtin/miniforge3/etc/profile.d/conda.sh 2>/dev/null || true
 conda activate "${CONDA_ENV:-pix2pix_cuda}" 2>/dev/null || true
 
-pip install -q "ultralytics>=8.0" 2>/dev/null || true
+pip install -q "scikit-image>=0.24" "ultralytics>=8.0"
 
 YOLO_WEIGHTS="${YOLO_WEIGHTS:-weights/yolo_cd3_hemit.pt}"
 HEMIT_MANIFEST="${HEMIT_MANIFEST:-eval/hemit/manifest.csv}"

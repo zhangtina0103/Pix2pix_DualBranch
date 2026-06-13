@@ -77,6 +77,10 @@ class CUTModel(BaseModel):
 
     def _nce_tensors(self, fake_b, real_a):
         """Spatial tensors for PatchNCE hooks (optional downsample)."""
+        in_c = real_a.shape[1]
+        if fake_b.shape[1] != in_c:
+            # HNSCC 4ch output: encoder hooks expect input_nc (3) like real_A.
+            fake_b = fake_b[:, :in_c]
         if self.nce_size <= 0:
             return fake_b, real_a
         s = self.nce_size

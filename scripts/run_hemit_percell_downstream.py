@@ -6,6 +6,7 @@ Metrics:
   - Per-nucleus CD3 / Pan-CK intensity Pearson (real vs generated)
   - CD3–Pan-CK co-expression preservation (|r_real - r_gen| per tile)
   - CD3-positive tile subset (tiles with ≥1 CD3+ nucleus)
+  - CD3-enriched tile subset (top fraction by mean real CD3 intensity)
 
 Examples:
   python scripts/run_hemit_percell_downstream.py \\
@@ -50,7 +51,9 @@ def main() -> None:
     p.add_argument("--outdir", type=str, required=True)
     p.add_argument("--model-name", type=str, default="model")
     p.add_argument("--cd3-marker-percentile", type=float, default=60,
-                   help="Lower (e.g. 50) for more CD3+ tiles — run analyze_cd3_positive_coverage.py first")
+                   help="Nucleus-based CD3+ threshold percentile")
+    p.add_argument("--cd3-enrichment-top-frac", type=float, default=0.10,
+                   help="Top fraction by mean real CD3 for enriched-tile subset (default 10%%)")
     p.add_argument("--bootstrap-resamples", type=int, default=10000)
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--plots", action="store_true")
@@ -67,6 +70,7 @@ def main() -> None:
                 entry["srcdir"],
                 model_name=entry["model"],
                 cd3_marker_percentile=args.cd3_marker_percentile,
+                cd3_enrichment_top_frac=args.cd3_enrichment_top_frac,
                 bootstrap_resamples=args.bootstrap_resamples,
                 seed=args.seed,
             )
@@ -90,6 +94,7 @@ def main() -> None:
         args.srcdir,
         model_name=args.model_name,
         cd3_marker_percentile=args.cd3_marker_percentile,
+        cd3_enrichment_top_frac=args.cd3_enrichment_top_frac,
         bootstrap_resamples=args.bootstrap_resamples,
         seed=args.seed,
     )
@@ -99,6 +104,8 @@ def main() -> None:
         "model": args.model_name,
         "cd3_percell_pearson": summary["all_tiles"]["cd3_percell_pearson"]["mean"],
         "panck_percell_pearson": summary["all_tiles"]["panck_percell_pearson"]["mean"],
+        "cd3enr_cd3_percell_pearson": summary["cd3_enriched_tiles"]["cd3_percell_pearson"]["mean"],
+        "n_cd3_enriched_tiles": summary["n_cd3_enriched_tiles"],
         **{k: str(v) for k, v in paths.items()},
     }, indent=2))
 

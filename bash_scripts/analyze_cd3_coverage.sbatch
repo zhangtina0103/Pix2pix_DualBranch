@@ -1,6 +1,5 @@
 #!/bin/bash
-# Count CD3+ test tiles at multiple pseudo-label percentiles (power analysis).
-# CPU-only; run before lowering YOLO_CD3_MARKER_PERCENTILE or PERCELL_CD3_PCT.
+# Count CD3+ and CD3-enriched test tiles (power analysis). CPU-only.
 #
 #   export CD3_COVERAGE_SRCDIR=results/hemit_fm_cross_attn_scratch_512/test_80/images
 #   export CD3_COVERAGE_OUTDIR=eval/hemit/cd3_coverage
@@ -24,6 +23,7 @@ conda activate "${CONDA_ENV:-pix2pix_cuda}" 2>/dev/null || true
 CD3_COVERAGE_SRCDIR="${CD3_COVERAGE_SRCDIR:-results/hemit_fm_cross_attn_scratch_512/test_80/images}"
 CD3_COVERAGE_OUTDIR="${CD3_COVERAGE_OUTDIR:-eval/hemit/cd3_coverage}"
 CD3_COVERAGE_PCTS="${CD3_COVERAGE_PCTS:-50,55,60,65,70}"
+CD3_COVERAGE_TOP_FRACS="${CD3_COVERAGE_TOP_FRACS:-0.05,0.10,0.15,0.20}"
 
 [[ -d "${CD3_COVERAGE_SRCDIR}" ]] || {
   echo "ERROR: missing ${CD3_COVERAGE_SRCDIR} — run test inference @80 first" >&2
@@ -33,6 +33,8 @@ CD3_COVERAGE_PCTS="${CD3_COVERAGE_PCTS:-50,55,60,65,70}"
 python scripts/analyze_cd3_positive_coverage.py \
   --srcdir "${CD3_COVERAGE_SRCDIR}" \
   --outdir "${CD3_COVERAGE_OUTDIR}" \
-  --percentiles "${CD3_COVERAGE_PCTS}"
+  --percentiles "${CD3_COVERAGE_PCTS}" \
+  --top-fracs "${CD3_COVERAGE_TOP_FRACS}"
 
 echo "Done → ${CD3_COVERAGE_OUTDIR}/cd3_positive_coverage.csv"
+echo "       ${CD3_COVERAGE_OUTDIR}/cd3_enrichment_coverage.csv"

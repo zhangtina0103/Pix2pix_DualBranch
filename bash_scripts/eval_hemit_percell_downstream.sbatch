@@ -1,11 +1,12 @@
 #!/bin/bash
-# Phase-1 per-cell downstream: intensity Pearson + CD3+ tile subset + co-expression.
+# Phase-1 per-cell downstream: intensity Pearson + CD3+ / enriched subsets.
 #
 #   export HEMIT_MANIFEST=eval/hemit/manifest.csv
-#   export PERCELL_OUTDIR=eval/hemit/percell_downstream_p50
-#   export PERCELL_CD3_PCT=50            # optional: more CD3+ tiles (see analyze_cd3_coverage.sbatch)
+#   export PERCELL_OUTDIR=eval/hemit/percell_downstream_enriched
+#   export PERCELL_CD3_ENRICH_TOP_FRAC=0.10   # top 10% by mean real CD3 (~95 tiles)
 #   sbatch bash_scripts/eval_hemit_percell_downstream.sbatch
 #
+# Coverage first: sbatch bash_scripts/analyze_cd3_coverage.sbatch
 # Plots: PLOTS=1 sbatch ...
 #SBATCH --job-name=hemit_percell
 #SBATCH --output=logs/hemit_percell_%j.out
@@ -25,6 +26,7 @@ conda activate "${CONDA_ENV:-pix2pix_cuda}" 2>/dev/null || true
 export HEMIT_MANIFEST="${HEMIT_MANIFEST:-eval/hemit/manifest.csv}"
 export PERCELL_OUTDIR="${PERCELL_OUTDIR:-eval/hemit/percell_downstream}"
 export PERCELL_CD3_PCT="${PERCELL_CD3_PCT:-60}"
+export PERCELL_CD3_ENRICH_TOP_FRAC="${PERCELL_CD3_ENRICH_TOP_FRAC:-0.10}"
 PLOT_FLAG=()
 [[ "${PLOTS:-0}" == "1" ]] && PLOT_FLAG=(--plots)
 
@@ -34,6 +36,7 @@ python scripts/run_hemit_percell_downstream.py \
   --manifest "${HEMIT_MANIFEST}" \
   --outdir "${PERCELL_OUTDIR}" \
   --cd3-marker-percentile "${PERCELL_CD3_PCT}" \
+  --cd3-enrichment-top-frac "${PERCELL_CD3_ENRICH_TOP_FRAC}" \
   "${PLOT_FLAG[@]}"
 
 echo "Done → ${PERCELL_OUTDIR}/percell_leaderboard.csv"

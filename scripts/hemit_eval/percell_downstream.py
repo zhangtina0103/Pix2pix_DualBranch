@@ -1,4 +1,4 @@
-"""Per-cell downstream: intensity correlation, co-expression, CD3+ tile subset."""
+"""Per-cell downstream: intensity correlation, co-expression, CD3+ / enriched subsets."""
 
 from __future__ import annotations
 
@@ -10,8 +10,12 @@ from typing import Any
 import numpy as np
 from skimage.measure import label, regionprops
 
+from hemit_eval.cd3_subset import (
+    cd3_enrichment_threshold,
+    is_cd3_enriched_tile,
+    tile_mean_cd3_intensity,
+)
 from hemit_eval.downstream_biology import (
-    DOWNSTREAM_MARKERS,
     _marker_positive_nuclei_count,
     segment_nuclei,
 )
@@ -19,6 +23,51 @@ from hemit_eval.image_io import list_fake_files, load_pair, resolve_image_dir
 from hemit_eval.statistics import summarize_values
 
 MARKER_CHANNELS = {"cd3": 1, "panck": 2}
+
+_EMPTY_SUMMARY = {
+    "n": 0, "mean": float("nan"), "std": float("nan"),
+    "ci_low": float("nan"), "ci_high": float("nan"),
+}
+
+
+def _summarize_column(
+    rows: list[dict[str, Any]],
+    col: str,
+    *,
+    bootstrap_resamples: int,
+    seed: int,
+    higher: bool = True,
+) -> dict[str, Any]:
+    if not rows:
+        return dict(_EMPTY_SUMMARY)
+    return summarize_values(
+        np.array([r[col] for r in rows], dtype=np.float64),
+        n_resamples=bootstrap_resamples,
+        random_state=seed,
+        higher_is_better=higher,
+    )
+
+
+def _subset_block(
+    rows: list[dict[str, Any]],
+    *,
+    bootstrap_resamples: int,
+    seed: int,
+) -> dict[str, Any]:
+    return {
+        "cd3_percell_pearson": _summarize_column(
+            rows, "cd3_percell_pearson", bootstrap_resamples=bootstrap_resamples, seed=seed,
+        ),
+        "panck_percell_pearson": _summarize_column(
+            rows, "panck_percell_pearson", bootstrap_resamples=bootstrap_resamples, seed=seed,
+        ),
+        "coexp_abs_err": _summarize_column(
+            rows, "coexp_abs_err", bootstrap_resamples=bootstrap_resamples, seed=seed, higher=False,
+        ),
+        "cd3_count_abs_err": _summarize_column(
+            rows, "cd3_count_abs_err", bootstrap_resamples=bootstrap_resamples, seed=seed, higher=False,
+        ),
+    }
 
 
 def _pearson(a: np.ndarray, b: np.ndarray) -> float:
@@ -65,10 +114,12 @@ def _tile_metrics(
 
     out: dict[str, Any] = {
         "n_nuclei": len(cells),
+        "cd3_mean_real": tile_mean_cd3_intensity(real),
         "cd3_count_real": cd3_count_real,
         "cd3_count_gen": cd3_count_gen,
         "cd3_count_abs_err": abs(cd3_count_gen - cd3_count_real),
         "is_cd3_positive_tile": cd3_count_real > 0,
+        "is_cd3_enriched_tile": False,
     }
     if len(cells) < 3:
         out.update({
@@ -100,6 +151,7 @@ def _tile_metrics(
 def compute_percell_downstream(
     srcdir: str | Path, *, model_name: str = "model",
     cd3_marker_percentile: float = 60,
+    cd3_enrichment_top_frac: float = 0.10,
     bootstrap_resamples: int = 10000, seed: int = 42,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     image_dir = resolve_image_dir(srcdir)
@@ -111,6 +163,13 @@ def compute_percell_downstream(
         )}
         per_tile.append(row)
 
+    enrich_thr = cd3_enrichment_threshold(
+        np.array([r["cd3_mean_real"] for r in per_tile], dtype=np.float64),
+        cd3_enrichment_top_frac,
+    )
+    for row in per_tile:
+        row["is_cd3_enriched_tile"] = is_cd3_enriched_tile(row["cd3_mean_real"], enrich_thr)
+
     def _summ(col: str, *, higher: bool = True) -> dict[str, Any]:
         return summarize_values(
             np.array([r[col] for r in per_tile], dtype=np.float64),
@@ -118,34 +177,27 @@ def compute_percell_downstream(
         )
 
     cd3pos = [r for r in per_tile if r.get("is_cd3_positive_tile")]
+    cd3enr = [r for r in per_tile if r.get("is_cd3_enriched_tile")]
     summary: dict[str, Any] = {
         "model": model_name,
         "n_tiles": len(per_tile),
         "n_cd3_positive_tiles": len(cd3pos),
+        "n_cd3_enriched_tiles": len(cd3enr),
         "cd3_marker_percentile": cd3_marker_percentile,
+        "cd3_enrichment_top_frac": cd3_enrichment_top_frac,
+        "cd3_enrichment_threshold": enrich_thr,
         "all_tiles": {
             "cd3_percell_pearson": _summ("cd3_percell_pearson"),
             "panck_percell_pearson": _summ("panck_percell_pearson"),
             "coexp_abs_err": _summ("coexp_abs_err", higher=False),
             "cd3_count_abs_err": _summ("cd3_count_abs_err", higher=False),
         },
-        "cd3_positive_tiles": {
-            "cd3_percell_pearson": summarize_values(
-                np.array([r["cd3_percell_pearson"] for r in cd3pos], dtype=np.float64),
-                n_resamples=bootstrap_resamples, random_state=seed,
-            ) if cd3pos else {"n": 0, "mean": float("nan"), "std": float("nan"),
-                              "ci_low": float("nan"), "ci_high": float("nan")},
-            "cd3_count_abs_err": summarize_values(
-                np.array([r["cd3_count_abs_err"] for r in cd3pos], dtype=np.float64),
-                n_resamples=bootstrap_resamples, random_state=seed, higher_is_better=False,
-            ) if cd3pos else {"n": 0, "mean": float("nan"), "std": float("nan"),
-                              "ci_low": float("nan"), "ci_high": float("nan")},
-            "panck_percell_pearson": summarize_values(
-                np.array([r["panck_percell_pearson"] for r in cd3pos], dtype=np.float64),
-                n_resamples=bootstrap_resamples, random_state=seed,
-            ) if cd3pos else {"n": 0, "mean": float("nan"), "std": float("nan"),
-                              "ci_low": float("nan"), "ci_high": float("nan")},
-        },
+        "cd3_positive_tiles": _subset_block(
+            cd3pos, bootstrap_resamples=bootstrap_resamples, seed=seed,
+        ),
+        "cd3_enriched_tiles": _subset_block(
+            cd3enr, bootstrap_resamples=bootstrap_resamples, seed=seed,
+        ),
         "image_dir": str(image_dir),
     }
     return per_tile, summary
@@ -169,12 +221,18 @@ def write_percell_results(
         w = csv.writer(f)
         w.writerow(["model", "scope", "metric", "mean", "std", "ci_low", "ci_high", "n"])
         model = summary["model"]
-        for scope in ("all_tiles", "cd3_positive_tiles"):
+        for scope in ("all_tiles", "cd3_positive_tiles", "cd3_enriched_tiles"):
+            n_scope = summary.get(
+                "n_cd3_enriched_tiles" if scope == "cd3_enriched_tiles"
+                else "n_cd3_positive_tiles" if scope == "cd3_positive_tiles"
+                else "n_tiles"
+            )
             for metric, block in summary[scope].items():
                 w.writerow([
                     model, scope, metric,
                     f"{block['mean']:.6f}", f"{block.get('std', 0):.6f}",
-                    f"{block['ci_low']:.6f}", f"{block['ci_high']:.6f}", block.get("n", summary["n_tiles"]),
+                    f"{block['ci_low']:.6f}", f"{block['ci_high']:.6f}",
+                    block.get("n", n_scope),
                 ])
     return {"per_tile_csv": per_tile_path, "summary_json": json_path, "summary_csv": flat_path}
 
@@ -186,16 +244,22 @@ def write_percell_leaderboard(summaries: list[dict[str, Any]], outdir: str | Pat
     with path.open("w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow([
-            "model", "n_tiles", "n_cd3_positive_tiles",
+            "model", "n_tiles", "n_cd3_positive_tiles", "n_cd3_enriched_tiles",
+            "cd3_enrichment_top_frac", "cd3_enrichment_threshold",
             "cd3_percell_pearson", "cd3_percell_ci_low", "cd3_percell_ci_high",
             "panck_percell_pearson", "panck_percell_ci_low", "panck_percell_ci_high",
-            "coexp_abs_err", "cd3pos_cd3_percell_pearson", "cd3pos_count_abs_err",
+            "coexp_abs_err",
+            "cd3pos_cd3_percell_pearson", "cd3pos_count_abs_err",
+            "cd3enr_cd3_percell_pearson", "cd3enr_panck_percell_pearson",
+            "cd3enr_coexp_abs_err", "cd3enr_count_abs_err",
         ])
         for s in summaries:
             allm = s["all_tiles"]
-            sub = s["cd3_positive_tiles"]
+            pos = s["cd3_positive_tiles"]
+            enr = s["cd3_enriched_tiles"]
             w.writerow([
-                s["model"], s["n_tiles"], s["n_cd3_positive_tiles"],
+                s["model"], s["n_tiles"], s["n_cd3_positive_tiles"], s["n_cd3_enriched_tiles"],
+                f"{s['cd3_enrichment_top_frac']:.4f}", f"{s['cd3_enrichment_threshold']:.6f}",
                 f"{allm['cd3_percell_pearson']['mean']:.6f}",
                 f"{allm['cd3_percell_pearson']['ci_low']:.6f}",
                 f"{allm['cd3_percell_pearson']['ci_high']:.6f}",
@@ -203,8 +267,12 @@ def write_percell_leaderboard(summaries: list[dict[str, Any]], outdir: str | Pat
                 f"{allm['panck_percell_pearson']['ci_low']:.6f}",
                 f"{allm['panck_percell_pearson']['ci_high']:.6f}",
                 f"{allm['coexp_abs_err']['mean']:.6f}",
-                f"{sub['cd3_percell_pearson']['mean']:.6f}",
-                f"{sub['cd3_count_abs_err']['mean']:.6f}",
+                f"{pos['cd3_percell_pearson']['mean']:.6f}",
+                f"{pos['cd3_count_abs_err']['mean']:.6f}",
+                f"{enr['cd3_percell_pearson']['mean']:.6f}",
+                f"{enr['panck_percell_pearson']['mean']:.6f}",
+                f"{enr['coexp_abs_err']['mean']:.6f}",
+                f"{enr['cd3_count_abs_err']['mean']:.6f}",
             ])
     return path
 
@@ -240,16 +308,38 @@ def plot_percell_leaderboard(summaries: list[dict[str, Any]], outdir: str | Path
         plt.close(fig)
         saved.append(p)
 
-    # CD3+ tile subset
+    # CD3+ tile subset (nucleus-positive)
     fig, ax = plt.subplots(figsize=(max(6, len(models) * 1.1), 4))
     means = [s["cd3_positive_tiles"]["cd3_percell_pearson"]["mean"] for s in summaries]
     ax.bar(x, means, color="coral")
     ax.set_xticks(x)
     ax.set_xticklabels(models, rotation=20, ha="right")
     ax.set_ylabel("Pearson r")
-    ax.set_title(f"Per-cell CD3 Pearson (CD3+ tiles only, n≈{summaries[0]['n_cd3_positive_tiles']})")
+    ax.set_title(f"Per-cell CD3 Pearson (CD3+ tiles, n≈{summaries[0]['n_cd3_positive_tiles']})")
     fig.tight_layout()
     p = plot_dir / "cd3pos_percell_pearson_comparison.png"
+    fig.savefig(p, dpi=160)
+    plt.close(fig)
+    saved.append(p)
+
+    # CD3-enriched tile subset (top mean CD3)
+    fig, ax = plt.subplots(figsize=(max(6, len(models) * 1.1), 4))
+    means = [s["cd3_enriched_tiles"]["cd3_percell_pearson"]["mean"] for s in summaries]
+    yerr = [
+        [m - s["cd3_enriched_tiles"]["cd3_percell_pearson"]["ci_low"] for m, s in zip(means, summaries)],
+        [s["cd3_enriched_tiles"]["cd3_percell_pearson"]["ci_high"] - m for m, s in zip(means, summaries)],
+    ]
+    top_frac = summaries[0]["cd3_enrichment_top_frac"]
+    ax.bar(x, means, yerr=yerr, capsize=3, color="seagreen")
+    ax.set_xticks(x)
+    ax.set_xticklabels(models, rotation=20, ha="right")
+    ax.set_ylabel("Pearson r")
+    ax.set_title(
+        f"Per-cell CD3 Pearson (top {top_frac:.0%} CD3-enriched tiles, "
+        f"n≈{summaries[0]['n_cd3_enriched_tiles']})"
+    )
+    fig.tight_layout()
+    p = plot_dir / "cd3enr_percell_pearson_comparison.png"
     fig.savefig(p, dpi=160)
     plt.close(fig)
     saved.append(p)

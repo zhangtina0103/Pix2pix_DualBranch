@@ -12,7 +12,15 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from hemit.eval.image_io import resolve_image_dir
+
+def resolve_image_dir(srcdir: Path) -> Path:
+    """Inline helper so manifest build works even if hemit.eval import fails."""
+    images = srcdir / "images"
+    if images.is_dir() and any(p.name.endswith("_fake_B.tif") for p in images.iterdir()):
+        return images
+    if any(p.name.endswith("_fake_B.tif") for p in srcdir.iterdir()):
+        return srcdir
+    raise FileNotFoundError(f"No *_fake_B.tif under {srcdir} or {srcdir}/images")
 
 
 def _has_images(srcdir: Path) -> bool:

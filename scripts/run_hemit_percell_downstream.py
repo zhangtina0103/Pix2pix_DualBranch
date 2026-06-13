@@ -44,6 +44,20 @@ from hemit_eval.percell_downstream import (
 )
 
 
+def _maybe_plot(summaries: list, outdir: Path, *, enabled: bool) -> list[str]:
+    if not enabled:
+        return []
+    try:
+        return [str(p) for p in plot_percell_leaderboard(summaries, outdir)]
+    except (ImportError, AttributeError) as exc:
+        print(
+            "WARNING: skipping plots — matplotlib/numpy incompatible in this env "
+            f"({exc}). CSVs were written. Re-run with PLOTS=0 or pip install 'numpy<2'.",
+            file=sys.stderr,
+        )
+        return []
+
+
 def main() -> None:
     p = argparse.ArgumentParser(description="HEMIT per-cell downstream (Phase 1).")
     p.add_argument("--srcdir", type=str, default=None)
@@ -77,7 +91,7 @@ def main() -> None:
             write_percell_results(model_out, per_tile, summary)
             summaries.append(summary)
         leaderboard = write_percell_leaderboard(summaries, outdir)
-        plot_paths = [str(p) for p in plot_percell_leaderboard(summaries, outdir)] if args.plots else []
+        plot_paths = _maybe_plot(summaries, outdir, enabled=args.plots)
         print(json.dumps({
             "mode": "comparison",
             "outdir": str(outdir),

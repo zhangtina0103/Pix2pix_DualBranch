@@ -7,7 +7,9 @@
 #   sbatch bash_scripts/eval_hemit_percell_downstream.sbatch
 #
 # Coverage first: sbatch bash_scripts/analyze_cd3_coverage.sbatch
-# Plots: PLOTS=1 sbatch ...
+#
+# Plots (optional): PLOTS=1 needs numpy<2 in pix2pix_cuda; otherwise CSV-only is fine.
+#   PLOTS=1 sbatch ...   # may warn+skip if numpy 2.x breaks matplotlib
 #SBATCH --job-name=hemit_percell
 #SBATCH --output=logs/hemit_percell_%j.out
 #SBATCH --error=logs/hemit_percell_%j.err

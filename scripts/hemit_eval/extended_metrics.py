@@ -86,15 +86,17 @@ class _LpipsScorer:
     def __init__(self) -> None:
         self._model = None
         self.available = False
+        self.device = "cpu"
         try:
             import lpips  # type: ignore
             import torch
             self._torch = torch
-            self._model = lpips.LPIPS(net="alex")
+            self.device = "cuda" if torch.cuda.is_available() else "cpu"
+            self._model = lpips.LPIPS(net="alex").to(self.device)
             self._model.eval()
             self.available = True
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f"WARNING: LPIPS unavailable ({exc}); lpips columns will be NaN", flush=True)
 
     def score(self, real_ch: np.ndarray, fake_ch: np.ndarray) -> float:
         if not self.available or self._model is None:
@@ -103,7 +105,7 @@ class _LpipsScorer:
         def _tensor(ch: np.ndarray):
             x = np.clip(ch, 0, 255).astype(np.float32) / 255.0
             x = np.stack([x, x, x], axis=0) * 2.0 - 1.0
-            return t.from_numpy(x).unsqueeze(0)
+            return t.from_numpy(x).unsqueeze(0).to(self.device)
         with t.no_grad():
             return float(self._model(_tensor(fake_ch), _tensor(real_ch)).item())
 
@@ -142,6 +144,8 @@ def compute_extended_metrics(
             )
 
     summary["lpips_available"] = bool(lpips_scorer and lpips_scorer.available)
+    if use_lpips and lpips_scorer and lpips_scorer.available:
+        summary["lpips_device"] = lpips_scorer.device
     summary["n_tiles"] = len(per_tile)
     summary["image_dir"] = str(image_dir)
     return per_tile, summary

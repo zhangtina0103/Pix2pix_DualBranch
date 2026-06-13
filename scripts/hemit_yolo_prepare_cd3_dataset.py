@@ -74,6 +74,7 @@ def export_split(
     images_dir: Path,
     labels_dir: Path,
     *,
+    split_name: str = "split",
     min_boxes: int = 1,
     bbox_pad: int = 8,
     min_box_px: int = 24,
@@ -86,7 +87,7 @@ def export_split(
     total = len(paths)
     for i, src in enumerate(paths, start=1):
         if i == 1 or i % 200 == 0 or i == total:
-            print(f"  [{split}] scanning {i}/{total} ... kept={n_images} boxes={n_boxes}", flush=True)
+            print(f"  [{split_name}] scanning {i}/{total} ... kept={n_images} boxes={n_boxes}", flush=True)
         stack = _load_stack(src)
         h, w = stack.shape[:2]
         boxes = cd3_positive_boxes(stack, pad=bbox_pad, min_side=min_box_px)
@@ -102,7 +103,7 @@ def export_split(
         n_images += 1
         n_boxes += len(boxes)
     if n_skipped:
-        print(f"  [{split}] skipped {n_skipped} tiles with <{min_boxes} boxes", flush=True)
+        print(f"  [{split_name}] skipped {n_skipped} tiles with <{min_boxes} boxes", flush=True)
     return n_images, n_boxes
 
 
@@ -158,6 +159,7 @@ def main() -> None:
             paths,
             outdir / "images" / split,
             outdir / "labels" / split,
+            split_name=split,
             min_boxes=args.min_boxes,
             bbox_pad=args.bbox_pad,
             min_box_px=args.min_box_px,

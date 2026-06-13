@@ -32,8 +32,8 @@ conda activate "${CONDA_ENV:-hemit_yolo}" 2>/dev/null || {
 YOLO_DATA="${YOLO_DATA:-datasets/hemit_cd3_yolo/hemit_cd3.yaml}"
 YOLO_WEIGHTS="${YOLO_WEIGHTS:-weights/yolo_cd3_hemit.pt}"
 
-if [[ ! -f "${YOLO_DATA}" ]]; then
-  PREP_ARGS=(--outdir datasets/hemit_cd3_yolo)
+if [[ "${FORCE_REPREP:-1}" == "1" ]] || [[ ! -f "${YOLO_DATA}" ]]; then
+  PREP_ARGS=(--outdir datasets/hemit_cd3_yolo --min-boxes 1 --bbox-pad 8 --min-box-px 24)
   if [[ -n "${HEMIT_ROOT:-}" ]]; then
     PREP_ARGS+=(--hemit-root "${HEMIT_ROOT}")
   elif [[ -n "${DATAROOT:-}" ]]; then

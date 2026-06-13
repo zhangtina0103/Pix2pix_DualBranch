@@ -74,7 +74,9 @@ def export_split(
     images_dir: Path,
     labels_dir: Path,
     *,
-    min_boxes: int = 0,
+    min_boxes: int = 1,
+    bbox_pad: int = 8,
+    min_box_px: int = 24,
 ) -> tuple[int, int]:
     images_dir.mkdir(parents=True, exist_ok=True)
     labels_dir.mkdir(parents=True, exist_ok=True)
@@ -83,7 +85,7 @@ def export_split(
     for src in paths:
         stack = _load_stack(src)
         h, w = stack.shape[:2]
-        boxes = cd3_positive_boxes(stack)
+        boxes = cd3_positive_boxes(stack, pad=bbox_pad, min_side=min_box_px)
         if len(boxes) < min_boxes:
             continue
         stem = src.stem
@@ -116,6 +118,10 @@ def main() -> None:
     src.add_argument("--dataroot", type=str, help="pix2pix dataroot (trainB, valB)")
     p.add_argument("--outdir", type=str, default="datasets/hemit_cd3_yolo")
     p.add_argument("--splits", type=str, default="train,val", help="Comma-separated splits to export")
+    p.add_argument("--min-boxes", type=int, default=1,
+                   help="Keep only tiles with at least this many CD3+ boxes (default: 1)")
+    p.add_argument("--bbox-pad", type=int, default=8, help="Pixel padding around nucleus bbox")
+    p.add_argument("--min-box-px", type=int, default=24, help="Minimum box side in pixels for YOLO")
     args = p.parse_args()
 
     hemit_root = Path(args.hemit_root).expanduser().resolve() if args.hemit_root else None
@@ -133,6 +139,9 @@ def main() -> None:
             paths,
             outdir / "images" / split,
             outdir / "labels" / split,
+            min_boxes=args.min_boxes,
+            bbox_pad=args.bbox_pad,
+            min_box_px=args.min_box_px,
         )
         totals[split] = (n_img, n_box)
         print(f"  {split}: {n_img} images, {n_box} CD3+ boxes")

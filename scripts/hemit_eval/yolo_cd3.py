@@ -61,13 +61,35 @@ class Box:
         return cls(x1, y1, x1 + bw, y1 + bh)
 
     @classmethod
-    def from_region_bbox(cls, min_row: int, min_col: int, max_row: int, max_col: int, *, pad: int = 2) -> Box:
-        return cls(
-            max(0, min_col - pad),
-            max(0, min_row - pad),
-            max_col + pad,
-            max_row + pad,
-        )
+    def from_region_bbox(
+        cls,
+        min_row: int,
+        min_col: int,
+        max_row: int,
+        max_col: int,
+        *,
+        pad: int = 8,
+        min_side: int = 24,
+        img_w: int | None = None,
+        img_h: int | None = None,
+    ) -> Box:
+        x1 = max(0, min_col - pad)
+        y1 = max(0, min_row - pad)
+        x2 = max_col + pad
+        y2 = max_row + pad
+        cx = (x1 + x2) / 2.0
+        cy = (y1 + y2) / 2.0
+        w = max(x2 - x1, float(min_side))
+        h = max(y2 - y1, float(min_side))
+        x1, y1 = cx - w / 2.0, cy - h / 2.0
+        x2, y2 = cx + w / 2.0, cy + h / 2.0
+        if img_w is not None:
+            x1 = max(0.0, min(float(img_w), x1))
+            x2 = max(0.0, min(float(img_w), x2))
+        if img_h is not None:
+            y1 = max(0.0, min(float(img_h), y1))
+            y2 = max(0.0, min(float(img_h), y2))
+        return cls(x1, y1, x2, y2)
 
 
 def segment_nuclei(dapi: np.ndarray, *, min_area: int = 36) -> np.ndarray:
@@ -83,9 +105,11 @@ def cd3_positive_boxes(
     stack: np.ndarray,
     *,
     min_area: int = 36,
-    pad: int = 2,
+    pad: int = 8,
+    min_side: int = 24,
 ) -> list[Box]:
     """Pseudo-label CD3+ nuclei on a real multiplex stack (H,W,3)."""
+    h, w = stack.shape[:2]
     nuclei = segment_nuclei(stack[..., 0], min_area=min_area)
     labeled = label(nuclei)
     if labeled.max() == 0:
@@ -104,7 +128,12 @@ def cd3_positive_boxes(
         if prop.mean_intensity < thr:
             continue
         min_row, min_col, max_row, max_col = prop.bbox
-        boxes.append(Box.from_region_bbox(min_row, min_col, max_row, max_col, pad=pad))
+        boxes.append(
+            Box.from_region_bbox(
+                min_row, min_col, max_row, max_col,
+                pad=pad, min_side=min_side, img_w=w, img_h=h,
+            )
+        )
     return boxes
 
 
@@ -276,6 +305,12 @@ def compute_yolo_downstream(
         n_resamples=bootstrap_resamples,
         random_state=seed,
     )
+    mean_ref = summary["metrics"]["mean_n_ref"]["mean"]
+    summary["degenerate"] = bool(mean_ref == 0.0)
+    if summary["degenerate"]:
+        summary["warning"] = (
+            "Detector found 0 cells on real_B across all tiles — metrics are not meaningful."
+        )
     return per_tile, summary
 
 

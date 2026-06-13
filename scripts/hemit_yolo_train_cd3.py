@@ -64,6 +64,41 @@ def main() -> None:
     weights_out.write_bytes(best.read_bytes())
     print(f"Copied best weights → {weights_out}")
 
+    _sanity_check_detector(weights_out, data_path)
+
+
+def _sanity_check_detector(weights: Path, data_yaml: Path) -> None:
+    """Fail fast if detector does not fire on a labeled train image."""
+    from ultralytics import YOLO
+
+    yaml_text = data_yaml.read_text(encoding="utf-8")
+    root = None
+    for line in yaml_text.splitlines():
+        if line.startswith("path:"):
+            root = Path(line.split(":", 1)[1].strip())
+            break
+    if root is None:
+        print("[warn] sanity check skipped — could not parse dataset path")
+        return
+
+    labels_dir = root / "labels" / "train"
+    pos = next((p for p in sorted(labels_dir.glob("*.txt")) if p.stat().st_size > 0), None)
+    if pos is None:
+        raise SystemExit("Sanity check failed: no non-empty train labels")
+
+    stem = pos.stem
+    img = root / "images" / "train" / f"{stem}.png"
+    n_gt = len(pos.read_text().strip().splitlines())
+    model = YOLO(str(weights))
+    result = model.predict(str(img), conf=0.1, verbose=False)[0]
+    n_det = 0 if result.boxes is None else len(result.boxes)
+    print(f"Sanity check {stem}: {n_gt} GT boxes, {n_det} detections @ conf=0.1")
+    if n_det == 0:
+        raise SystemExit(
+            "Sanity check failed: 0 detections on a labeled train tile. "
+            "Do not run downstream eval — retrain or lower conf / enlarge boxes."
+        )
+
 
 if __name__ == "__main__":
     main()

@@ -82,11 +82,16 @@ def export_split(
     labels_dir.mkdir(parents=True, exist_ok=True)
     n_images = 0
     n_boxes = 0
-    for src in paths:
+    n_skipped = 0
+    total = len(paths)
+    for i, src in enumerate(paths, start=1):
+        if i == 1 or i % 200 == 0 or i == total:
+            print(f"  [{split}] scanning {i}/{total} ... kept={n_images} boxes={n_boxes}", flush=True)
         stack = _load_stack(src)
         h, w = stack.shape[:2]
         boxes = cd3_positive_boxes(stack, pad=bbox_pad, min_side=min_box_px)
         if len(boxes) < min_boxes:
+            n_skipped += 1
             continue
         stem = src.stem
         img_path = images_dir / f"{stem}.png"
@@ -96,6 +101,8 @@ def export_split(
         lbl_path.write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
         n_images += 1
         n_boxes += len(boxes)
+    if n_skipped:
+        print(f"  [{split}] skipped {n_skipped} tiles with <{min_boxes} boxes", flush=True)
     return n_images, n_boxes
 
 
@@ -128,6 +135,18 @@ def main() -> None:
     dataroot = Path(args.dataroot).expanduser().resolve() if args.dataroot else None
     outdir = Path(args.outdir).expanduser().resolve()
     splits = [s.strip() for s in args.splits.split(",") if s.strip()]
+
+    # Remove stale images/labels from prior exports (e.g. 3717-image run before --min-boxes 1)
+    import shutil
+    for split in splits:
+        for sub in ("images", "labels"):
+            d = outdir / sub / split
+            if d.exists():
+                shutil.rmtree(d)
+                print(f"  cleared {d}", flush=True)
+    for cache in outdir.rglob("*.cache"):
+        cache.unlink()
+        print(f"  cleared {cache}", flush=True)
 
     totals: dict[str, tuple[int, int]] = {}
     for split in splits:

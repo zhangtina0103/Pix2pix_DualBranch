@@ -39,6 +39,7 @@ def main() -> None:
         raise SystemExit(f"Missing dataset yaml: {data_path}")
 
     yolo = YOLO(args.model)
+    print(f"Training YOLO: data={data_path} epochs={args.epochs} imgsz={args.imgsz}", flush=True)
     results = yolo.train(
         data=str(data_path),
         epochs=args.epochs,

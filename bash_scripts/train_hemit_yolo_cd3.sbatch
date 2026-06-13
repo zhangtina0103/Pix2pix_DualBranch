@@ -8,7 +8,10 @@
 #   pip install torch torchvision ultralytics scikit-image tifffile scipy pandas pillow
 #
 #   export HEMIT_ROOT=/home/zhangtin/HEMIT
+#   export FORCE_REPREP=0        # after prep succeeded once
 #   sbatch bash_scripts/train_hemit_yolo_cd3.sbatch
+#
+# Bad GPU (CUDA ECC error): resubmit, or export YOLO_DEVICE=cpu YOLO_BATCH=8
 #
 #SBATCH --job-name=yolo_cd3_train
 #SBATCH --output=logs/yolo_cd3_train_%j.out
@@ -23,11 +26,31 @@ set -euo pipefail
 source "${SLURM_SUBMIT_DIR:-$PWD}/bash_scripts/_common.sh"
 mkdir -p logs datasets/hemit_cd3_yolo weights runs/hemit_yolo
 
-source /home/zhangtin/miniforge3/etc/profile.d/conda.sh 2>/dev/null || true
+log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
+# Heartbeat for SLURM (some clusters buffer stdout until job ends)
+echo "yolo_cd3_train job=${SLURM_JOB_ID:-local} host=$(hostname) start=$(date)" \
+  > "logs/yolo_cd3_train_${SLURM_JOB_ID:-local}.heartbeat"
+log "job ${SLURM_JOB_ID:-local} starting on $(hostname)"
+log "REPO_ROOT=${REPO_ROOT}"
+log "cwd=$(pwd)"
+
+for _conda in \
+  "/orcd/home/002/zhangtin/miniforge3/etc/profile.d/conda.sh" \
+  "/home/zhangtin/miniforge3/etc/profile.d/conda.sh" \
+  "${HOME}/miniforge3/etc/profile.d/conda.sh"; do
+  if [[ -f "${_conda}" ]]; then
+    # shellcheck disable=SC1090
+    source "${_conda}"
+    break
+  fi
+done
+
 conda activate "${CONDA_ENV:-hemit_yolo}" 2>/dev/null || {
-  echo "ERROR: create hemit_yolo env first (see header comments). Do not use pix2pix_cuda for YOLO." >&2
+  log "ERROR: create hemit_yolo env first (see header comments)."
   exit 1
 }
+log "conda env: ${CONDA_DEFAULT_ENV:-unknown}"
+python -c "import sys; print('python', sys.executable)"
 
 YOLO_DATA="${YOLO_DATA:-datasets/hemit_cd3_yolo/hemit_cd3.yaml}"
 YOLO_WEIGHTS="${YOLO_WEIGHTS:-weights/yolo_cd3_hemit.pt}"
@@ -39,18 +62,22 @@ if [[ "${FORCE_REPREP:-1}" == "1" ]] || [[ ! -f "${YOLO_DATA}" ]]; then
   elif [[ -n "${DATAROOT:-}" ]]; then
     PREP_ARGS+=(--dataroot "${DATAROOT}")
   else
-    echo "ERROR: set HEMIT_ROOT or DATAROOT, or pre-build ${YOLO_DATA}" >&2
+    log "ERROR: set HEMIT_ROOT or DATAROOT, or pre-build ${YOLO_DATA}"
     exit 1
   fi
-  python scripts/hemit_yolo_prepare_cd3_dataset.py "${PREP_ARGS[@]}"
+  log "preparing YOLO dataset: ${PREP_ARGS[*]}"
+  python -u scripts/hemit_yolo_prepare_cd3_dataset.py "${PREP_ARGS[@]}"
+  log "dataset prep done"
 fi
 
-python scripts/hemit_yolo_train_cd3.py \
+log "starting YOLO train → ${YOLO_WEIGHTS} device=${YOLO_DEVICE:-0}"
+python -u scripts/hemit_yolo_train_cd3.py \
   --data "${YOLO_DATA}" \
   --weights-out "${YOLO_WEIGHTS}" \
   --epochs "${YOLO_EPOCHS:-100}" \
   --imgsz "${YOLO_IMGSZ:-512}" \
   --batch "${YOLO_BATCH:-16}" \
-  --device "${CUDA_VISIBLE_DEVICES:-0}"
+  --device "${YOLO_DEVICE:-0}"
 
 echo "Done. Weights: ${YOLO_WEIGHTS}"
+log "finished OK"

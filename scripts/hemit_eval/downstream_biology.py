@@ -28,19 +28,19 @@ def segment_nuclei(dapi: np.ndarray, *, min_area: int = 36) -> np.ndarray:
     return remove_small_objects(mask, min_size=min_area)
 
 
-def _marker_positive_mask(marker: np.ndarray, nuclei_mask: np.ndarray) -> np.ndarray:
+def _marker_positive_nuclei_count(marker: np.ndarray, nuclei_mask: np.ndarray) -> int:
+    """Count nuclei whose mean marker intensity exceeds adaptive threshold."""
     labeled = label(nuclei_mask)
     if labeled.max() == 0:
-        return np.zeros_like(nuclei_mask, dtype=bool)
+        return 0
     means = [p.mean_intensity for p in regionprops(labeled, intensity_image=marker)]
     if not means:
-        return np.zeros_like(nuclei_mask, dtype=bool)
-    thr = max(threshold_otsu(marker[marker > 0]) if np.any(marker > 0) else 0.0, float(np.percentile(means, 60)))
-    positive = np.zeros_like(nuclei_mask, dtype=bool)
-    for prop in regionprops(labeled, intensity_image=marker):
-        if prop.mean_intensity >= thr:
-            positive[labeled == prop.label] = True
-    return positive
+        return 0
+    thr = max(
+        threshold_otsu(marker[marker > 0]) if np.any(marker > 0) else 0.0,
+        float(np.percentile(means, 60)),
+    )
+    return sum(1 for p in regionprops(labeled, intensity_image=marker) if p.mean_intensity >= thr)
 
 
 def compute_tile_proportions(real: np.ndarray, fake: np.ndarray) -> dict[str, Any]:
@@ -59,8 +59,8 @@ def compute_tile_proportions(real: np.ndarray, fake: np.ndarray) -> dict[str, An
     idx = {"cd3": 1, "panck": 2}
     total_real = total_gen = 0
     for marker, ch_i in idx.items():
-        cr = int(np.sum(_marker_positive_mask(real[..., ch_i], nuclei)))
-        cg = int(np.sum(_marker_positive_mask(fake[..., ch_i], nuclei)))
+        cr = _marker_positive_nuclei_count(real[..., ch_i], nuclei)
+        cg = _marker_positive_nuclei_count(fake[..., ch_i], nuclei)
         out[f"{marker}_count_real"], out[f"{marker}_count_gen"] = cr, cg
         out[f"{marker}_p_real"], out[f"{marker}_p_gen"] = cr / n_total, cg / n_total
         total_real += cr

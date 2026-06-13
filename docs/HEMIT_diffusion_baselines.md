@@ -108,3 +108,36 @@ DiffVS/D-VST may improve **visual quality / PanCK** via pretrained priors but ar
 MODEL=diffvs MODE=prepare|train|test|metrics bash scripts/run_hemit_all.sh
 MODEL=dvst  MODE=prepare|train|test|metrics bash scripts/run_hemit_all.sh
 ```
+
+## Robustness eval (extended metrics + downstream)
+
+Same pipeline as GAN/FM once TIFF pairs exist (`*_real_B.tif` / `*_fake_B.tif`):
+
+| Model | TIFF export dir |
+|-------|-----------------|
+| D-VST | `results/diffusion/dvst/images/` |
+| DiffVS | `results/diffusion/diffvs/images/` (symlinked from inference `pix2pix_metrics/`) |
+
+```bash
+# D-VST only (after MODE=test|metrics)
+python scripts/build_diffusion_robustness_manifest.py --require-images
+python scripts/run_hemit_robustness_eval.py \
+  --manifest eval/diffusion/manifest.csv \
+  --outdir eval/diffusion/robustness_comparison \
+  --reference-model pix2pix
+
+# Or sbatch (GPU for LPIPS)
+sbatch bash_scripts/eval_diffusion_robustness.sbatch
+
+# Merge GAN/FM + diffusion for one leaderboard
+python scripts/concat_robustness_manifests.py \
+  --manifest eval/hemit/manifest.csv \
+  --manifest eval/diffusion/manifest.csv \
+  --out eval/combined/manifest.csv
+python scripts/run_hemit_robustness_eval.py \
+  --manifest eval/combined/manifest.csv \
+  --outdir eval/combined/robustness_comparison \
+  --reference-model pix2pix
+```
+
+Add a second diffusion baseline tomorrow: export TIFFs to `results/diffusion/<name>/images/`, add a row to `eval/diffusion/paper_models.csv`, rebuild manifest, re-concat.

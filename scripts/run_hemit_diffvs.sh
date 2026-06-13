@@ -82,6 +82,14 @@ metrics() {
     cp -f "${DIFFVS_INFER_DIR}/score.csv" "${DIFFUSION_RESULTS_ROOT}/diffvs/score.csv"
     echo "Score: ${DIFFUSION_RESULTS_ROOT}/diffvs/score.csv"
   fi
+  local tiff_export="${DIFFVS_INFER_DIR}/pix2pix_metrics"
+  if [[ -d "${tiff_export}" ]]; then
+    mkdir -p "${DIFFUSION_RESULTS_ROOT}/diffvs/images"
+    ln -sfn "${tiff_export}" "${DIFFUSION_RESULTS_ROOT}/diffvs/images" 2>/dev/null || \
+      rsync -a --delete "${tiff_export}/" "${DIFFUSION_RESULTS_ROOT}/diffvs/images/" 2>/dev/null || \
+      cp -a "${tiff_export}/." "${DIFFUSION_RESULTS_ROOT}/diffvs/images/"
+    echo "TIFFs: ${DIFFUSION_RESULTS_ROOT}/diffvs/images"
+  fi
 }
 
 MODE="${MODE:-all}"

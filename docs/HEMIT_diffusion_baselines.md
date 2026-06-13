@@ -141,3 +141,24 @@ python scripts/run_hemit_robustness_eval.py \
 ```
 
 Add a second diffusion baseline tomorrow: export TIFFs to `results/diffusion/<name>/images/`, add a row to `eval/diffusion/paper_models.csv`, rebuild manifest, re-concat.
+
+## YOLO CD3 downstream (mentor recommendation)
+
+Train a **frozen** YOLO detector on **real** HEMIT CD3 stains only; at test, run the same weights on `real_B` (reference) vs each model's `fake_B` (prediction). Fair across generators: one detector, no per-model tuning, never train on generated images.
+
+**Labels:** pseudo-boxes from CD3+ nuclei on train/val `label` TIFFs (same nucleus logic as downstream biology).
+
+```bash
+# 1) Export YOLO dataset + train (GPU)
+export HEMIT_ROOT=/path/to/hemit   # or DATAROOT=./datasets/hemit
+sbatch bash_scripts/train_hemit_yolo_cd3.sbatch
+
+# 2) Eval all paper models on test TIFFs
+export YOLO_WEIGHTS=weights/yolo_cd3_hemit.pt
+export HEMIT_MANIFEST=eval/hemit/manifest.csv
+sbatch bash_scripts/eval_hemit_yolo_downstream.sbatch
+```
+
+Outputs: `eval/hemit/yolo_downstream/yolo_cd3_leaderboard.csv` (count MAE, F1, precision, recall with bootstrap CI).
+
+**Paper framing:** supplementary downstream — complements Pearson/per-cell metrics; cross-attn may not win on sparse detection counts.

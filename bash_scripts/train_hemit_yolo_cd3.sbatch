@@ -21,8 +21,12 @@ mkdir -p logs datasets/hemit_cd3_yolo weights runs/hemit_yolo
 source /home/zhangtin/miniforge3/etc/profile.d/conda.sh 2>/dev/null || true
 conda activate "${CONDA_ENV:-pix2pix_cuda}" 2>/dev/null || true
 
-# ultralytics may upgrade numpy→2.x; scikit-image<0.22 then breaks (np.bool8 removed)
-pip install -q "scikit-image>=0.24" "ultralytics>=8.0"
+# YOLO deps: pin numpy 1.22, install ultralytics without upgrading torch/numpy
+pip install -q "numpy==1.22.4"
+pip install -q "scikit-image>=0.19,<0.25" "tifffile>=2023.1"
+pip install -q "ultralytics>=8.0" --no-deps
+pip install -q opencv-python-headless pyyaml tqdm requests psutil py-cpuinfo pandas matplotlib seaborn pillow scipy
+python -c "import numpy; from ultralytics import YOLO; print('yolo deps OK, numpy', numpy.__version__)"
 
 YOLO_DATA="${YOLO_DATA:-datasets/hemit_cd3_yolo/hemit_cd3.yaml}"
 YOLO_WEIGHTS="${YOLO_WEIGHTS:-weights/yolo_cd3_hemit.pt}"

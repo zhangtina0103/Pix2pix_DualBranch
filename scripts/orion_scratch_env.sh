@@ -17,13 +17,18 @@ export ORION_DATA_DIR="${ORION_DATA_DIR:-${ORION_SCRATCH_ROOT}}"
 export ORION_SRC="${ORION_SRC:-${ORION_SCRATCH_ROOT}/ORIONCRC_dataset_tile_20x}"
 export ORION_ZIP="${ORION_ZIP:-${ORION_SCRATCH_ROOT}/ORIONCRC_dataset_tile_20x.zip}"
 
-# ORION_PANEL=hemit  → Hoechst,CD3e,Pan-CK  (datasets/orion_lite)
-# ORION_PANEL=immune → CD3e,CD8a,FOXP3       (datasets/orion_immune_cd3_cd8_foxp3)
+# ORION_PANEL=hemit    → Hoechst,CD3e,Pan-CK  (datasets/orion_lite)
+# ORION_PANEL=immune   → CD3e,CD8a,FOXP3       (datasets/orion_immune_cd3_cd8_foxp3)
+# ORION_PANEL=cd3_cd4  → Hoechst,CD3e,CD4       (datasets/orion_hoechst_cd3_cd4) — Pan-CK replaced
 export ORION_PANEL="${ORION_PANEL:-hemit}"
 case "${ORION_PANEL}" in
   immune)
     export ORION_MARKERS="${ORION_MARKERS:-CD3e,CD8a,FOXP3}"
     export DATAROOT="${DATAROOT:-${ORION_SCRATCH_ROOT}/datasets/orion_immune_cd3_cd8_foxp3}"
+    ;;
+  cd3_cd4)
+    export ORION_MARKERS="${ORION_MARKERS:-Hoechst,CD3e,CD4}"
+    export DATAROOT="${DATAROOT:-${ORION_SCRATCH_ROOT}/datasets/orion_hoechst_cd3_cd4}"
     ;;
   hemit|*)
     export ORION_MARKERS="${ORION_MARKERS:-Hoechst,CD3e,Pan-CK}"

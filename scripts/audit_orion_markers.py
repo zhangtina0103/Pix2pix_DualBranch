@@ -133,6 +133,11 @@ def suggest_panels(ranked: list[tuple[str, float, float]]) -> list[dict]:
         "Ultra-sparse checkpoints (if audit ranks FOXP3/PD-1 high)",
     )
     add_panel(
+        "hoechst_cd3_cd4",
+        ["Hoechst", "CD3e", "CD4"],
+        "Recommended screen: keep HEMIT core, drop Pan-CK for moderate immune CD4",
+    )
+    add_panel(
         "hemit_matched",
         ["Hoechst", "CD3e", "Pan-CK"],
         "Current panel (GAN-favored on CRC; use as supplement only)",

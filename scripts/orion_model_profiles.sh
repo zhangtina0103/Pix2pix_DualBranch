@@ -35,14 +35,22 @@ if [[ "${HEMIT_TRAIN_SIZE:-512}" != "1024" ]]; then
   fi
 fi
 
-# Immune panel (CD3e,CD8a,FOXP3): distinct checkpoints from HEMIT-matched orion_lite_* runs.
-if [[ "${ORION_PANEL:-hemit}" == "immune" && "${TRAIN_NAME}" != *"_immune"* ]]; then
+# Distinct checkpoint suffixes per Orion panel (avoid overwriting orion_lite hemit-matched runs).
+_orion_panel_suffix() {
+  case "${ORION_PANEL:-hemit}" in
+    immune) printf '%s' "_immune" ;;
+    cd3_cd4) printf '%s' "_cd3_cd4" ;;
+    *) printf '%s' "" ;;
+  esac
+}
+_panel_suffix="$(_orion_panel_suffix)"
+if [[ -n "${_panel_suffix}" && "${TRAIN_NAME}" != *"${_panel_suffix}"* ]]; then
   if [[ "${TRAIN_NAME}" == *_512 ]]; then
-    TRAIN_NAME="${TRAIN_NAME%_512}_immune_512"
-    PRETRAINED_NAME="${PRETRAINED_NAME%_512}_immune_512"
+    TRAIN_NAME="${TRAIN_NAME%_512}${_panel_suffix}_512"
+    PRETRAINED_NAME="${PRETRAINED_NAME%_512}${_panel_suffix}_512"
   else
-    TRAIN_NAME="${TRAIN_NAME}_immune"
-    PRETRAINED_NAME="${PRETRAINED_NAME}_immune"
+    TRAIN_NAME="${TRAIN_NAME}${_panel_suffix}"
+    PRETRAINED_NAME="${PRETRAINED_NAME}${_panel_suffix}"
   fi
 fi
 

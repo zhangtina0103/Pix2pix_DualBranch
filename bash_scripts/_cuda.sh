@@ -58,3 +58,10 @@ except RuntimeError as e:
     sys.exit(1)
 PY
 }
+
+# After conda activate: keep numpy 1.x (ultralytics etc. may have upgraded to 2.x).
+if [[ -f "${REPO_ROOT:-}/scripts/ensure_pix2pix_numpy.sh" ]]; then
+  # shellcheck source=/dev/null
+  source "${REPO_ROOT}/scripts/ensure_pix2pix_numpy.sh"
+  ensure_pix2pix_numpy
+fi

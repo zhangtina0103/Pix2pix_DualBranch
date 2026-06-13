@@ -66,6 +66,20 @@ class FMPerceptualLoss(nn.Module):
             mode="bilinear", align_corners=False,
         )
 
+    def _align_rgb3(self, pred: torch.Tensor, target: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        """VGG/LPIPS expect 3 channels (HNSCC 4ch mIF → use first 3 markers)."""
+        c = pred.shape[1]
+        if c == 3:
+            return pred, target
+        if c > 3:
+            return pred[:, :3], target[:, :3]
+        if c == 1:
+            return pred.expand(-1, 3, -1, -1), target.expand(-1, 3, -1, -1)
+        # 2ch: pad with duplicate first channel
+        pad_p = pred[:, :1]
+        pad_t = target[:, :1]
+        return torch.cat([pred, pad_p], dim=1), torch.cat([target, pad_t], dim=1)
+
     def _to_lpips_range(self, x: torch.Tensor) -> torch.Tensor:
         return x.clamp(-1, 1)
 
@@ -80,6 +94,7 @@ class FMPerceptualLoss(nn.Module):
     def forward(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
         pred = self._maybe_downsample(pred)
         target = self._maybe_downsample(target)
+        pred, target = self._align_rgb3(pred, target)
 
         if self._backend == "monai":
             return self._monai(pred, target)

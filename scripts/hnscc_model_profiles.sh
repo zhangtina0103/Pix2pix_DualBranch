@@ -36,6 +36,12 @@ if [[ -f "${DATAROOT}/meta.json" ]]; then
   NUM_TEST="$(python3 -c "import json; print(json.load(open('${DATAROOT}/meta.json'))['test_count'])")"
   HNSCC_OUTPUT_NC="$(python3 -c "import json; print(json.load(open('${DATAROOT}/meta.json')).get('output_nc', 4))")"
 fi
+
+# HNSCC: 3ch H&E → 4ch mIF; CycleGAN identity loss needs input_nc == output_nc.
+if [[ "${MODEL}" == "cyclegan" && "${HNSCC_OUTPUT_NC:-4}" != "3" ]]; then
+  export LAMBDA_IDENTITY=0
+fi
+
 export TRAIN_NAME PRETRAINED_NAME NUM_TEST DATAROOT HNSCC_OUTPUT_NC
 
 if [[ "${MODEL}" == "vanilla_fm" && "${VANILLA_FM_ENV_LOCKED:-0}" == "1" ]]; then

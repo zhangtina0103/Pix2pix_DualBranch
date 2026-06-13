@@ -1,8 +1,13 @@
 #!/bin/bash
 # Train YOLO CD3 detector on real HEMIT stains (train/val pseudo-labels).
 #
-#   export HEMIT_ROOT=/path/to/hemit   # official layout: train/label
-#   # or: export DATAROOT=./datasets/hemit
+# Uses separate env hemit_yolo — does NOT touch pix2pix_cuda.
+# One-time setup (run once on login node):
+#   conda create -n hemit_yolo python=3.10 -y
+#   conda activate hemit_yolo
+#   pip install torch torchvision ultralytics scikit-image tifffile scipy pandas pillow
+#
+#   export HEMIT_ROOT=/home/zhangtin/HEMIT
 #   sbatch bash_scripts/train_hemit_yolo_cd3.sbatch
 #
 #SBATCH --job-name=yolo_cd3_train
@@ -19,14 +24,10 @@ source "${SLURM_SUBMIT_DIR:-$PWD}/bash_scripts/_common.sh"
 mkdir -p logs datasets/hemit_cd3_yolo weights runs/hemit_yolo
 
 source /home/zhangtin/miniforge3/etc/profile.d/conda.sh 2>/dev/null || true
-conda activate "${CONDA_ENV:-pix2pix_cuda}" 2>/dev/null || true
-
-# YOLO deps: pin numpy 1.22, install ultralytics without upgrading torch/numpy
-pip install -q "numpy==1.22.4"
-pip install -q "scikit-image>=0.19,<0.25" "tifffile>=2023.1"
-pip install -q "ultralytics>=8.0" --no-deps
-pip install -q opencv-python-headless pyyaml tqdm requests psutil py-cpuinfo pandas matplotlib seaborn pillow scipy
-python -c "import numpy; from ultralytics import YOLO; print('yolo deps OK, numpy', numpy.__version__)"
+conda activate "${CONDA_ENV:-hemit_yolo}" 2>/dev/null || {
+  echo "ERROR: create hemit_yolo env first (see header comments). Do not use pix2pix_cuda for YOLO." >&2
+  exit 1
+}
 
 YOLO_DATA="${YOLO_DATA:-datasets/hemit_cd3_yolo/hemit_cd3.yaml}"
 YOLO_WEIGHTS="${YOLO_WEIGHTS:-weights/yolo_cd3_hemit.pt}"

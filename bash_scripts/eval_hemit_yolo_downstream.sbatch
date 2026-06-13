@@ -1,6 +1,8 @@
 #!/bin/bash
 # YOLO CD3 downstream: frozen detector on real vs generated test TIFFs.
 #
+# Uses separate env hemit_yolo — does NOT touch pix2pix_cuda.
+#
 #   export YOLO_WEIGHTS=weights/yolo_cd3_hemit.pt
 #   export HEMIT_MANIFEST=eval/hemit/manifest.csv
 #   sbatch bash_scripts/eval_hemit_yolo_downstream.sbatch
@@ -19,12 +21,10 @@ source "${SLURM_SUBMIT_DIR:-$PWD}/bash_scripts/_common.sh"
 mkdir -p logs eval/hemit/yolo_downstream
 
 source /home/zhangtin/miniforge3/etc/profile.d/conda.sh 2>/dev/null || true
-conda activate "${CONDA_ENV:-pix2pix_cuda}" 2>/dev/null || true
-
-pip install -q "numpy==1.22.4"
-pip install -q "scikit-image>=0.19,<0.25" "tifffile>=2023.1"
-pip install -q "ultralytics>=8.0" --no-deps
-pip install -q opencv-python-headless pyyaml tqdm requests psutil py-cpuinfo pandas matplotlib seaborn pillow scipy
+conda activate "${CONDA_ENV:-hemit_yolo}" 2>/dev/null || {
+  echo "ERROR: create hemit_yolo env first (see train_hemit_yolo_cd3.sbatch header)." >&2
+  exit 1
+}
 
 YOLO_WEIGHTS="${YOLO_WEIGHTS:-weights/yolo_cd3_hemit.pt}"
 HEMIT_MANIFEST="${HEMIT_MANIFEST:-eval/hemit/manifest.csv}"

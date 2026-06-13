@@ -79,6 +79,12 @@ def get_params(opt, size):
     return {'crop_pos': (x, y), 'flip': flip}
 
 
+def _channel_normalize(nc):
+    """Per-channel mean/std for Normalize (supports HNSCC 4ch mIF panels)."""
+    mean = (0.5,) * nc
+    return transforms.Normalize(mean, mean)
+
+
 def get_transformA(opt, params=None, grayscale=False, method=InterpolationMode.BICUBIC, convert=True):
     transform_list = []
     if grayscale:
@@ -106,10 +112,11 @@ def get_transformA(opt, params=None, grayscale=False, method=InterpolationMode.B
 
     if convert:
         transform_list += [transforms.ToTensor()]
-        if grayscale:
+        in_nc = int(getattr(opt, 'input_nc', 3))
+        if grayscale or in_nc == 1:
             transform_list += [transforms.Normalize((0.5,), (0.5,))]
         else:
-            transform_list += [transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
+            transform_list += [_channel_normalize(in_nc)]
     return transforms.Compose(transform_list)
 
 def get_transformB(opt, params=None, grayscale=False, method=InterpolationMode.BICUBIC, convert=True):
@@ -139,10 +146,11 @@ def get_transformB(opt, params=None, grayscale=False, method=InterpolationMode.B
 
     if convert:
         transform_list += [transforms.ToTensor()]
-        if grayscale:
+        out_nc = int(getattr(opt, 'output_nc', 3))
+        if grayscale or out_nc == 1:
             transform_list += [transforms.Normalize((0.5,), (0.5,))]
         else:
-            transform_list += [transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
+            transform_list += [_channel_normalize(out_nc)]
     return transforms.Compose(transform_list)
 
 

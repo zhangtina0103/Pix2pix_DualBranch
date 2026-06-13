@@ -50,7 +50,12 @@ def _has_checkpoint(repo: Path, train_name: str, epoch: int) -> bool:
 def _model_label(train_name: str, explicit: str | None = None) -> str:
     if explicit:
         return explicit
-    return MODEL_ALIASES.get(train_name, train_name.removeprefix("hemit_") or train_name)
+    base = train_name.removesuffix("_512") if train_name.endswith("_512") else train_name
+    return MODEL_ALIASES.get(base, MODEL_ALIASES.get(train_name, train_name.removeprefix("hemit_") or train_name))
+
+
+def _is_hemit_model(train_name: str) -> bool:
+    return train_name.startswith("hemit_")
 
 
 def load_paper_models(path: Path) -> list[dict[str, str]]:
@@ -131,6 +136,8 @@ def main() -> None:
     p.add_argument("--repo", type=str, default=".")
     p.add_argument("--require-images", action="store_true",
                    help="Only include models with existing test TIFFs")
+    p.add_argument("--include-orion", action="store_true",
+                   help="Include orion_lite_* runs (default: HEMIT hemit_* only)")
     p.add_argument("--no-auto-discover", action="store_true",
                    help="Only use paper_models.csv (error if missing)")
     p.add_argument("--status", action="store_true", help="Print status table and exit")
@@ -155,6 +162,9 @@ def main() -> None:
             f"No models found under {repo / 'results'} for test_{args.test_epoch}/images.\n"
             f"Check --test-epoch or run test.py first."
         )
+
+    if not args.include_orion:
+        models = [m for m in models if _is_hemit_model(m["train_name"])]
 
     if paper_path.is_file():
         print(f"paper_models: {paper_path}")

@@ -27,8 +27,12 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from hemit.eval.compare_models import load_manifest, run_model_comparison
-from hemit.eval.extended_metrics import compute_extended_metrics, write_extended_metrics
+from scripts.hemit_eval_path import setup_hemit_eval_path
+
+setup_hemit_eval_path()
+
+from hemit_eval.compare_models import load_manifest, run_model_comparison
+from hemit_eval.extended_metrics import compute_extended_metrics, write_extended_metrics
 
 
 def main() -> None:

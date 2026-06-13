@@ -27,8 +27,12 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from hemit.eval.compare_models import load_manifest
-from hemit.eval.downstream_biology import (
+from scripts.hemit_eval_path import setup_hemit_eval_path
+
+setup_hemit_eval_path()
+
+from hemit_eval.compare_models import load_manifest
+from hemit_eval.downstream_biology import (
     compute_downstream_biology,
     plot_downstream_model_comparison,
     plot_downstream_single_model,

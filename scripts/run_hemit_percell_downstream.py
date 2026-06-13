@@ -49,6 +49,8 @@ def main() -> None:
     p.add_argument("--manifest", type=str, default=None)
     p.add_argument("--outdir", type=str, required=True)
     p.add_argument("--model-name", type=str, default="model")
+    p.add_argument("--cd3-marker-percentile", type=float, default=60,
+                   help="Lower (e.g. 50) for more CD3+ tiles — run analyze_cd3_positive_coverage.py first")
     p.add_argument("--bootstrap-resamples", type=int, default=10000)
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--plots", action="store_true")
@@ -64,6 +66,7 @@ def main() -> None:
             per_tile, summary = compute_percell_downstream(
                 entry["srcdir"],
                 model_name=entry["model"],
+                cd3_marker_percentile=args.cd3_marker_percentile,
                 bootstrap_resamples=args.bootstrap_resamples,
                 seed=args.seed,
             )
@@ -86,6 +89,7 @@ def main() -> None:
     per_tile, summary = compute_percell_downstream(
         args.srcdir,
         model_name=args.model_name,
+        cd3_marker_percentile=args.cd3_marker_percentile,
         bootstrap_resamples=args.bootstrap_resamples,
         seed=args.seed,
     )

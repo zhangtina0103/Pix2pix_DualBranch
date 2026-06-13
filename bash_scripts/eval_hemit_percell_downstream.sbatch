@@ -2,6 +2,8 @@
 # Phase-1 per-cell downstream: intensity Pearson + CD3+ tile subset + co-expression.
 #
 #   export HEMIT_MANIFEST=eval/hemit/manifest.csv
+#   export PERCELL_OUTDIR=eval/hemit/percell_downstream_p50
+#   export PERCELL_CD3_PCT=50            # optional: more CD3+ tiles (see analyze_cd3_coverage.sbatch)
 #   sbatch bash_scripts/eval_hemit_percell_downstream.sbatch
 #
 # Plots: PLOTS=1 sbatch ...
@@ -22,6 +24,7 @@ conda activate "${CONDA_ENV:-pix2pix_cuda}" 2>/dev/null || true
 
 export HEMIT_MANIFEST="${HEMIT_MANIFEST:-eval/hemit/manifest.csv}"
 export PERCELL_OUTDIR="${PERCELL_OUTDIR:-eval/hemit/percell_downstream}"
+export PERCELL_CD3_PCT="${PERCELL_CD3_PCT:-60}"
 PLOT_FLAG=()
 [[ "${PLOTS:-0}" == "1" ]] && PLOT_FLAG=(--plots)
 
@@ -30,6 +33,7 @@ PLOT_FLAG=()
 python scripts/run_hemit_percell_downstream.py \
   --manifest "${HEMIT_MANIFEST}" \
   --outdir "${PERCELL_OUTDIR}" \
+  --cd3-marker-percentile "${PERCELL_CD3_PCT}" \
   "${PLOT_FLAG[@]}"
 
 echo "Done → ${PERCELL_OUTDIR}/percell_leaderboard.csv"

@@ -48,11 +48,20 @@ def _per_cell_intensities(real: np.ndarray, fake: np.ndarray) -> list[dict[str, 
     return cells
 
 
-def _tile_metrics(real: np.ndarray, fake: np.ndarray) -> dict[str, Any]:
+def _tile_metrics(
+    real: np.ndarray,
+    fake: np.ndarray,
+    *,
+    cd3_marker_percentile: float = 60,
+) -> dict[str, Any]:
     cells = _per_cell_intensities(real, fake)
     nuclei = segment_nuclei(real[..., 0])
-    cd3_count_real = _marker_positive_nuclei_count(real[..., 1], nuclei)
-    cd3_count_gen = _marker_positive_nuclei_count(fake[..., 1], nuclei)
+    cd3_count_real = _marker_positive_nuclei_count(
+        real[..., 1], nuclei, marker_percentile=cd3_marker_percentile,
+    )
+    cd3_count_gen = _marker_positive_nuclei_count(
+        fake[..., 1], nuclei, marker_percentile=cd3_marker_percentile,
+    )
 
     out: dict[str, Any] = {
         "n_nuclei": len(cells),
@@ -90,13 +99,16 @@ def _tile_metrics(real: np.ndarray, fake: np.ndarray) -> dict[str, Any]:
 
 def compute_percell_downstream(
     srcdir: str | Path, *, model_name: str = "model",
+    cd3_marker_percentile: float = 60,
     bootstrap_resamples: int = 10000, seed: int = 42,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     image_dir = resolve_image_dir(srcdir)
     per_tile: list[dict[str, Any]] = []
     for fake_path in list_fake_files(image_dir):
         real, fake, base = load_pair(fake_path)
-        row = {"file_name": base, "model": model_name, **_tile_metrics(real, fake)}
+        row = {"file_name": base, "model": model_name, **_tile_metrics(
+            real, fake, cd3_marker_percentile=cd3_marker_percentile,
+        )}
         per_tile.append(row)
 
     def _summ(col: str, *, higher: bool = True) -> dict[str, Any]:
@@ -110,6 +122,7 @@ def compute_percell_downstream(
         "model": model_name,
         "n_tiles": len(per_tile),
         "n_cd3_positive_tiles": len(cd3pos),
+        "cd3_marker_percentile": cd3_marker_percentile,
         "all_tiles": {
             "cd3_percell_pearson": _summ("cd3_percell_pearson"),
             "panck_percell_pearson": _summ("panck_percell_pearson"),

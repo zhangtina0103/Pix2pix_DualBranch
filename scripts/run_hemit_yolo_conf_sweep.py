@@ -27,6 +27,8 @@ def main() -> None:
     p.add_argument("--outdir", type=str, required=True)
     p.add_argument("--model-name", type=str, default="probe")
     p.add_argument("--conf-values", type=str, default="0.01,0.05,0.1,0.15,0.25")
+    p.add_argument("--iou-threshold", type=float, default=0.25)
+    p.add_argument("--cd3-marker-percentile", type=float, default=60)
     p.add_argument("--ref-mode", type=str, default="yolo", choices=("yolo", "pseudo"))
     p.add_argument("--cd3-positive-only", action="store_true")
     p.add_argument("--imgsz", type=int, default=512)
@@ -49,9 +51,11 @@ def main() -> None:
             yolo,
             model_name=args.model_name,
             conf=conf,
+            iou_threshold=args.iou_threshold,
             imgsz=args.imgsz,
             ref_mode=args.ref_mode,
             cd3_positive_only=args.cd3_positive_only,
+            cd3_marker_percentile=args.cd3_marker_percentile,
             bootstrap_resamples=2000,
         )
         m = summary["metrics"]

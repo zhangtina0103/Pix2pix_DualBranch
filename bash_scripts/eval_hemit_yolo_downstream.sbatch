@@ -6,11 +6,14 @@
 #   export YOLO_WEIGHTS=weights/yolo_cd3_hemit.pt
 #   export HEMIT_MANIFEST=eval/hemit/manifest.csv
 #   export YOLO_REF_MODE=pseudo          # pseudo | yolo
-#   export YOLO_CD3_POSITIVE_ONLY=1      # eval CD3+ tiles only (~26)
-#   export YOLO_CONF=0.1
-#   export YOLO_OUTDIR=eval/hemit/yolo_downstream_v2
+#   export YOLO_CD3_POSITIVE_ONLY=1      # eval CD3+ tiles only (~26 @ p60)
+#   export YOLO_CONF=0.05
+#   export YOLO_IOU_THRESHOLD=0.25       # was 0.5 in v2 — sparse cells need looser match
+#   export YOLO_CD3_MARKER_PERCENTILE=50 # after analyze_cd3_coverage.sbatch shows n tiles
+#   export YOLO_OUTDIR=eval/hemit/yolo_downstream_v3
 #   sbatch bash_scripts/eval_hemit_yolo_downstream.sbatch
 #
+# Step 1 (CPU): sbatch bash_scripts/analyze_cd3_coverage.sbatch
 #SBATCH --job-name=yolo_cd3_eval
 #SBATCH --output=logs/yolo_cd3_eval_%j.out
 #SBATCH --error=logs/yolo_cd3_eval_%j.err
@@ -34,7 +37,9 @@ YOLO_WEIGHTS="${YOLO_WEIGHTS:-weights/yolo_cd3_hemit.pt}"
 HEMIT_MANIFEST="${HEMIT_MANIFEST:-eval/hemit/manifest.csv}"
 YOLO_OUTDIR="${YOLO_OUTDIR:-eval/hemit/yolo_downstream}"
 YOLO_REF_MODE="${YOLO_REF_MODE:-pseudo}"
-YOLO_CONF="${YOLO_CONF:-0.1}"
+YOLO_CONF="${YOLO_CONF:-0.05}"
+YOLO_IOU="${YOLO_IOU_THRESHOLD:-0.25}"
+YOLO_CD3_PCT="${YOLO_CD3_MARKER_PERCENTILE:-60}"
 
 EXTRA_ARGS=()
 [[ "${YOLO_CD3_POSITIVE_ONLY:-1}" == "1" ]] && EXTRA_ARGS+=(--cd3-positive-only)
@@ -48,7 +53,9 @@ python scripts/run_hemit_yolo_downstream.py \
   --outdir "${YOLO_OUTDIR}" \
   --imgsz "${YOLO_IMGSZ:-512}" \
   --conf "${YOLO_CONF}" \
+  --iou-threshold "${YOLO_IOU}" \
   --ref-mode "${YOLO_REF_MODE}" \
+  --cd3-marker-percentile "${YOLO_CD3_PCT}" \
   "${EXTRA_ARGS[@]}"
 
 echo "Done. See ${YOLO_OUTDIR}/yolo_cd3_leaderboard.csv"

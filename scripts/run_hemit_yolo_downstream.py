@@ -52,12 +52,15 @@ def main() -> None:
     p.add_argument("--outdir", type=str, required=True)
     p.add_argument("--model-name", type=str, default="model")
     p.add_argument("--conf", type=float, default=0.1)
-    p.add_argument("--iou-threshold", type=float, default=0.5)
+    p.add_argument("--iou-threshold", type=float, default=0.25,
+                   help="IoU for box matching (0.25 for sparse small cells; 0.5 is strict)")
     p.add_argument("--imgsz", type=int, default=512)
     p.add_argument("--ref-mode", type=str, default="pseudo", choices=("yolo", "pseudo"),
                    help="yolo=detector on real_B; pseudo=CD3+ pseudo-boxes on real (stable on sparse test)")
     p.add_argument("--cd3-positive-only", action="store_true",
                    help="Eval only tiles with >=1 pseudo CD3+ cell on real_B")
+    p.add_argument("--cd3-marker-percentile", type=float, default=60,
+                   help="Lower (e.g. 50) to include more CD3+ tiles — run analyze_cd3_positive_coverage.py first")
     p.add_argument("--bootstrap-resamples", type=int, default=10000)
     p.add_argument("--seed", type=int, default=42)
     args = p.parse_args()
@@ -88,6 +91,7 @@ def main() -> None:
                 imgsz=args.imgsz,
                 ref_mode=args.ref_mode,
                 cd3_positive_only=args.cd3_positive_only,
+                cd3_marker_percentile=args.cd3_marker_percentile,
                 bootstrap_resamples=args.bootstrap_resamples,
                 seed=args.seed,
             )
@@ -115,6 +119,7 @@ def main() -> None:
         imgsz=args.imgsz,
         ref_mode=args.ref_mode,
         cd3_positive_only=args.cd3_positive_only,
+        cd3_marker_percentile=args.cd3_marker_percentile,
         bootstrap_resamples=args.bootstrap_resamples,
         seed=args.seed,
     )

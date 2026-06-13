@@ -107,6 +107,7 @@ def cd3_positive_boxes(
     min_area: int = 36,
     pad: int = 8,
     min_side: int = 24,
+    marker_percentile: float = 60,
 ) -> list[Box]:
     """Pseudo-label CD3+ nuclei on a real multiplex stack (H,W,3)."""
     h, w = stack.shape[:2]
@@ -121,7 +122,7 @@ def cd3_positive_boxes(
     means = [p.mean_intensity for p in props]
     thr = max(
         threshold_otsu(marker[marker > 0]) if np.any(marker > 0) else 0.0,
-        float(np.percentile(means, 60)),
+        float(np.percentile(means, marker_percentile)),
     )
     boxes: list[Box] = []
     for prop in props:
@@ -159,7 +160,7 @@ def match_boxes(
     reference: Sequence[Box],
     predicted: Sequence[Box],
     *,
-    iou_threshold: float = 0.5,
+    iou_threshold: float = 0.25,
 ) -> tuple[int, int, int]:
     """Greedy IoU matching: return (tp, fp, fn)."""
     if not reference and not predicted:
@@ -231,12 +232,13 @@ def compute_tile_detection(
     model: Any,
     *,
     conf: float = 0.25,
-    iou_threshold: float = 0.5,
+    iou_threshold: float = 0.25,
     imgsz: int | None = None,
     ref_mode: str = "yolo",
+    marker_percentile: float = 60,
 ) -> dict[str, Any]:
     if ref_mode == "pseudo":
-        ref_boxes = cd3_positive_boxes(real)
+        ref_boxes = cd3_positive_boxes(real, marker_percentile=marker_percentile)
     elif ref_mode == "yolo":
         ref_boxes = run_yolo_on_cd3(model, real, conf=conf, imgsz=imgsz)
     else:
@@ -266,10 +268,11 @@ def compute_yolo_downstream(
     *,
     model_name: str = "model",
     conf: float = 0.25,
-    iou_threshold: float = 0.5,
+    iou_threshold: float = 0.25,
     imgsz: int | None = None,
     ref_mode: str = "yolo",
     cd3_positive_only: bool = False,
+    cd3_marker_percentile: float = 60,
     bootstrap_resamples: int = 10000,
     seed: int = 42,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
@@ -278,7 +281,7 @@ def compute_yolo_downstream(
     n_skipped = 0
     for fake_path in list_fake_files(image_dir):
         real, fake, base = load_pair(fake_path)
-        if cd3_positive_only and len(cd3_positive_boxes(real)) < 1:
+        if cd3_positive_only and len(cd3_positive_boxes(real, marker_percentile=cd3_marker_percentile)) < 1:
             n_skipped += 1
             continue
         row = {
@@ -286,7 +289,8 @@ def compute_yolo_downstream(
             "model": model_name,
             **compute_tile_detection(
                 real, fake, model,
-                conf=conf, iou_threshold=iou_threshold, imgsz=imgsz, ref_mode=ref_mode,
+                conf=conf, iou_threshold=iou_threshold, imgsz=imgsz,
+                ref_mode=ref_mode, marker_percentile=cd3_marker_percentile,
             ),
         }
         per_tile.append(row)
@@ -302,6 +306,7 @@ def compute_yolo_downstream(
         "iou_threshold": iou_threshold,
         "ref_mode": ref_mode,
         "cd3_positive_only": cd3_positive_only,
+        "cd3_marker_percentile": cd3_marker_percentile,
         "metrics": {},
     }
     for name in metrics:

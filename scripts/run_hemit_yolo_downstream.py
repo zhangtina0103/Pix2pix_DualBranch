@@ -2,14 +2,23 @@
 """
 YOLO CD3 downstream: train on real stains, evaluate frozen detector on generated test TIFFs.
 
-Reference boxes = detector(real_B CD3). Predicted boxes = detector(fake_B CD3).
-Metrics: count MAE, precision/recall/F1 (IoU-matched), bootstrap CI.
+Reference boxes = detector(real_B) or pseudo CD3+ boxes on real (--ref-mode).
+Predicted boxes = detector(fake_B CD3).
 
 Examples:
+  # Recommended after weak test transfer: pseudo ref + CD3+ tiles only
   python scripts/run_hemit_yolo_downstream.py \\
     --weights weights/yolo_cd3_hemit.pt \\
     --manifest eval/hemit/manifest.csv \\
-    --outdir eval/hemit/yolo_downstream
+    --outdir eval/hemit/yolo_downstream_v2 \\
+    --ref-mode pseudo --cd3-positive-only --conf 0.1
+
+  # Find a usable conf threshold first (one model):
+  python scripts/run_hemit_yolo_conf_sweep.py \\
+    --weights weights/yolo_cd3_hemit.pt \\
+    --srcdir results/hemit_fm_cross_attn_scratch_512/test_80/images \\
+    --outdir eval/hemit/yolo_conf_sweep \\
+    --ref-mode pseudo --cd3-positive-only
 """
 
 from __future__ import annotations
@@ -42,9 +51,13 @@ def main() -> None:
     p.add_argument("--manifest", type=str, default=None)
     p.add_argument("--outdir", type=str, required=True)
     p.add_argument("--model-name", type=str, default="model")
-    p.add_argument("--conf", type=float, default=0.25)
+    p.add_argument("--conf", type=float, default=0.1)
     p.add_argument("--iou-threshold", type=float, default=0.5)
     p.add_argument("--imgsz", type=int, default=512)
+    p.add_argument("--ref-mode", type=str, default="pseudo", choices=("yolo", "pseudo"),
+                   help="yolo=detector on real_B; pseudo=CD3+ pseudo-boxes on real (stable on sparse test)")
+    p.add_argument("--cd3-positive-only", action="store_true",
+                   help="Eval only tiles with >=1 pseudo CD3+ cell on real_B")
     p.add_argument("--bootstrap-resamples", type=int, default=10000)
     p.add_argument("--seed", type=int, default=42)
     args = p.parse_args()
@@ -73,6 +86,8 @@ def main() -> None:
                 conf=args.conf,
                 iou_threshold=args.iou_threshold,
                 imgsz=args.imgsz,
+                ref_mode=args.ref_mode,
+                cd3_positive_only=args.cd3_positive_only,
                 bootstrap_resamples=args.bootstrap_resamples,
                 seed=args.seed,
             )
@@ -98,6 +113,8 @@ def main() -> None:
         conf=args.conf,
         iou_threshold=args.iou_threshold,
         imgsz=args.imgsz,
+        ref_mode=args.ref_mode,
+        cd3_positive_only=args.cd3_positive_only,
         bootstrap_resamples=args.bootstrap_resamples,
         seed=args.seed,
     )

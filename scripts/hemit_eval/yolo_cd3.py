@@ -233,8 +233,14 @@ def compute_tile_detection(
     conf: float = 0.25,
     iou_threshold: float = 0.5,
     imgsz: int | None = None,
+    ref_mode: str = "yolo",
 ) -> dict[str, Any]:
-    ref_boxes = run_yolo_on_cd3(model, real, conf=conf, imgsz=imgsz)
+    if ref_mode == "pseudo":
+        ref_boxes = cd3_positive_boxes(real)
+    elif ref_mode == "yolo":
+        ref_boxes = run_yolo_on_cd3(model, real, conf=conf, imgsz=imgsz)
+    else:
+        raise ValueError(f"ref_mode must be 'yolo' or 'pseudo', got {ref_mode!r}")
     pred_boxes = run_yolo_on_cd3(model, fake, conf=conf, imgsz=imgsz)
     tp, fp, fn = match_boxes(ref_boxes, pred_boxes, iou_threshold=iou_threshold)
     precision, recall, f1 = detection_prf(tp, fp, fn)
@@ -250,6 +256,7 @@ def compute_tile_detection(
         "precision": precision,
         "recall": recall,
         "f1": f1,
+        "ref_mode": ref_mode,
     }
 
 
@@ -261,18 +268,25 @@ def compute_yolo_downstream(
     conf: float = 0.25,
     iou_threshold: float = 0.5,
     imgsz: int | None = None,
+    ref_mode: str = "yolo",
+    cd3_positive_only: bool = False,
     bootstrap_resamples: int = 10000,
     seed: int = 42,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     image_dir = resolve_image_dir(srcdir)
     per_tile: list[dict[str, Any]] = []
+    n_skipped = 0
     for fake_path in list_fake_files(image_dir):
         real, fake, base = load_pair(fake_path)
+        if cd3_positive_only and len(cd3_positive_boxes(real)) < 1:
+            n_skipped += 1
+            continue
         row = {
             "file_name": base,
             "model": model_name,
             **compute_tile_detection(
-                real, fake, model, conf=conf, iou_threshold=iou_threshold, imgsz=imgsz,
+                real, fake, model,
+                conf=conf, iou_threshold=iou_threshold, imgsz=imgsz, ref_mode=ref_mode,
             ),
         }
         per_tile.append(row)
@@ -282,9 +296,12 @@ def compute_yolo_downstream(
     summary: dict[str, Any] = {
         "model": model_name,
         "n_tiles": len(per_tile),
+        "n_skipped_cd3_negative": n_skipped,
         "image_dir": str(image_dir),
         "conf": conf,
         "iou_threshold": iou_threshold,
+        "ref_mode": ref_mode,
+        "cd3_positive_only": cd3_positive_only,
         "metrics": {},
     }
     for name in metrics:
@@ -306,10 +323,11 @@ def compute_yolo_downstream(
         random_state=seed,
     )
     mean_ref = summary["metrics"]["mean_n_ref"]["mean"]
-    summary["degenerate"] = bool(mean_ref == 0.0)
+    summary["degenerate"] = bool(len(per_tile) == 0 or mean_ref == 0.0)
     if summary["degenerate"]:
         summary["warning"] = (
-            "Detector found 0 cells on real_B across all tiles — metrics are not meaningful."
+            "No eval tiles or 0 reference boxes per tile — try --ref-mode pseudo "
+            "--cd3-positive-only and/or lower --conf (e.g. 0.05)."
         )
     return per_tile, summary
 

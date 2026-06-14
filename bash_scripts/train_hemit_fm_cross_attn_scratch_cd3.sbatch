@@ -21,10 +21,31 @@ conda activate "${CONDA_ENV:-pix2pix_cuda}"
 source "${REPO_ROOT}/bash_scripts/_cuda.sh"
 
 export MODEL=vanilla_fm MODE=train
-export DATAROOT="${DATAROOT:-./datasets/hemit}"
+# Force HEMIT dataroot — inherited HNSCC DATAROOT (4ch) breaks Normalize (output_nc=3).
+unset DATAROOT
+export DATAROOT="${HEMIT_DATAROOT:-${REPO_ROOT}/datasets/hemit}"
+export HEMIT_SRC="${HEMIT_SRC:-/home/zhangtin/HEMIT}"
 export HEMIT_TRAIN_SIZE="${HEMIT_TRAIN_SIZE:-512}"
 export BATCH_SIZE="${BATCH_SIZE:-4}"
 export DISPLAY_ID=-1
+
+python3 - <<'PY'
+from pathlib import Path
+import sys
+from PIL import Image
+
+root = Path("${DATAROOT}") / "trainB"
+imgs = sorted(root.glob("*.tif")) + sorted(root.glob("*.tiff")) + sorted(root.glob("*.png"))
+if not imgs:
+    sys.exit(f"ERROR: no trainB images under {root}")
+nc = len(Image.open(imgs[0]).getbands())
+if nc != 3:
+    sys.exit(
+        f"ERROR: HEMIT trainB has {nc} channels (expected 3). "
+        f"DATAROOT={root.parent} looks like HNSCC — unset DATAROOT or set HEMIT_DATAROOT=./datasets/hemit"
+    )
+print(f"OK: DATAROOT={root.parent} trainB channels={nc}")
+PY
 
 source "${REPO_ROOT}/bash_scripts/_vanilla_fm_sbatch_preamble.sh"
 source "${REPO_ROOT}/scripts/vanilla_fm_env.sh"

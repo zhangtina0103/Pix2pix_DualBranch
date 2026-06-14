@@ -48,3 +48,23 @@ vanilla_fm_finetune_from_joint_perc_full130() {
   export TRAIN_LR="${TRAIN_LR:-5e-5}"
   echo "finetune from full/130: ${TRAIN_NAME} epochs ${EPOCH_COUNT}..$((N_EPOCHS + N_EPOCHS_DECAY)) (+${extra} ep) lr=${TRAIN_LR}" >&2
 }
+
+# Finetune from any checkpoint/<name>/<epoch>_net_G.pth (e.g. film_v2 @145).
+vanilla_fm_finetune_from_checkpoint() {
+  local src_name="$1" src_epoch="$2" extra_epochs="${3:-15}"
+  local src="${REPO_ROOT}/checkpoints/${src_name}/${src_epoch}_net_G.pth"
+  local dst="${REPO_ROOT}/checkpoints/${TRAIN_NAME}/${src_epoch}_net_G.pth"
+  [[ -f "${src}" ]] || {
+    echo "ERROR: missing ${src}" >&2
+    exit 1
+  }
+  mkdir -p "${REPO_ROOT}/checkpoints/${TRAIN_NAME}"
+  cp -f "${src}" "${dst}"
+  export CONTINUE_TRAIN=1
+  export RESUME_FROM_EPOCH="${src_epoch}"
+  export EPOCH_COUNT=$((src_epoch + 1))
+  export N_EPOCHS=$((src_epoch + extra_epochs))
+  export N_EPOCHS_DECAY=0
+  export TRAIN_LR="${TRAIN_LR:-5e-5}"
+  echo "finetune from ${src_name}/${src_epoch}: ${TRAIN_NAME} epochs ${EPOCH_COUNT}..$((N_EPOCHS + N_EPOCHS_DECAY)) (+${extra_epochs} ep) lr=${TRAIN_LR}" >&2
+}

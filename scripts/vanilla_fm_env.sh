@@ -635,6 +635,24 @@ vanilla_fm_apply_fm_cross_attn_scratch_env() {
   echo "fm_cross_attn_scratch: H&E cross-attn bottleneck-only (dec=${FM_CROSS_ATTN_DECODER:-0}) heads=${FM_CROSS_ATTN_HEADS}" >&2
 }
 
+# Cross-attn scratch + CD3 boost (mentor suggestions: focal L1, fg weight, velocity consistency).
+# NOT fair vs 1,1,1 baselines — use for CD3 ablation only. Fair row: fm_cross_attn_scratch @80.
+vanilla_fm_apply_fm_cross_attn_scratch_cd3_env() {
+  vanilla_fm_apply_fm_cross_attn_scratch_env
+  export TRAIN_NAME=hemit_fm_cross_attn_scratch_cd3
+  export VANILLA_FM_EXPECTED_TRAIN_NAME="${TRAIN_NAME}"
+  vanilla_fm_apply_fm_scratch_80_schedule
+  export FM_CHANNEL_WEIGHTS=1,2,1
+  export FM_FOCAL_GAMMA=1.0
+  export FM_FOCAL_FG_BETA=8.0
+  export FM_FOCAL_FG_CHANNELS=0,1,0
+  export FM_LAMBDA_VEL_CONSIST=0.1
+  export FM_STEPS=25
+  export FM_VAL_STEPS=8
+  export FM_SAMPLE_METHOD=heun
+  echo "fm_cross_attn_scratch_cd3: scratch 1→80 (CD3 ablation, not fair vs 1,1,1) focal=${FM_FOCAL_GAMMA} fg_beta=${FM_FOCAL_FG_BETA} vel_consist=${FM_LAMBDA_VEL_CONSIST} ch=${FM_CHANNEL_WEIGHTS}" >&2
+}
+
 # Orion-Lite: same cross-attn recipe, fair @80, 1,1,1 channel weights.
 vanilla_fm_apply_orion_fm_cross_attn_scratch_env() {
   vanilla_fm_apply_joint_perc_pins
@@ -1032,6 +1050,12 @@ vanilla_fm_print_train_env() {
   fi
   if [[ "${FM_LAMBDA_VEL:-0}" != "0" ]]; then
     echo "  velocity_aux: lambda=${FM_LAMBDA_VEL}"
+  fi
+  if [[ "${FM_LAMBDA_VEL_CONSIST:-0}" != "0" ]]; then
+    echo "  velocity_consistency: lambda=${FM_LAMBDA_VEL_CONSIST}"
+  fi
+  if [[ "${FM_FOCAL_GAMMA:-0}" != "0" || "${FM_FOCAL_FG_BETA:-0}" != "0" ]]; then
+    echo "  focal_L1: gamma=${FM_FOCAL_GAMMA:-0} fg_beta=${FM_FOCAL_FG_BETA:-0} fg_ch=${FM_FOCAL_FG_CHANNELS:-0,1,0}"
   fi
   if [[ "${FM_BACKBONE}" == "monai" && -z "${FM_CROP_SIZE:-}" ]]; then
     echo "  WARNING: monai UNet at 1024² OOMs (mid-block attention). Use FM_BACKBONE=custom or FM_CROP_SIZE=512" >&2

@@ -273,8 +273,8 @@ class VanillaFMModel(BaseModel):
         parser.add_argument("--fm_val_steps", type=int, default=8,
                             help="ODE steps during training validation")
         parser.add_argument("--fm_sample_method", type=str, default="heun",
-                            choices=["euler", "heun"],
-                            help="ODE solver at val / test")
+                            choices=["euler", "heun", "midpoint"],
+                            help="ODE solver at val / test (heun=2nd-order PC; midpoint=RK2)")
         parser.add_argument("--fm_use_cfg", action="store_true",
                             help="Classifier-free guidance: cond dropout at train, guided ODE at test")
         parser.add_argument("--fm_cfg_dropout", type=float, default=0.1,
@@ -325,8 +325,16 @@ class VanillaFMModel(BaseModel):
             parser.add_argument("--fm_sample_l1_prob", type=float, default=1.0,
                                 help="Fraction of iters with ODE sample L1")
             parser.add_argument("--fm_train_sample_method", type=str, default="euler",
-                                choices=["euler", "heun"],
+                                choices=["euler", "heun", "midpoint"],
                                 help="ODE solver for train sample L1")
+            parser.add_argument("--fm_focal_gamma", type=float, default=0.0,
+                                help="Focal L1: upweight hard pixels as (|err|/mean)^gamma (0=off)")
+            parser.add_argument("--fm_focal_fg_beta", type=float, default=0.0,
+                                help="Foreground boost on bright target pixels (1+beta*I) on fg channels")
+            parser.add_argument("--fm_focal_fg_channels", type=str, default="0,1,0",
+                                help="Per-channel mask for fg boost (DAPI,CD3,panCK); e.g. 0,1,0=CD3 only")
+            parser.add_argument("--fm_lambda_vel_consist", type=float, default=0.0,
+                                help="Velocity consistency: MSE(v@t, v@t') on same (x0,x1) path (0=off)")
             parser.add_argument("--fm_use_gan", action="store_true",
                                 help="PatchGAN on ODE samples (pix2pix-style sharpness)")
             parser.add_argument("--fm_lambda_gan", type=float, default=1.0,
@@ -502,6 +510,16 @@ class VanillaFMModel(BaseModel):
         self.fm_use_gan = bool(getattr(opt, "fm_use_gan", False)) and self.isTrain
         cw = [float(x) for x in str(getattr(opt, "fm_channel_weights", "1,2,1")).split(",")]
         self.fm_channel_weights = torch.tensor(cw, device=self.device, dtype=torch.float32)
+        fg_ch = [float(x) for x in str(getattr(opt, "fm_focal_fg_channels", "0,1,0")).split(",")]
+        self.fm_focal_fg_channels = torch.tensor(fg_ch, device=self.device, dtype=torch.float32)
+        self.fm_focal_gamma = float(getattr(opt, "fm_focal_gamma", 0.0))
+        self.fm_focal_fg_beta = float(getattr(opt, "fm_focal_fg_beta", 0.0))
+        if self.isTrain and (self.fm_focal_gamma > 0 or self.fm_focal_fg_beta > 0):
+            print(
+                f"FM focal L1: gamma={self.fm_focal_gamma} "
+                f"fg_beta={self.fm_focal_fg_beta} "
+                f"fg_channels={getattr(opt, 'fm_focal_fg_channels', '0,1,0')}"
+            )
 
         if self.isTrain:
             if self.fm_use_patchnce:
@@ -517,6 +535,8 @@ class VanillaFMModel(BaseModel):
                 self.loss_names.append("Perc")
             if float(getattr(opt, "fm_lambda_vel", 0.0)) > 0:
                 self.loss_names.append("Vel")
+            if float(getattr(opt, "fm_lambda_vel_consist", 0.0)) > 0:
+                self.loss_names.append("VelC")
             if float(getattr(opt, "fm_lambda_l1", 0.0)) > 0:
                 self.loss_names.append("L1")
             if float(getattr(opt, "fm_lambda_sample_l1", 0.0)) > 0:
@@ -837,6 +857,11 @@ class VanillaFMModel(BaseModel):
             v0 = self._velocity_raw(x, t0)
             if method == "euler" or is_last:
                 return x + dt * v0
+            if method == "midpoint":
+                t_mid = (t0 + 0.5 * dt).expand(B)
+                x_mid = x + 0.5 * dt * v0
+                v_mid = self._velocity_raw(x_mid, t_mid)
+                return x + dt * v_mid
             x_mid = x + dt * v0
             v1 = self._velocity_raw(x_mid, t1)
             return x + dt * (v0 + v1) * 0.5
@@ -845,6 +870,12 @@ class VanillaFMModel(BaseModel):
         v0 = self._velocity_from_x1(x, t0, x1_0)
         if method == "euler" or is_last:
             return x + dt * v0
+        if method == "midpoint":
+            t_mid = (t0 + 0.5 * dt).expand(B)
+            x_mid = x + 0.5 * dt * v0
+            x1_mid = self._pred_x1(x_mid, t_mid, cfg_guidance=cfg_guidance, cfg_scale=cfg_scale)
+            v_mid = self._velocity_from_x1(x_mid, t_mid, x1_mid)
+            return x + dt * v_mid
         x_mid = x + dt * v0
         x1_1 = self._pred_x1(x_mid, t1, cfg_guidance=cfg_guidance, cfg_scale=cfg_scale)
         v1 = self._velocity_from_x1(x_mid, t1, x1_1)
@@ -947,6 +978,17 @@ class VanillaFMModel(BaseModel):
             self.loss_Vel = F.mse_loss(v_pred, v_star) * lam_vel
             loss = loss + self.loss_Vel
 
+        lam_vel_c = float(getattr(self.opt, "fm_lambda_vel_consist", 0.0))
+        if lam_vel_c > 0 and self.fm_loss_mode == "x1":
+            t2 = self._sample_t(x1.shape[0], x1.device)
+            t2_bc = t2.view(-1, 1, 1, 1)
+            xt2 = (1.0 - t2_bc) * x0 + t2_bc * x1
+            x1_hat2 = self._pred_x1(xt2, t2, cond=cond)
+            v_at_t = self._velocity_from_x1(xt, t, x1_hat)
+            v_at_t2 = self._velocity_from_x1(xt2, t2, x1_hat2)
+            self.loss_VelC = self._channel_weighted_mse(v_at_t, v_at_t2) * lam_vel_c
+            loss = loss + self.loss_VelC
+
         lam_path = float(getattr(self.opt, "fm_lambda_l1", 0.0))
         if lam_path > 0 and self.fm_loss_mode == "x1":
             self.loss_L1 = F.l1_loss(x1_hat, x1) * lam_path
@@ -988,8 +1030,26 @@ class VanillaFMModel(BaseModel):
         return need_sample or need_gan
 
     def _channel_weighted_l1(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        err = F.l1_loss(pred, target, reduction="none")
         w = self.fm_channel_weights.view(1, -1, 1, 1).to(pred.device)
-        return (w * F.l1_loss(pred, target, reduction="none")).mean()
+
+        gamma = self.fm_focal_gamma
+        if gamma > 0:
+            focal = (err / (err.mean().detach() + 1e-6)).pow(gamma)
+            w = w * focal
+
+        beta = self.fm_focal_fg_beta
+        if beta > 0:
+            tgt01 = (target + 1.0) * 0.5
+            fg_mask = self.fm_focal_fg_channels.view(1, -1, 1, 1).to(pred.device)
+            w = w * (1.0 + beta * tgt01 * fg_mask)
+
+        return (w * err).mean()
+
+    def _channel_weighted_mse(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        sq = (pred - target) ** 2
+        w = self.fm_channel_weights.view(1, -1, 1, 1).to(pred.device)
+        return (w * sq).mean()
 
     def _sample_train_fake(self) -> torch.Tensor:
         x1 = self.real_B

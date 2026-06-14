@@ -647,10 +647,11 @@ vanilla_fm_apply_fm_cross_attn_scratch_cd3_env() {
   export FM_FOCAL_FG_BETA=8.0
   export FM_FOCAL_FG_CHANNELS=0,1,0
   export FM_LAMBDA_VEL_CONSIST=0.1
+  export FM_VEL_CONSIST_PROB="${FM_VEL_CONSIST_PROB:-0.25}"
   export FM_STEPS=25
   export FM_VAL_STEPS=8
   export FM_SAMPLE_METHOD=heun
-  echo "fm_cross_attn_scratch_cd3: scratch 1→80 (CD3 ablation, not fair vs 1,1,1) focal=${FM_FOCAL_GAMMA} fg_beta=${FM_FOCAL_FG_BETA} vel_consist=${FM_LAMBDA_VEL_CONSIST} ch=${FM_CHANNEL_WEIGHTS}" >&2
+  echo "fm_cross_attn_scratch_cd3: scratch 1→80 (CD3 ablation, not fair vs 1,1,1) focal=${FM_FOCAL_GAMMA} fg_beta=${FM_FOCAL_FG_BETA} vel_consist=${FM_LAMBDA_VEL_CONSIST} prob=${FM_VEL_CONSIST_PROB} ch=${FM_CHANNEL_WEIGHTS}" >&2
 }
 
 # Orion-Lite: same cross-attn recipe, fair @80, 1,1,1 channel weights.
@@ -1020,7 +1021,7 @@ vanilla_fm_print_train_env() {
     echo "  velocity_aux: lambda=${FM_LAMBDA_VEL}"
   fi
   if [[ "${FM_LAMBDA_VEL_CONSIST:-0}" != "0" ]]; then
-    echo "  velocity_consistency: lambda=${FM_LAMBDA_VEL_CONSIST}"
+    echo "  velocity_consistency: lambda=${FM_LAMBDA_VEL_CONSIST} prob=${FM_VEL_CONSIST_PROB:-1.0}"
   fi
   if [[ "${FM_FOCAL_GAMMA:-0}" != "0" || "${FM_FOCAL_FG_BETA:-0}" != "0" ]]; then
     echo "  focal_L1: gamma=${FM_FOCAL_GAMMA:-0} fg_beta=${FM_FOCAL_FG_BETA:-0} fg_ch=${FM_FOCAL_FG_CHANNELS:-0,1,0}"

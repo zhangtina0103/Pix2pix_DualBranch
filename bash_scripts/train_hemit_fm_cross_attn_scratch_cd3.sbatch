@@ -25,7 +25,7 @@ export MODEL=vanilla_fm MODE=train
 export HEMIT_SRC="${HEMIT_SRC:-/home/zhangtin/HEMIT}"
 export DATAROOT="${HEMIT_DATAROOT:-${REPO_ROOT}/datasets/hemit}"
 export HEMIT_TRAIN_SIZE="${HEMIT_TRAIN_SIZE:-512}"
-export BATCH_SIZE="${BATCH_SIZE:-2}"  # vel consist = extra UNet pass; use 2 @512²
+export BATCH_SIZE="${BATCH_SIZE:-4}"
 export DISPLAY_ID=-1
 
 if [[ ! -d "${DATAROOT}/trainB" ]] || [[ -z "$(ls -A "${DATAROOT}/trainB" 2>/dev/null)" ]]; then

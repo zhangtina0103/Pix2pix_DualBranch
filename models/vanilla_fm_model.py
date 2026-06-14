@@ -335,6 +335,8 @@ class VanillaFMModel(BaseModel):
                                 help="Per-channel mask for fg boost (DAPI,CD3,panCK); e.g. 0,1,0=CD3 only")
             parser.add_argument("--fm_lambda_vel_consist", type=float, default=0.0,
                                 help="Velocity consistency: MSE(v@t, v@t') on same (x0,x1) path (0=off)")
+            parser.add_argument("--fm_vel_consist_prob", type=float, default=1.0,
+                                help="Fraction of steps that run velocity consistency (VRAM/speed)")
             parser.add_argument("--fm_use_gan", action="store_true",
                                 help="PatchGAN on ODE samples (pix2pix-style sharpness)")
             parser.add_argument("--fm_lambda_gan", type=float, default=1.0,
@@ -1113,8 +1115,12 @@ class VanillaFMModel(BaseModel):
 
         self.optimizer_G.zero_grad(set_to_none=True)
         self._loss_fm().backward()
-        if float(getattr(self.opt, "fm_lambda_vel_consist", 0.0)) > 0:
+        lam_vc = float(getattr(self.opt, "fm_lambda_vel_consist", 0.0))
+        prob_vc = float(getattr(self.opt, "fm_vel_consist_prob", 1.0))
+        if lam_vc > 0 and random.random() < prob_vc:
             self._loss_fm_vel_consist().backward()
+        elif lam_vc > 0 and hasattr(self, "loss_VelC"):
+            self.loss_VelC = self.real_B.new_tensor(0.0)
         if fake_ode is not None and lam_sample > 0:
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()

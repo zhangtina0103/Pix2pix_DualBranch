@@ -29,22 +29,35 @@ export HEMIT_TRAIN_SIZE="${HEMIT_TRAIN_SIZE:-512}"
 export BATCH_SIZE="${BATCH_SIZE:-4}"
 export DISPLAY_ID=-1
 
+if [[ ! -d "${DATAROOT}/trainB" ]] || [[ -z "$(ls -A "${DATAROOT}/trainB" 2>/dev/null)" ]]; then
+  echo "==> ${DATAROOT}/trainB missing or empty; preparing from HEMIT_SRC=${HEMIT_SRC}"
+  MODEL=dualbranch MODE=prepare bash "${REPO_ROOT}/scripts/run_hemit_all.sh"
+fi
+
 python3 - <<'PY'
-from pathlib import Path
+import os
 import sys
+from pathlib import Path
+
 from PIL import Image
 
-root = Path("${DATAROOT}") / "trainB"
+dataroot = os.environ.get("DATAROOT")
+if not dataroot:
+    sys.exit("ERROR: DATAROOT not set")
+root = Path(dataroot) / "trainB"
 imgs = sorted(root.glob("*.tif")) + sorted(root.glob("*.tiff")) + sorted(root.glob("*.png"))
 if not imgs:
-    sys.exit(f"ERROR: no trainB images under {root}")
+    sys.exit(
+        f"ERROR: no trainB images under {root}. "
+        f"Run: export HEMIT_SRC=/home/zhangtin/HEMIT MODE=prepare bash scripts/run_hemit_all.sh"
+    )
 nc = len(Image.open(imgs[0]).getbands())
 if nc != 3:
     sys.exit(
         f"ERROR: HEMIT trainB has {nc} channels (expected 3). "
-        f"DATAROOT={root.parent} looks like HNSCC — unset DATAROOT or set HEMIT_DATAROOT=./datasets/hemit"
+        f"DATAROOT={root.parent} may be HNSCC — unset DATAROOT and re-prepare from HEMIT_SRC"
     )
-print(f"OK: DATAROOT={root.parent} trainB channels={nc}")
+print(f"OK: DATAROOT={root.parent} trainB channels={nc} n={len(imgs)}")
 PY
 
 source "${REPO_ROOT}/bash_scripts/_vanilla_fm_sbatch_preamble.sh"

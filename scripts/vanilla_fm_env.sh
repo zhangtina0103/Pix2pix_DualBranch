@@ -685,38 +685,6 @@ vanilla_fm_apply_orion_joint_perc_scratch_env() {
   echo "orion_joint_perc_scratch: vanilla FM Orion-Lite @80" >&2
 }
 
-# HNSCC cross-attn FM @80 (4 mIF markers, fair GAN compare).
-vanilla_fm_apply_hnscc_fm_cross_attn_scratch_env() {
-  vanilla_fm_apply_joint_perc_pins
-  export TRAIN_NAME=hemit_fm_cross_attn_scratch
-  export TRAIN_NAME="${TRAIN_NAME/hemit_/hnscc_}"
-  export VANILLA_FM_EXPECTED_TRAIN_NAME="${TRAIN_NAME}"
-  unset DATASET_MODE FM_USE_SEG FM_INIT_FROM_COND
-  export FM_FLOW_PATH=noise
-  export FM_USE_TRI_HEAD=0
-  export FM_USE_CROSS_ATTN=1
-  export FM_CROSS_ATTN_DECODER="${FM_CROSS_ATTN_DECODER:-0}"
-  export FM_CROSS_ATTN_HEADS="${FM_CROSS_ATTN_HEADS:-4}"
-  unset FM_LAMBDA_SAMPLE_L1
-  export FM_LAMBDA_SAMPLE_L1=0
-  export FM_CHANNEL_WEIGHTS=2,1,1,1
-  vanilla_fm_apply_fm_scratch_80_schedule
-  echo "hnscc_fm_cross_attn_scratch: cross-attn @80, ch=${FM_CHANNEL_WEIGHTS} (CD3 emphasis)" >&2
-}
-
-# HNSCC vanilla FM baseline (no cross-attn) @80.
-vanilla_fm_apply_hnscc_joint_perc_scratch_env() {
-  vanilla_fm_apply_joint_perc_pins
-  export TRAIN_NAME=hemit_vanilla_fm_joint_perc_scratch
-  export TRAIN_NAME="${TRAIN_NAME/hemit_/hnscc_}"
-  export VANILLA_FM_EXPECTED_TRAIN_NAME="${TRAIN_NAME}"
-  unset DATASET_MODE FM_USE_SEG FM_INIT_FROM_COND
-  export FM_FLOW_PATH=noise
-  export FM_CHANNEL_WEIGHTS=2,1,1,1
-  vanilla_fm_apply_fm_scratch_80_schedule
-  echo "hnscc_joint_perc_scratch: vanilla FM @80, ch=${FM_CHANNEL_WEIGHTS}" >&2
-}
-
 # Cross-attn + CUT-style PatchNCE (H&E patches ↔ x1_hat), scratch @80.
 vanilla_fm_apply_fm_cross_attn_patchnce_scratch_env() {
   vanilla_fm_apply_joint_perc_pins

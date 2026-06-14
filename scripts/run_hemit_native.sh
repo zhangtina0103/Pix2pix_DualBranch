@@ -8,7 +8,7 @@ cd "$ROOT"
 
 MODEL="${MODEL:-dualbranch}"
 MODE="${MODE:-all}"
-HEMIT_SRC="${HEMIT_SRC:-/home/zhangtin/virtual-staining/data/hemit}"
+HEMIT_SRC="${HEMIT_SRC:-/home/zhangtin/HEMIT}"
 DATAROOT="${DATAROOT:-./datasets/hemit}"
 GPU_IDS="${GPU_IDS:-0}"
 

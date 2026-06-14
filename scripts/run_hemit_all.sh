@@ -20,7 +20,7 @@ cd "$ROOT"
 
 export MODEL="${MODEL:-dualbranch}"
 export MODE="${MODE:-all}"
-export HEMIT_SRC="${HEMIT_SRC:-/home/zhangtin/virtual-staining/data/hemit}"
+export HEMIT_SRC="${HEMIT_SRC:-/home/zhangtin/HEMIT}"
 export DATAROOT="${DATAROOT:-./datasets/hemit}"
 export VS_DATA_ROOT="${VS_DATA_ROOT:-${HEMIT_SRC}}"
 export REPO_ROOT="${ROOT}"

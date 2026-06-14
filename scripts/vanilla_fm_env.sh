@@ -654,6 +654,42 @@ vanilla_fm_apply_fm_cross_attn_scratch_cd3_env() {
   echo "fm_cross_attn_scratch_cd3: scratch 1→80 (CD3 ablation, not fair vs 1,1,1) focal=${FM_FOCAL_GAMMA} fg_beta=${FM_FOCAL_FG_BETA} vel_consist=${FM_LAMBDA_VEL_CONSIST} prob=${FM_VEL_CONSIST_PROB} ch=${FM_CHANNEL_WEIGHTS}" >&2
 }
 
+# Cross-attn + focal L1 only (γ on CD3 error). Single-component ablation vs fair cross-attn.
+vanilla_fm_apply_fm_cross_attn_scratch_focal_env() {
+  vanilla_fm_apply_fm_cross_attn_scratch_env
+  export TRAIN_NAME=hemit_fm_cross_attn_scratch_focal
+  export VANILLA_FM_EXPECTED_TRAIN_NAME="${TRAIN_NAME}"
+  vanilla_fm_apply_fm_scratch_80_schedule
+  export FM_CHANNEL_WEIGHTS=1,1,1
+  export FM_FOCAL_GAMMA=1.0
+  export FM_FOCAL_FG_BETA=0
+  export FM_FOCAL_FG_CHANNELS=0,1,0
+  export FM_LAMBDA_VEL_CONSIST=0
+  unset FM_VEL_CONSIST_PROB
+  export FM_STEPS=25
+  export FM_VAL_STEPS=8
+  export FM_SAMPLE_METHOD=heun
+  echo "fm_cross_attn_scratch_focal: 1→80 ablation — focal γ=${FM_FOCAL_GAMMA} only; ch=${FM_CHANNEL_WEIGHTS} (fair)" >&2
+}
+
+# Cross-attn + CD3 foreground reweight only (no focal, no vel). Single-component ablation.
+vanilla_fm_apply_fm_cross_attn_scratch_fg_env() {
+  vanilla_fm_apply_fm_cross_attn_scratch_env
+  export TRAIN_NAME=hemit_fm_cross_attn_scratch_fg
+  export VANILLA_FM_EXPECTED_TRAIN_NAME="${TRAIN_NAME}"
+  vanilla_fm_apply_fm_scratch_80_schedule
+  export FM_CHANNEL_WEIGHTS=1,1,1
+  export FM_FOCAL_GAMMA=0
+  export FM_FOCAL_FG_BETA=8.0
+  export FM_FOCAL_FG_CHANNELS=0,1,0
+  export FM_LAMBDA_VEL_CONSIST=0
+  unset FM_VEL_CONSIST_PROB
+  export FM_STEPS=25
+  export FM_VAL_STEPS=8
+  export FM_SAMPLE_METHOD=heun
+  echo "fm_cross_attn_scratch_fg: 1→80 ablation — fg_beta=${FM_FOCAL_FG_BETA} CD3 only; ch=${FM_CHANNEL_WEIGHTS} (fair)" >&2
+}
+
 # Orion-Lite: same cross-attn recipe, fair @80, 1,1,1 channel weights.
 vanilla_fm_apply_orion_fm_cross_attn_scratch_env() {
   vanilla_fm_apply_joint_perc_pins

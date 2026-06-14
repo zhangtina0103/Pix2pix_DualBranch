@@ -33,6 +33,8 @@ case "${RESUME_PROFILE}" in
   tri_head) vanilla_fm_apply_fm_tri_head_scratch_env ;;
   cross_attn) vanilla_fm_apply_fm_cross_attn_scratch_env ;;
   cross_attn_cd3) vanilla_fm_apply_fm_cross_attn_scratch_cd3_env ;;
+  cross_attn_focal) vanilla_fm_apply_fm_cross_attn_scratch_focal_env ;;
+  cross_attn_fg) vanilla_fm_apply_fm_cross_attn_scratch_fg_env ;;
   cross_attn_patchnce) vanilla_fm_apply_fm_cross_attn_patchnce_scratch_env ;;
   cross_attn_init) vanilla_fm_apply_fm_cross_attn_init_scratch_env ;;
   perc_strong) vanilla_fm_apply_perc_strong_scratch_env ;;

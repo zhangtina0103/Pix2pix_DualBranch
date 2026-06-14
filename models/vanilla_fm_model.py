@@ -978,16 +978,8 @@ class VanillaFMModel(BaseModel):
             self.loss_Vel = F.mse_loss(v_pred, v_star) * lam_vel
             loss = loss + self.loss_Vel
 
-        lam_vel_c = float(getattr(self.opt, "fm_lambda_vel_consist", 0.0))
-        if lam_vel_c > 0 and self.fm_loss_mode == "x1":
-            t2 = self._sample_t(x1.shape[0], x1.device)
-            t2_bc = t2.view(-1, 1, 1, 1)
-            xt2 = (1.0 - t2_bc) * x0 + t2_bc * x1
-            x1_hat2 = self._pred_x1(xt2, t2, cond=cond)
-            v_at_t = self._velocity_from_x1(xt, t, x1_hat)
-            v_at_t2 = self._velocity_from_x1(xt2, t2, x1_hat2)
-            self.loss_VelC = self._channel_weighted_mse(v_at_t, v_at_t2) * lam_vel_c
-            loss = loss + self.loss_VelC
+        if float(getattr(self.opt, "fm_lambda_vel_consist", 0.0)) > 0:
+            self.loss_VelC = loss.new_tensor(0.0)
 
         lam_path = float(getattr(self.opt, "fm_lambda_l1", 0.0))
         if lam_path > 0 and self.fm_loss_mode == "x1":
@@ -1011,6 +1003,31 @@ class VanillaFMModel(BaseModel):
             if not hasattr(self, attr):
                 setattr(self, attr, loss.new_tensor(0.0))
         return loss
+
+    def _loss_fm_vel_consist(self) -> torch.Tensor:
+        """Second backward pass — avoids 2× UNet graph peak memory in _loss_fm."""
+        lam_vel_c = float(getattr(self.opt, "fm_lambda_vel_consist", 0.0))
+        if lam_vel_c <= 0 or self.fm_loss_mode != "x1":
+            return self.real_B.new_tensor(0.0)
+
+        x1 = self.real_B
+        x0 = self._sample_x0(x1)
+        cond = self._cond_for_train()
+        t = self._sample_t(x1.shape[0], x1.device)
+        t2 = self._sample_t(x1.shape[0], x1.device)
+        t_bc = t.view(-1, 1, 1, 1)
+        t2_bc = t2.view(-1, 1, 1, 1)
+        xt = (1.0 - t_bc) * x0 + t_bc * x1
+        xt2 = (1.0 - t2_bc) * x0 + t2_bc * x1
+
+        with torch.no_grad():
+            x1_hat = self._pred_x1(xt, t, cond=cond)
+            v_at_t = self._velocity_from_x1(xt, t, x1_hat)
+
+        x1_hat2 = self._pred_x1(xt2, t2, cond=cond)
+        v_at_t2 = self._velocity_from_x1(xt2, t2, x1_hat2)
+        self.loss_VelC = self._channel_weighted_mse(v_at_t2, v_at_t) * lam_vel_c
+        return self.loss_VelC
 
     def _ode_aux_steps(self) -> int:
         gan_steps = int(getattr(self.opt, "fm_gan_sample_steps", 0))
@@ -1096,6 +1113,8 @@ class VanillaFMModel(BaseModel):
 
         self.optimizer_G.zero_grad(set_to_none=True)
         self._loss_fm().backward()
+        if float(getattr(self.opt, "fm_lambda_vel_consist", 0.0)) > 0:
+            self._loss_fm_vel_consist().backward()
         if fake_ode is not None and lam_sample > 0:
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()

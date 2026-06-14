@@ -44,7 +44,10 @@ sbatch bash_scripts/resume_hemit_fm_scratch.sbatch
 | `seg_only_scratch` | `hemit_cond_fm_seg_only_scratch` |
 | `tri_head` | `hemit_fm_tri_head_scratch` |
 | `cross_attn` | `hemit_fm_cross_attn_scratch` |
-| `cross_attn_cd3` | `hemit_fm_cross_attn_scratch_cd3` |
+| `cross_attn_cd3` | `hemit_fm_cross_attn_scratch_cd3` (combo ablation — optional) |
+| `cross_attn_focal` | `hemit_fm_cross_attn_scratch_focal` |
+| `cross_attn_fg` | `hemit_fm_cross_attn_scratch_fg` |
+| `cross_attn_vel` | `hemit_fm_cross_attn_scratch_vel` |
 | `perc_strong` | `hemit_vanilla_fm_perc_strong_scratch` |
 | `res3` | `hemit_vanilla_fm_joint_perc_res3_scratch` |
 | `consistent` | `hemit_cond_fm_consistent` (finetune from 80) |

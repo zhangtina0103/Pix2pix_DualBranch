@@ -21,10 +21,9 @@ conda activate "${CONDA_ENV:-pix2pix_cuda}"
 source "${REPO_ROOT}/bash_scripts/_cuda.sh"
 
 export MODEL=vanilla_fm MODE=train
-# Force HEMIT dataroot — inherited HNSCC DATAROOT (4ch) breaks Normalize (output_nc=3).
-unset DATAROOT
-export DATAROOT="${HEMIT_DATAROOT:-${REPO_ROOT}/datasets/hemit}"
+# This job always trains on HEMIT (3ch). Override with HEMIT_DATAROOT if needed.
 export HEMIT_SRC="${HEMIT_SRC:-/home/zhangtin/HEMIT}"
+export DATAROOT="${HEMIT_DATAROOT:-${REPO_ROOT}/datasets/hemit}"
 export HEMIT_TRAIN_SIZE="${HEMIT_TRAIN_SIZE:-512}"
 export BATCH_SIZE="${BATCH_SIZE:-4}"
 export DISPLAY_ID=-1
@@ -34,31 +33,22 @@ if [[ ! -d "${DATAROOT}/trainB" ]] || [[ -z "$(ls -A "${DATAROOT}/trainB" 2>/dev
   MODEL=dualbranch MODE=prepare bash "${REPO_ROOT}/scripts/run_hemit_all.sh"
 fi
 
-python3 - <<'PY'
-import os
-import sys
+python3 -c '
+import os, sys
 from pathlib import Path
-
 from PIL import Image
-
-dataroot = os.environ.get("DATAROOT")
+dataroot = os.environ.get("DATAROOT", "")
 if not dataroot:
     sys.exit("ERROR: DATAROOT not set")
 root = Path(dataroot) / "trainB"
 imgs = sorted(root.glob("*.tif")) + sorted(root.glob("*.tiff")) + sorted(root.glob("*.png"))
 if not imgs:
-    sys.exit(
-        f"ERROR: no trainB images under {root}. "
-        f"Run: export HEMIT_SRC=/home/zhangtin/HEMIT MODE=prepare bash scripts/run_hemit_all.sh"
-    )
+    sys.exit(f"ERROR: no trainB under {root} — run MODE=prepare with HEMIT_SRC=/home/zhangtin/HEMIT")
 nc = len(Image.open(imgs[0]).getbands())
 if nc != 3:
-    sys.exit(
-        f"ERROR: HEMIT trainB has {nc} channels (expected 3). "
-        f"DATAROOT={root.parent} may be HNSCC — unset DATAROOT and re-prepare from HEMIT_SRC"
-    )
-print(f"OK: DATAROOT={root.parent} trainB channels={nc} n={len(imgs)}")
-PY
+    sys.exit(f"ERROR: trainB has {nc} channels (expected 3). DATAROOT={dataroot} is not HEMIT")
+print(f"OK: DATAROOT={dataroot} trainB n={len(imgs)} channels={nc}")
+'
 
 source "${REPO_ROOT}/bash_scripts/_vanilla_fm_sbatch_preamble.sh"
 source "${REPO_ROOT}/scripts/vanilla_fm_env.sh"

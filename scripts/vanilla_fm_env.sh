@@ -672,6 +672,52 @@ vanilla_fm_apply_fm_cross_attn_scratch_focal_env() {
   echo "fm_cross_attn_scratch_focal: 1→80 ablation — focal γ=${FM_FOCAL_GAMMA} only; ch=${FM_CHANNEL_WEIGHTS} (fair)" >&2
 }
 
+# Tuned focal: gentler γ (default 0.75 — small step down from γ=1 @80). No vel.
+vanilla_fm_apply_fm_cross_attn_scratch_focal_tuned_env() {
+  vanilla_fm_apply_fm_cross_attn_scratch_env
+  export TRAIN_NAME=hemit_fm_cross_attn_scratch_focal_tuned
+  export VANILLA_FM_EXPECTED_TRAIN_NAME="${TRAIN_NAME}"
+  vanilla_fm_apply_fm_scratch_80_schedule
+  export FM_CHANNEL_WEIGHTS=1,1,1
+  export FM_FOCAL_GAMMA="${FM_FOCAL_GAMMA:-0.75}"
+  export FM_FOCAL_FG_BETA=0
+  export FM_FOCAL_FG_CHANNELS=0,1,0
+  export FM_LAMBDA_VEL_CONSIST=0
+  unset FM_VEL_CONSIST_PROB
+  export FM_STEPS=25
+  export FM_VAL_STEPS=8
+  export FM_SAMPLE_METHOD=heun
+  echo "fm_cross_attn_scratch_focal_tuned: focal γ=${FM_FOCAL_GAMMA} only (no vel); ch=${FM_CHANNEL_WEIGHTS}" >&2
+}
+
+# Alternate γ=0.6 (between 0.75 and 1.0). No vel.
+vanilla_fm_apply_fm_cross_attn_scratch_focal_g075_env() {
+  vanilla_fm_apply_fm_cross_attn_scratch_env
+  export TRAIN_NAME=hemit_fm_cross_attn_scratch_focal_g075
+  export VANILLA_FM_EXPECTED_TRAIN_NAME="${TRAIN_NAME}"
+  vanilla_fm_apply_fm_scratch_80_schedule
+  export FM_CHANNEL_WEIGHTS=1,1,1
+  export FM_FOCAL_GAMMA=0.6
+  export FM_FOCAL_FG_BETA=0
+  export FM_FOCAL_FG_CHANNELS=0,1,0
+  export FM_LAMBDA_VEL_CONSIST=0
+  unset FM_VEL_CONSIST_PROB
+  export FM_STEPS=25
+  export FM_VAL_STEPS=8
+  export FM_SAMPLE_METHOD=heun
+  echo "fm_cross_attn_scratch_focal_g075: focal γ=${FM_FOCAL_GAMMA} only (no vel); ch=${FM_CHANNEL_WEIGHTS}" >&2
+}
+
+# γ=0.75 + light vel — node-2 recipe (pairs with γ-only sweep).
+vanilla_fm_apply_fm_cross_attn_scratch_focal_tuned_vel_env() {
+  vanilla_fm_apply_fm_cross_attn_scratch_focal_tuned_env
+  export TRAIN_NAME=hemit_fm_cross_attn_scratch_focal_tuned_vel
+  export VANILLA_FM_EXPECTED_TRAIN_NAME="${TRAIN_NAME}"
+  export FM_LAMBDA_VEL_CONSIST="${FM_LAMBDA_VEL_CONSIST:-0.05}"
+  export FM_VEL_CONSIST_PROB="${FM_VEL_CONSIST_PROB:-0.25}"
+  echo "fm_cross_attn_scratch_focal_tuned_vel: γ=${FM_FOCAL_GAMMA} + vel=${FM_LAMBDA_VEL_CONSIST} prob=${FM_VEL_CONSIST_PROB}" >&2
+}
+
 # Cross-attn + CD3 foreground reweight only (no focal, no vel). Single-component ablation.
 vanilla_fm_apply_fm_cross_attn_scratch_fg_env() {
   vanilla_fm_apply_fm_cross_attn_scratch_env

@@ -24,6 +24,8 @@ conda activate "${CONDA_ENV:-pix2pix_cuda}"
 source "${REPO_ROOT}/bash_scripts/_cuda.sh"
 
 export DISPLAY_ID=-1
+export HEMIT_NO_GPU_SYNC=1
+export GPU_IDS=0
 # BATCH_SIZE from hemit_model_profiles (4 @ 512²). OOM: BATCH_SIZE=2 sbatch ...
 export DATAROOT="${DATAROOT:-./datasets/hemit}"
 

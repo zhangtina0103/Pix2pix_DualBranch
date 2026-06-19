@@ -25,6 +25,9 @@ export DATAROOT="${HEMIT_DATAROOT:-${REPO_ROOT}/datasets/hemit}"
 export HEMIT_TRAIN_SIZE="${HEMIT_TRAIN_SIZE:-512}"
 export BATCH_SIZE="${BATCH_SIZE:-4}"
 export DISPLAY_ID=-1
+# One GPU per job — reserve 2nd cluster GPU for focal_tuned_vel in parallel.
+export HEMIT_NO_GPU_SYNC=1
+export GPU_IDS=0
 
 source "${REPO_ROOT}/bash_scripts/_vanilla_fm_sbatch_preamble.sh"
 source "${REPO_ROOT}/scripts/vanilla_fm_env.sh"

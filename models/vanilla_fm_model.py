@@ -1054,7 +1054,9 @@ class VanillaFMModel(BaseModel):
 
         gamma = self.fm_focal_gamma
         if gamma > 0:
-            focal = (err / (err.mean().detach() + 1e-6)).pow(gamma)
+            # Detach focal weights: for γ<1, backprop through (err/mean)^γ·err blows up at err→0.
+            ratio = (err / (err.mean().detach() + 1e-6)).clamp(min=1e-8, max=1e4)
+            focal = ratio.pow(gamma).detach()
             w = w * focal
 
         beta = self.fm_focal_fg_beta

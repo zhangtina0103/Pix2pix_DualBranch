@@ -45,9 +45,9 @@ sbatch bash_scripts/resume_hemit_fm_scratch.sbatch
 | `tri_head` | `hemit_fm_tri_head_scratch` |
 | `cross_attn` | `hemit_fm_cross_attn_scratch` |
 | `cross_attn_cd3` | `hemit_fm_cross_attn_scratch_cd3` (combo ablation — optional) |
-| `cross_attn_focal` | `hemit_fm_cross_attn_scratch_focal` |
-| `cross_attn_focal_tuned` | `hemit_fm_cross_attn_scratch_focal_tuned` (γ=0.5 + vel) |
-| `cross_attn_focal_g075` | `hemit_fm_cross_attn_scratch_focal_g075` (γ=0.75 + vel) |
+| `cross_attn_focal` | `hemit_fm_cross_attn_scratch_focal` (global focal, all channels) |
+| `cross_attn_focal_cd3` | `hemit_fm_cross_attn_scratch_focal_cd3` (CD3-only focal γ=1) |
+| `cross_attn_focal_tuned` | `hemit_fm_cross_attn_scratch_focal_tuned` (γ=0.75, global) |
 | `cross_attn_fg` | `hemit_fm_cross_attn_scratch_fg` |
 | `cross_attn_vel` | `hemit_fm_cross_attn_scratch_vel` |
 | `perc_strong` | `hemit_vanilla_fm_perc_strong_scratch` |

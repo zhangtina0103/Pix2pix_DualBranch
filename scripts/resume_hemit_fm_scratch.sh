@@ -34,6 +34,7 @@ case "${RESUME_PROFILE}" in
   cross_attn) vanilla_fm_apply_fm_cross_attn_scratch_env ;;
   cross_attn_cd3) vanilla_fm_apply_fm_cross_attn_scratch_cd3_env ;;
   cross_attn_focal) vanilla_fm_apply_fm_cross_attn_scratch_focal_env ;;
+  cross_attn_focal_cd3) vanilla_fm_apply_fm_cross_attn_scratch_focal_cd3_env ;;
   cross_attn_focal_tuned) vanilla_fm_apply_fm_cross_attn_scratch_focal_tuned_env ;;
   cross_attn_focal_g075) vanilla_fm_apply_fm_cross_attn_scratch_focal_g075_env ;;
   cross_attn_focal_tuned_vel) vanilla_fm_apply_fm_cross_attn_scratch_focal_tuned_vel_env ;;

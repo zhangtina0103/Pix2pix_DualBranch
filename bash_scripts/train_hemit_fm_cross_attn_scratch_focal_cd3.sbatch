@@ -1,12 +1,11 @@
 #!/bin/bash
-# Single-component ablation: cross-attn + global focal L1 (γ=1, all channels).
-# vs fair: only FM_FOCAL_GAMMA changes. Same speed as fair (no vel consist).
+# Cross-attn + CD3-only focal L1 (γ=1). DAPI/panCK plain L1; CD3 gets (|err|/mean)^γ.
 #
-#   sbatch bash_scripts/train_hemit_fm_cross_attn_scratch_focal.sbatch
-# Resume: RESUME_PROFILE=cross_attn_focal sbatch bash_scripts/resume_hemit_fm_scratch.sbatch
-#SBATCH --job-name=hemit_xa_focal
-#SBATCH --output=logs/hemit_fm_cross_attn_scratch_focal_%j.out
-#SBATCH --error=logs/hemit_fm_cross_attn_scratch_focal_%j.err
+#   sbatch bash_scripts/train_hemit_fm_cross_attn_scratch_focal_cd3.sbatch
+# Resume: RESUME_PROFILE=cross_attn_focal_cd3 sbatch bash_scripts/resume_hemit_fm_scratch.sbatch
+#SBATCH --job-name=hemit_xa_foc_cd3
+#SBATCH --output=logs/hemit_fm_cross_attn_scratch_focal_cd3_%j.out
+#SBATCH --error=logs/hemit_fm_cross_attn_scratch_focal_cd3_%j.err
 #SBATCH --partition=mit_normal_gpu
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
@@ -26,10 +25,12 @@ export DATAROOT="${HEMIT_DATAROOT:-${REPO_ROOT}/datasets/hemit}"
 export HEMIT_TRAIN_SIZE="${HEMIT_TRAIN_SIZE:-512}"
 export BATCH_SIZE="${BATCH_SIZE:-4}"
 export DISPLAY_ID=-1
+export HEMIT_NO_GPU_SYNC=1
+export GPU_IDS=0
 
 source "${REPO_ROOT}/bash_scripts/_vanilla_fm_sbatch_preamble.sh"
 source "${REPO_ROOT}/scripts/vanilla_fm_env.sh"
-vanilla_fm_apply_fm_cross_attn_scratch_focal_env
+vanilla_fm_apply_fm_cross_attn_scratch_focal_cd3_env
 unset FM_CROSS_ATTN_DECODER
 export FM_CROSS_ATTN_HEADS="${FM_CROSS_ATTN_HEADS:-4}"
 export VANILLA_FM_ENV_LOCKED=1

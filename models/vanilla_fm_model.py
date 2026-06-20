@@ -329,6 +329,8 @@ class VanillaFMModel(BaseModel):
                                 help="ODE solver for train sample L1")
             parser.add_argument("--fm_focal_gamma", type=float, default=0.0,
                                 help="Focal L1: upweight hard pixels as (|err|/mean)^gamma (0=off)")
+            parser.add_argument("--fm_focal_channels", type=str, default="1,1,1",
+                                help="Per-channel mask for focal L1 (DAPI,CD3,panCK); 0,1,0=CD3 only")
             parser.add_argument("--fm_focal_fg_beta", type=float, default=0.0,
                                 help="Foreground boost on bright target pixels (1+beta*I) on fg channels")
             parser.add_argument("--fm_focal_fg_channels", type=str, default="0,1,0",
@@ -514,11 +516,14 @@ class VanillaFMModel(BaseModel):
         self.fm_channel_weights = torch.tensor(cw, device=self.device, dtype=torch.float32)
         fg_ch = [float(x) for x in str(getattr(opt, "fm_focal_fg_channels", "0,1,0")).split(",")]
         self.fm_focal_fg_channels = torch.tensor(fg_ch, device=self.device, dtype=torch.float32)
+        focal_ch = [float(x) for x in str(getattr(opt, "fm_focal_channels", "1,1,1")).split(",")]
+        self.fm_focal_channels = torch.tensor(focal_ch, device=self.device, dtype=torch.float32)
         self.fm_focal_gamma = float(getattr(opt, "fm_focal_gamma", 0.0))
         self.fm_focal_fg_beta = float(getattr(opt, "fm_focal_fg_beta", 0.0))
         if self.isTrain and (self.fm_focal_gamma > 0 or self.fm_focal_fg_beta > 0):
             print(
                 f"FM focal L1: gamma={self.fm_focal_gamma} "
+                f"focal_channels={getattr(opt, 'fm_focal_channels', '1,1,1')} "
                 f"fg_beta={self.fm_focal_fg_beta} "
                 f"fg_channels={getattr(opt, 'fm_focal_fg_channels', '0,1,0')}"
             )
@@ -1057,7 +1062,9 @@ class VanillaFMModel(BaseModel):
             # Detach focal weights: for γ<1, backprop through (err/mean)^γ·err blows up at err→0.
             ratio = (err / (err.mean().detach() + 1e-6)).clamp(min=1e-8, max=1e4)
             focal = ratio.pow(gamma).detach()
-            w = w * focal
+            ch_mask = self.fm_focal_channels.view(1, -1, 1, 1).to(pred.device)
+            focal_w = torch.where(ch_mask > 0, focal, torch.ones_like(focal))
+            w = w * focal_w
 
         beta = self.fm_focal_fg_beta
         if beta > 0:

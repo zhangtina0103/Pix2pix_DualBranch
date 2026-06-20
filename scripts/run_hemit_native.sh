@@ -138,6 +138,7 @@ train() {
         --fm_lambda_vel_consist "${FM_LAMBDA_VEL_CONSIST:-0}"
         --fm_vel_consist_prob "${FM_VEL_CONSIST_PROB:-1.0}"
         --fm_focal_gamma "${FM_FOCAL_GAMMA:-0}"
+        --fm_focal_channels "${FM_FOCAL_CHANNELS:-1,1,1}"
         --fm_focal_fg_beta "${FM_FOCAL_FG_BETA:-0}"
         --fm_focal_fg_channels "${FM_FOCAL_FG_CHANNELS:-0,1,0}"
         --fm_steps "${FM_STEPS:-25}"

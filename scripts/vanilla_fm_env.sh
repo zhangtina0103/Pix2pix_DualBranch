@@ -654,7 +654,7 @@ vanilla_fm_apply_fm_cross_attn_scratch_cd3_env() {
   echo "fm_cross_attn_scratch_cd3: scratch 1→80 (CD3 ablation, not fair vs 1,1,1) focal=${FM_FOCAL_GAMMA} fg_beta=${FM_FOCAL_FG_BETA} vel_consist=${FM_LAMBDA_VEL_CONSIST} prob=${FM_VEL_CONSIST_PROB} ch=${FM_CHANNEL_WEIGHTS}" >&2
 }
 
-# Cross-attn + focal L1 only (γ on CD3 error). Single-component ablation vs fair cross-attn.
+# Cross-attn + global focal L1 (all channels). Single-component ablation vs fair cross-attn.
 vanilla_fm_apply_fm_cross_attn_scratch_focal_env() {
   vanilla_fm_apply_fm_cross_attn_scratch_env
   export TRAIN_NAME=hemit_fm_cross_attn_scratch_focal
@@ -662,6 +662,7 @@ vanilla_fm_apply_fm_cross_attn_scratch_focal_env() {
   vanilla_fm_apply_fm_scratch_80_schedule
   export FM_CHANNEL_WEIGHTS=1,1,1
   export FM_FOCAL_GAMMA=1.0
+  export FM_FOCAL_CHANNELS=1,1,1
   export FM_FOCAL_FG_BETA=0
   export FM_FOCAL_FG_CHANNELS=0,1,0
   export FM_LAMBDA_VEL_CONSIST=0
@@ -669,7 +670,26 @@ vanilla_fm_apply_fm_cross_attn_scratch_focal_env() {
   export FM_STEPS=25
   export FM_VAL_STEPS=8
   export FM_SAMPLE_METHOD=heun
-  echo "fm_cross_attn_scratch_focal: 1→80 ablation — focal γ=${FM_FOCAL_GAMMA} only; ch=${FM_CHANNEL_WEIGHTS} (fair)" >&2
+  echo "fm_cross_attn_scratch_focal: 1→80 — global focal γ=${FM_FOCAL_GAMMA}; ch=${FM_CHANNEL_WEIGHTS}" >&2
+}
+
+# Cross-attn + CD3-only focal L1 (DAPI/panCK plain L1). Proposed method candidate.
+vanilla_fm_apply_fm_cross_attn_scratch_focal_cd3_env() {
+  vanilla_fm_apply_fm_cross_attn_scratch_env
+  export TRAIN_NAME=hemit_fm_cross_attn_scratch_focal_cd3
+  export VANILLA_FM_EXPECTED_TRAIN_NAME="${TRAIN_NAME}"
+  vanilla_fm_apply_fm_scratch_80_schedule
+  export FM_CHANNEL_WEIGHTS=1,1,1
+  export FM_FOCAL_GAMMA=1.0
+  export FM_FOCAL_CHANNELS=0,1,0
+  export FM_FOCAL_FG_BETA=0
+  export FM_FOCAL_FG_CHANNELS=0,1,0
+  export FM_LAMBDA_VEL_CONSIST=0
+  unset FM_VEL_CONSIST_PROB
+  export FM_STEPS=25
+  export FM_VAL_STEPS=8
+  export FM_SAMPLE_METHOD=heun
+  echo "fm_cross_attn_scratch_focal_cd3: 1→80 — focal γ=${FM_FOCAL_GAMMA} CD3-only; ch=${FM_CHANNEL_WEIGHTS}" >&2
 }
 
 # Tuned focal: gentler γ (default 0.75 — small step down from γ=1 @80). No vel.
@@ -680,6 +700,7 @@ vanilla_fm_apply_fm_cross_attn_scratch_focal_tuned_env() {
   vanilla_fm_apply_fm_scratch_80_schedule
   export FM_CHANNEL_WEIGHTS=1,1,1
   export FM_FOCAL_GAMMA="${FM_FOCAL_GAMMA:-0.75}"
+  export FM_FOCAL_CHANNELS=1,1,1
   export FM_FOCAL_FG_BETA=0
   export FM_FOCAL_FG_CHANNELS=0,1,0
   export FM_LAMBDA_VEL_CONSIST=0
@@ -698,6 +719,7 @@ vanilla_fm_apply_fm_cross_attn_scratch_focal_g075_env() {
   vanilla_fm_apply_fm_scratch_80_schedule
   export FM_CHANNEL_WEIGHTS=1,1,1
   export FM_FOCAL_GAMMA=0.6
+  export FM_FOCAL_CHANNELS=1,1,1
   export FM_FOCAL_FG_BETA=0
   export FM_FOCAL_FG_CHANNELS=0,1,0
   export FM_LAMBDA_VEL_CONSIST=0
@@ -705,7 +727,7 @@ vanilla_fm_apply_fm_cross_attn_scratch_focal_g075_env() {
   export FM_STEPS=25
   export FM_VAL_STEPS=8
   export FM_SAMPLE_METHOD=heun
-  echo "fm_cross_attn_scratch_focal_g075: focal γ=${FM_FOCAL_GAMMA} only (no vel); ch=${FM_CHANNEL_WEIGHTS}" >&2
+  echo "fm_cross_attn_scratch_focal_g075: global focal γ=${FM_FOCAL_GAMMA} (no vel); ch=${FM_CHANNEL_WEIGHTS}" >&2
 }
 
 # γ=0.75 + light vel — node-2 recipe (pairs with γ-only sweep).
@@ -1124,7 +1146,7 @@ vanilla_fm_print_train_env() {
     echo "  velocity_consistency: lambda=${FM_LAMBDA_VEL_CONSIST} prob=${FM_VEL_CONSIST_PROB:-1.0}"
   fi
   if [[ "${FM_FOCAL_GAMMA:-0}" != "0" || "${FM_FOCAL_FG_BETA:-0}" != "0" ]]; then
-    echo "  focal_L1: gamma=${FM_FOCAL_GAMMA:-0} fg_beta=${FM_FOCAL_FG_BETA:-0} fg_ch=${FM_FOCAL_FG_CHANNELS:-0,1,0}"
+    echo "  focal_L1: gamma=${FM_FOCAL_GAMMA:-0} focal_ch=${FM_FOCAL_CHANNELS:-1,1,1} fg_beta=${FM_FOCAL_FG_BETA:-0} fg_ch=${FM_FOCAL_FG_CHANNELS:-0,1,0}"
   fi
   if [[ "${FM_BACKBONE}" == "monai" && -z "${FM_CROP_SIZE:-}" ]]; then
     echo "  WARNING: monai UNet at 1024² OOMs (mid-block attention). Use FM_BACKBONE=custom or FM_CROP_SIZE=512" >&2

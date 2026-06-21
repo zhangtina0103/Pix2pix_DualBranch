@@ -2,6 +2,9 @@
 # Resume a scratch FM run (6h walltime chunks). Same TRAIN_NAME + env profile as train job.
 #
 #   export RESUME_PROFILE=advanced   # or: v2, consistent_scratch, tri_head, cross_attn, ...
+#   export RESUME_PROFILE=cross_attn_focal_tuned      # γ=0.75
+#   export RESUME_PROFILE=cross_attn_focal_tuned_vel  # γ=0.75 + vel
+#   export RESUME_PROFILE=cross_attn_focal_cd3        # CD3-only focal
 #   export RESUME_FROM_EPOCH=25      # optional; default = latest saved *_net_G.pth
 #   bash scripts/resume_hemit_fm_scratch.sh
 #

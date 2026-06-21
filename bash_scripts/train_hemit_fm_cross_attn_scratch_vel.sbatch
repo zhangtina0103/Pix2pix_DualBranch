@@ -1,6 +1,6 @@
 #!/bin/bash
-# Single-component ablation: cross-attn + velocity consistency only. Fair 1,1,1.
-# Slower than fair/focal/fg (~25% steps extra UNet). OOM → BATCH_SIZE=2 sbatch ...
+# Cross-attn + velocity consistency only. Fair 1,1,1; default 10 Heun steps (Consistency-FM).
+# ~25% of steps run extra UNet for vel_consist. OOM → BATCH_SIZE=2 sbatch ...
 #
 #   sbatch bash_scripts/train_hemit_fm_cross_attn_scratch_vel.sbatch
 # Resume: RESUME_PROFILE=cross_attn_vel sbatch bash_scripts/resume_hemit_fm_scratch.sbatch

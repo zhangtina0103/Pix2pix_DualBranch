@@ -758,7 +758,7 @@ vanilla_fm_apply_fm_cross_attn_scratch_fg_env() {
   echo "fm_cross_attn_scratch_fg: 1→80 ablation — fg_beta=${FM_FOCAL_FG_BETA} CD3 only; ch=${FM_CHANNEL_WEIGHTS} (fair)" >&2
 }
 
-# Cross-attn + velocity consistency only (Consistency FM). Fair 1,1,1; slower than fair/focal/fg.
+# Cross-attn + velocity consistency (Consistency-FM style). Fair 1,1,1; ~10 Heun train/val/test.
 vanilla_fm_apply_fm_cross_attn_scratch_vel_env() {
   vanilla_fm_apply_fm_cross_attn_scratch_env
   export TRAIN_NAME=hemit_fm_cross_attn_scratch_vel
@@ -770,10 +770,10 @@ vanilla_fm_apply_fm_cross_attn_scratch_vel_env() {
   export FM_FOCAL_FG_CHANNELS=0,1,0
   export FM_LAMBDA_VEL_CONSIST=0.1
   export FM_VEL_CONSIST_PROB="${FM_VEL_CONSIST_PROB:-0.25}"
-  export FM_STEPS=25
-  export FM_VAL_STEPS=8
+  export FM_STEPS="${FM_STEPS:-10}"
+  export FM_VAL_STEPS="${FM_VAL_STEPS:-10}"
   export FM_SAMPLE_METHOD=heun
-  echo "fm_cross_attn_scratch_vel: 1→80 ablation — vel_consist=${FM_LAMBDA_VEL_CONSIST} prob=${FM_VEL_CONSIST_PROB}; ch=${FM_CHANNEL_WEIGHTS} (fair)" >&2
+  echo "fm_cross_attn_scratch_vel: vel_consist=${FM_LAMBDA_VEL_CONSIST} prob=${FM_VEL_CONSIST_PROB}; Heun steps=${FM_STEPS}; ch=${FM_CHANNEL_WEIGHTS}" >&2
 }
 
 # Orion-Lite: same cross-attn recipe, fair @80, 1,1,1 channel weights.

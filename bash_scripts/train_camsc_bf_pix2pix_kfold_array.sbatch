@@ -1,14 +1,14 @@
 #!/bin/bash
-# CaMSC k-fold pix2pix with train-time augmentations (random 512 crops from full-res fields).
+# One CaMSC fold per array task (fits 6h wall limit; run 5 folds in parallel).
 #
 #   export CAMSC_KFOLD_ROOT=~/orcd/scratch/camsc/datasets/camsc_bf_kfold_aug
 #   export CAMSC_ENABLE_AUG=1
-#   sbatch bash_scripts/train_camsc_bf_pix2pix_kfold_array.sbatch   # recommended (6h/fold, 5 GPUs)
-#   sbatch bash_scripts/train_camsc_bf_pix2pix_kfold.sbatch         # all folds sequential (may hit 6h limit)
-#SBATCH --job-name=camsc_p2p
-#SBATCH --output=logs/camsc_pix2pix_%j.out
-#SBATCH --error=logs/camsc_pix2pix_%j.err
+#   sbatch bash_scripts/train_camsc_bf_pix2pix_kfold_array.sbatch
+#SBATCH --job-name=camsc_p2p_kf
+#SBATCH --output=logs/camsc_pix2pix_%A_%a.out
+#SBATCH --error=logs/camsc_pix2pix_%A_%a.err
 #SBATCH --partition=mit_normal_gpu
+#SBATCH --array=0-4
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
@@ -38,14 +38,7 @@ export N_EPOCHS_DECAY="${N_EPOCHS_DECAY:-20}"
 export LR_DECAY_ITERS="${LR_DECAY_ITERS:-100}"
 
 camsc_apply_model_env
-echo "pix2pix k-fold @ ${CAMSC_KFOLD_ROOT}"
 
-for FOLD in $(seq 0 $((CAMSC_KFOLDS - 1))); do
-  [[ -d "$(camsc_fold_dataroot "${FOLD}")/trainA" ]] || {
-    echo "ERROR: missing $(camsc_fold_dataroot "${FOLD}")/trainA" >&2
-    exit 1
-  }
-  camsc_run_fold_train "${FOLD}"
-done
-
-echo "Done: pix2pix all ${CAMSC_KFOLDS} folds."
+FOLD="${SLURM_ARRAY_TASK_ID}"
+echo "pix2pix fold ${FOLD} @ ${CAMSC_KFOLD_ROOT}"
+camsc_run_fold_train "${FOLD}"

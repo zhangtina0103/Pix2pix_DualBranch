@@ -1,9 +1,13 @@
 #!/bin/bash
 # CaMSC k-fold: pix2pix + FM cross-attn in parallel (2 GPUs).
 #
-#   sbatch bash_scripts/prepare_camsc_bf.sbatch
+#   export CAMSC_KFOLD_ROOT=~/orcd/scratch/camsc/datasets/camsc_bf_kfold_aug
+#   export CAMSC_ENABLE_AUG=1
 #   sbatch bash_scripts/train_camsc_bf_compare_array.sbatch
-#   TEST_EPOCH=50 sbatch bash_scripts/eval_camsc_bf_compare.sbatch
+#
+# Or run separately:
+#   sbatch bash_scripts/train_camsc_bf_pix2pix_kfold.sbatch
+#   sbatch bash_scripts/train_camsc_bf_fm_cross_attn_kfold.sbatch
 #
 # Array task 0 = pix2pix (ResNet9, ~11M G)
 # Array task 1 = fm_cross_attn (flow matching + H&E cross-attn bottleneck)
@@ -15,7 +19,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
-#SBATCH --time=03:00:00
+#SBATCH --time=06:00:00
 
 set -euo pipefail
 source "${SLURM_SUBMIT_DIR:-$PWD}/bash_scripts/_common.sh"

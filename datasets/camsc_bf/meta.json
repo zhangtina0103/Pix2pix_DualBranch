@@ -1,0 +1,18 @@
+{
+  "task": "brightfield_to_hoechst_wt1",
+  "markers": [
+    "Hoechst",
+    "WT1"
+  ],
+  "label_channels": [
+    "Hoechst",
+    "WT1",
+    "pad"
+  ],
+  "train_output_nc": 3,
+  "fm_channel_weights": "1,1,0",
+  "n_pairs": 50,
+  "tile_size": 512,
+  "src": "/Users/tinazhang/Downloads/20260504",
+  "manifest": "/Users/tinazhang/Desktop/varanasi_group/Pix2pix_DualBranch/datasets/camsc_bf/manifest_auto.csv"
+}

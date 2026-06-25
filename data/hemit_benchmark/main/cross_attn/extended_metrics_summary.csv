@@ -1,0 +1,13 @@
+scope,channel,metric,n,mean,std,median,ci_low,ci_high,higher_is_better
+channel,dapi,ssim,945,0.794766,0.128304,0.808001,,,True
+channel,dapi,pearson,945,0.673613,0.250369,0.770375,,,True
+channel,dapi,psnr,945,27.742406,7.208026,25.963295,,,True
+channel,cd3,ssim,945,0.860930,0.077642,0.872076,,,True
+channel,cd3,pearson,945,0.571466,0.123478,0.590643,,,True
+channel,cd3,psnr,945,26.432092,6.399003,25.337979,,,True
+channel,panck,ssim,945,0.933686,0.020018,0.938355,,,True
+channel,panck,pearson,945,0.968308,0.092498,0.981461,,,True
+channel,panck,psnr,945,37.523392,3.452787,37.492437,,,True
+average,mean,ssim,945,0.863128,0.052947,0.865037,,,True
+average,mean,pearson,945,0.737796,0.119509,0.773121,,,True
+average,mean,psnr,945,30.565963,4.646520,29.613487,,,True

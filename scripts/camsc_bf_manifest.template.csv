@@ -1,0 +1,4 @@
+split,bf_path,hoechst_path,wt1_path,sample_id
+train,20260504/CaMSC 30% 10x BF_8.tif,20260504/CaMSC 30% 10x Hoechst_1.tif,20260414_WT1/REPLACE_ME.tif,camsc_30pct_10x_08
+train,20260504/CaMSC 30% 10x BF_9.tif,20260504/CaMSC 30% 10x Hoechst_2.tif,20260414_WT1/REPLACE_ME.tif,camsc_30pct_10x_09
+val,20260504/CaMSC 30% 10x BF_10.tif,20260504/CaMSC 30% 10x Hoechst_3.tif,20260414_WT1/REPLACE_ME.tif,camsc_30pct_10x_10

@@ -122,7 +122,8 @@ camsc_apply_model_env() {
       export LAMBDA_ASP="${LAMBDA_ASP:-1.0}"
       camsc_apply_train_data_env
       ;;
-    cyclegan)
+    cyclegan|cyclegan_ft)
+      [[ "${CAMSC_MODEL}" == cyclegan_ft ]] && export CAMSC_MODEL=cyclegan_ft
       export MODEL=cyclegan
       export PY_MODEL=cycle_gan
       export NETG="${NETG:-resnet_9blocks}"
@@ -151,7 +152,7 @@ camsc_apply_model_env() {
       ;;
     *)
       echo "ERROR: unknown CAMSC_MODEL=${CAMSC_MODEL}" >&2
-      echo "  pix2pix | pix2pix_ft | cut | cut_ft | asp | asp_ft | cyclegan |" >&2
+      echo "  pix2pix | pix2pix_ft | cut | cut_ft | asp | asp_ft | cyclegan | cyclegan_ft |" >&2
       echo "  fm_cross_attn | fm_cross_attn_ft | fm_cross_attn_zeroshot | diffvs_zeroshot | vanilla_fm" >&2
       return 1
       ;;
@@ -170,7 +171,7 @@ camsc_run_fold_train() {
       echo "==> ${CAMSC_MODEL} fold=${fold} DATAROOT=${DATAROOT} TRAIN_NAME=${TRAIN_NAME}"
       bash scripts/run_hemit_native.sh
       ;;
-    pix2pix_ft|cut_ft|asp_ft)
+    pix2pix_ft|cut_ft|asp_ft|cyclegan_ft)
       # shellcheck source=/dev/null
       source "${REPO_ROOT}/scripts/camsc_gan_finetune.sh"
       camsc_gan_finetune_setup_from_hemit "${fold}"
@@ -199,7 +200,7 @@ camsc_run_fold_test() {
   export TRAIN_NAME="$(camsc_fold_train_name "${fold}")"
   export MODE=test
   case "${CAMSC_MODEL}" in
-    pix2pix|cut|asp|cyclegan|pix2pix_ft|cut_ft|asp_ft)
+    pix2pix|cut|asp|cyclegan|pix2pix_ft|cut_ft|asp_ft|cyclegan_ft)
       camsc_apply_model_env
       echo "==> ${CAMSC_MODEL} test fold=${fold} TRAIN_NAME=${TRAIN_NAME} epoch=${TEST_EPOCH:-?}"
       bash scripts/run_hemit_native.sh

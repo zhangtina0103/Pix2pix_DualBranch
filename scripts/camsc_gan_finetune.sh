@@ -13,7 +13,7 @@ camsc_gan_base_model() {
     asp_ft) echo asp ;;
     cyclegan_ft) echo cyclegan ;;
     *)
-      echo "ERROR: CAMSC_MODEL=${CAMSC_MODEL} (need pix2pix_ft|cut_ft|asp_ft)" >&2
+      echo "ERROR: CAMSC_MODEL=${CAMSC_MODEL} (need pix2pix_ft|cut_ft|asp_ft|cyclegan_ft)" >&2
       return 1
       ;;
   esac

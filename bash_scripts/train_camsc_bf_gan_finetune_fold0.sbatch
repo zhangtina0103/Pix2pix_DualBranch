@@ -5,7 +5,7 @@
 #   export CAMSC_KFOLD_ROOT=~/orcd/scratch/camsc/datasets/camsc_bf_kfold_aug
 #   export CAMSC_ENABLE_AUG=1
 #   sbatch bash_scripts/train_camsc_bf_gan_finetune_fold0.sbatch
-#   CAMSC_GAN_FT_MODEL=cut_ft sbatch bash_scripts/train_camsc_bf_gan_finetune_fold0.sbatch
+#   CAMSC_GAN_FT_MODEL=cut_ft|asp_ft|cyclegan_ft sbatch bash_scripts/train_camsc_bf_gan_finetune_fold0.sbatch
 #
 # After train:
 #   CAMSC_GAN_FT_MODEL=pix2pix_ft CAMSC_EVAL_FOLDS=0 TEST_EPOCH=110 sbatch bash_scripts/eval_camsc_bf_gan_finetune.sbatch
@@ -32,8 +32,8 @@ source "${REPO_ROOT}/scripts/camsc_scratch_env.sh"
 # camsc_scratch_env.sh defaults CAMSC_MODEL=vanilla_fm — override for this job.
 export CAMSC_MODEL="${CAMSC_GAN_FT_MODEL:-pix2pix_ft}"
 case "${CAMSC_MODEL}" in
-  pix2pix_ft|cut_ft|asp_ft) ;;
-  *) echo "ERROR: CAMSC_MODEL=${CAMSC_MODEL} (use pix2pix_ft|cut_ft|asp_ft or set CAMSC_GAN_FT_MODEL)" >&2; exit 1 ;;
+  pix2pix_ft|cut_ft|asp_ft|cyclegan_ft) ;;
+  *) echo "ERROR: CAMSC_MODEL=${CAMSC_MODEL} (use pix2pix_ft|cut_ft|asp_ft|cyclegan_ft or set CAMSC_GAN_FT_MODEL)" >&2; exit 1 ;;
 esac
 
 export CAMSC_ENABLE_AUG="${CAMSC_ENABLE_AUG:-1}"
@@ -48,6 +48,8 @@ export CAMSC_FT_DECAY_EPOCHS="${CAMSC_FT_DECAY_EPOCHS:-0}"
 export TRAIN_LR="${TRAIN_LR:-5e-5}"
 
 if [[ "${CAMSC_MODEL}" == cut_ft || "${CAMSC_MODEL}" == asp_ft ]]; then
+  export BATCH_SIZE="${BATCH_SIZE:-2}"
+elif [[ "${CAMSC_MODEL}" == cyclegan_ft ]]; then
   export BATCH_SIZE="${BATCH_SIZE:-2}"
 else
   export BATCH_SIZE="${BATCH_SIZE:-4}"

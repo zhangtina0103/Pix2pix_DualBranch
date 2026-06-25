@@ -21,4 +21,4 @@ done
 
 echo "Metrics under: ${CAMSC_KFOLD_ROOT}/eval/<model>/"
 echo "  kfold_aggregate.json"
-echo "  leaderboard_main_metrics.csv  (SSIM, Pearson, PSNR, MAE, RMSE, LPIPS)"
+echo "  leaderboard_main_metrics.csv  (SSIM, Pearson, Spearman, PSNR, MAE, RMSE, LPIPS)"

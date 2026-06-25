@@ -38,7 +38,7 @@ from scripts.hemit_eval.extended_metrics import (  # noqa: E402
 
 CAMSC_CHANNELS = ("hoechst", "wt1")
 CAMSC_CHANNEL_IDX = (0, 1)
-MAIN_METRICS = ("ssim", "pearson", "psnr", "mae", "rmse", "lpips")
+MAIN_METRICS = ("ssim", "pearson", "spearman", "psnr", "mae", "rmse", "lpips")
 
 
 def _to_uint8(img: np.ndarray) -> np.ndarray:
@@ -130,6 +130,8 @@ def main() -> None:
     p.add_argument("--name-suffix", type=str, default="_512")
     p.add_argument("--epoch", type=int, default=80)
     p.add_argument("--k-folds", type=int, default=5)
+    p.add_argument("--eval-folds", type=str, default="",
+                   help="Comma/space folds to score (default: all 0..k-folds-1)")
     p.add_argument("--out-dir", type=str, default="")
     p.add_argument("--no-lpips", action="store_true")
     args = p.parse_args()
@@ -145,10 +147,15 @@ def main() -> None:
     elif not args.no_lpips:
         print("LPIPS: unavailable (install lpips or use --no-lpips)")
 
+    if args.eval_folds.strip():
+        fold_list = [int(x) for x in args.eval_folds.replace(",", " ").split() if x.strip()]
+    else:
+        fold_list = list(range(args.k_folds))
+
     per_fold = []
     all_tiles = []
 
-    for fold in range(args.k_folds):
+    for fold in fold_list:
         name = f"{args.name_prefix}{fold}{args.name_suffix}"
         images_dir = find_test_images_dir(results_root, name, args.epoch)
         if images_dir is None:
@@ -167,7 +174,8 @@ def main() -> None:
             f"fold {fold}: n={len(df)} "
             f"Hoechst SSIM={summary['hoechst_ssim_mean']:.4f} "
             f"WT1 SSIM={summary['wt1_ssim_mean']:.4f} "
-            f"avg Pearson={summary['average_pearson_mean']:.4f}"
+            f"avg Pearson={summary['average_pearson_mean']:.4f} "
+            f"avg Spearman={summary['average_spearman_mean']:.4f}"
         )
 
     if not per_fold:
@@ -201,10 +209,20 @@ def main() -> None:
 
     print("\n=== Pooled (all test tiles) — main metrics ===")
     for ch in CAMSC_CHANNELS:
-        print(f"  {ch}: SSIM={agg[f'{ch}_ssim_mean']:.4f}  Pearson={agg[f'{ch}_pearson_mean']:.4f}  "
-              f"PSNR={agg[f'{ch}_psnr_mean']:.2f}  MAE={agg[f'{ch}_mae_mean']:.2f}  "
-              f"RMSE={agg[f'{ch}_rmse_mean']:.2f}  LPIPS={agg.get(f'{ch}_lpips_mean', float('nan')):.4f}")
-    print(f"  average: SSIM={agg['average_ssim_mean']:.4f}  Pearson={agg['average_pearson_mean']:.4f}")
+        print(
+            f"  {ch}: SSIM={agg[f'{ch}_ssim_mean']:.4f}  "
+            f"Pearson={agg[f'{ch}_pearson_mean']:.4f}  "
+            f"Spearman={agg[f'{ch}_spearman_mean']:.4f}  "
+            f"PSNR={agg[f'{ch}_psnr_mean']:.2f}  "
+            f"MAE={agg[f'{ch}_mae_mean']:.2f}  "
+            f"RMSE={agg[f'{ch}_rmse_mean']:.2f}  "
+            f"LPIPS={agg.get(f'{ch}_lpips_mean', float('nan')):.4f}"
+        )
+    print(
+        f"  average: SSIM={agg['average_ssim_mean']:.4f}  "
+        f"Pearson={agg['average_pearson_mean']:.4f}  "
+        f"Spearman={agg['average_spearman_mean']:.4f}"
+    )
     print(f"\nWrote {out_dir}/kfold_summary.csv, kfold_aggregate.json, leaderboard_main_metrics.csv")
 
 

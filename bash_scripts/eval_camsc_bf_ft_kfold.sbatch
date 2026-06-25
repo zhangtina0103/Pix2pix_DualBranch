@@ -72,6 +72,23 @@ camsc_resolve_test_epoch() {
   local dir="${REPO_ROOT}/checkpoints/$(camsc_resolved_train_name "${fold}")"
   [[ -d "${dir}" ]] || return 1
   local req="${TEST_EPOCH}"
+  # CycleGAN uses G_A not G
+  if [[ "${CAMSC_MODEL}" == cyclegan_ft ]]; then
+    [[ -f "${dir}/${req}_net_G_A.pth" ]] && echo "${req}" && return 0
+    [[ -f "${dir}/latest_net_G_A.pth" ]] && echo "latest" && return 0
+    local best="" f epoch
+    shopt -s nullglob
+    for f in "${dir}"/*_net_G_A.pth; do
+      epoch="$(basename "${f}" _net_G_A.pth)"
+      [[ "${epoch}" =~ ^[0-9]+$ ]] || continue
+      if [[ -z "${best}" || "${epoch}" -gt "${best}" ]] && [[ "${epoch}" -le "${req}" ]]; then
+        best="${epoch}"
+      fi
+    done
+    shopt -u nullglob
+    [[ -n "${best}" ]] && echo "${best}" && return 0
+    return 1
+  fi
   [[ -f "${dir}/${req}_net_G.pth" ]] && echo "${req}" && return 0
   [[ -f "${dir}/latest_net_G.pth" ]] && echo "latest" && return 0
   local best="" f epoch
@@ -89,8 +106,14 @@ camsc_resolve_test_epoch() {
 }
 
 REQUESTED_EPOCH="${TEST_EPOCH}"
+FOLD_LIST="${CAMSC_EVAL_FOLDS:-}"
+if [[ -z "${FOLD_LIST}" ]]; then
+  FOLD_LIST="$(seq 0 $((CAMSC_KFOLDS - 1)))"
+fi
+EVAL_FOLDS_ARG="${FOLD_LIST// /,}"
+
 RAN_ANY=0
-for FOLD in $(seq 0 $((CAMSC_KFOLDS - 1))); do
+for FOLD in ${FOLD_LIST}; do
   RESOLVED="$(camsc_resolve_test_epoch "${FOLD}" || true)"
   if [[ -z "${RESOLVED}" ]]; then
     echo "[skip] fold ${FOLD}: no checkpoint $(camsc_resolved_train_name "${FOLD}")"
@@ -113,6 +136,7 @@ python scripts/eval_camsc_kfold.py \
   --name-suffix "${NAME_SUFFIX}" \
   --epoch "${REQUESTED_EPOCH}" \
   --k-folds "${CAMSC_KFOLDS}" \
+  --eval-folds "${EVAL_FOLDS_ARG}" \
   --out-dir "${OUT}"
 
 echo "Done: ${OUT}/kfold_aggregate.json"

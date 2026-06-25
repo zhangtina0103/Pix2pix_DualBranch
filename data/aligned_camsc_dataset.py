@@ -78,25 +78,13 @@ class AlignedCamscDataset(BaseDataset):
 
     @staticmethod
     def modify_commandline_options(parser, is_train):
-        parser.set_defaults(dataset_mode="aligned_camsc", preprocess="crop", crop_size=512)
-        parser.add_argument(
-            "--camsc_repeats",
-            type=int,
-            default=1,
-            help="Virtual epoch size: each field sampled this many times per epoch "
-                 "(different random crop each time). Use 8+ for tiny sets.",
-        )
-        parser.add_argument(
-            "--camsc_scale_jitter",
-            type=float,
-            default=0.12,
-            help="Random scale before crop (0=off). E.g. 0.12 → zoom 88%%–112%%.",
-        )
-        parser.add_argument(
-            "--camsc_bf_noise",
-            type=float,
-            default=0.02,
-            help="Gaussian noise std on BF tensor after normalize (0=off).",
+        parser.set_defaults(
+            dataset_mode="aligned_camsc",
+            preprocess="crop",
+            crop_size=512,
+            camsc_repeats=8,
+            camsc_scale_jitter=0.12,
+            camsc_bf_noise=0.02,
         )
         return parser
 

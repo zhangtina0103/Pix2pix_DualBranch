@@ -241,8 +241,8 @@ train() {
     --lr_decay_iters "${LR_DECAY_ITERS:-50}"
     --val_freq "${VAL_FREQ:-5}"
     --save_epoch_freq "${SAVE_EPOCH_FREQ:-5}"
-    "${extra[@]}"
     "${camsc_extra[@]}"
+    "${extra[@]}"
   )
   [[ -n "${MAX_DATASET_SIZE:-}" ]] && train_args+=(--max_dataset_size "${MAX_DATASET_SIZE}")
   case "${PY_MODEL}" in

@@ -76,6 +76,8 @@ camsc_apply_model_env() {
       export FM_CROSS_ATTN_HEADS="${FM_CROSS_ATTN_HEADS:-4}"
       export FM_CHANNEL_WEIGHTS="${FM_CHANNEL_WEIGHTS:-1,1,0}"
       export VANILLA_FM_ENV_LOCKED=1
+      # FM env unsets DATASET_MODE; restore CaMSC loader settings for train-time aug
+      camsc_apply_train_data_env
       ;;
     vanilla_fm)
       export MODEL=vanilla_fm
@@ -91,6 +93,7 @@ camsc_apply_model_env() {
 
 camsc_run_fold_train() {
   local fold="${1:?fold}"
+  camsc_apply_train_data_env
   export DATAROOT="$(camsc_fold_dataroot "${fold}")"
   export TRAIN_NAME="$(camsc_fold_train_name "${fold}")"
   export MODE=train

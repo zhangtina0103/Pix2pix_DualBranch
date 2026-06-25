@@ -1,5 +1,5 @@
 #!/bin/bash
-# Test + aggregate metrics for pix2pix and fm_cross_attn CaMSC k-fold runs.
+# Test + metrics for pix2pix and fm_cross_attn only (vanilla FM → eval_camsc_kfold.sbatch).
 #
 #   TEST_EPOCH=50 sbatch bash_scripts/eval_camsc_bf_compare.sbatch
 #SBATCH --job-name=camsc_cmp_ev
@@ -21,6 +21,10 @@ source "${REPO_ROOT}/bash_scripts/_cuda.sh"
 
 # shellcheck source=/dev/null
 source "${REPO_ROOT}/scripts/camsc_scratch_env.sh"
+
+export CAMSC_ENABLE_AUG="${CAMSC_ENABLE_AUG:-1}"
+camsc_apply_train_data_env
+
 # shellcheck source=/dev/null
 source "${REPO_ROOT}/scripts/vanilla_fm_env.sh"
 
@@ -34,6 +38,9 @@ for CAMSC_MODEL in pix2pix fm_cross_attn; do
   camsc_apply_model_env
   export MODE=test
 
+  NAME_SUFFIX="_${HEMIT_TRAIN_SIZE:-512}"
+  [[ "${CAMSC_ENABLE_AUG:-0}" == "1" ]] && NAME_SUFFIX="${NAME_SUFFIX}_aug"
+
   for FOLD in $(seq 0 $((CAMSC_KFOLDS - 1))); do
     echo "========== test ${CAMSC_MODEL} fold ${FOLD} epoch=${TEST_EPOCH} =========="
     camsc_run_fold_test "${FOLD}"
@@ -45,7 +52,7 @@ for CAMSC_MODEL in pix2pix fm_cross_attn; do
     --kfold-root "${CAMSC_KFOLD_ROOT}" \
     --results-root "${REPO_ROOT}/results" \
     --name-prefix "$(camsc_results_name_prefix)" \
-    --name-suffix "_${HEMIT_TRAIN_SIZE:-512}" \
+    --name-suffix "${NAME_SUFFIX}" \
     --epoch "${TEST_EPOCH}" \
     --k-folds "${CAMSC_KFOLDS}" \
     --out-dir "${OUT}"

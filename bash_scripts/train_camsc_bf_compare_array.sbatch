@@ -1,5 +1,5 @@
 #!/bin/bash
-# CaMSC k-fold: pix2pix vs FM+cross-attn in parallel (2 GPUs).
+# CaMSC k-fold: pix2pix + FM cross-attn in parallel (2 GPUs).
 #
 #   sbatch bash_scripts/prepare_camsc_bf.sbatch
 #   sbatch bash_scripts/train_camsc_bf_compare_array.sbatch
@@ -27,14 +27,18 @@ source "${REPO_ROOT}/bash_scripts/_cuda.sh"
 
 # shellcheck source=/dev/null
 source "${REPO_ROOT}/scripts/camsc_scratch_env.sh"
-# shellcheck source=/dev/null
-source "${REPO_ROOT}/scripts/vanilla_fm_env.sh"
+
+export CAMSC_ENABLE_AUG="${CAMSC_ENABLE_AUG:-1}"
+camsc_apply_train_data_env
 
 case "${SLURM_ARRAY_TASK_ID}" in
   0) export CAMSC_MODEL=pix2pix ;;
   1) export CAMSC_MODEL=fm_cross_attn ;;
   *) echo "ERROR: unknown array task ${SLURM_ARRAY_TASK_ID}" >&2; exit 1 ;;
 esac
+
+echo "SLURM array task ${SLURM_ARRAY_TASK_ID} → CAMSC_MODEL=${CAMSC_MODEL}"
+echo "K-fold root: ${CAMSC_KFOLD_ROOT}"
 
 export MODE=train
 export GPU_IDS=0
@@ -43,15 +47,18 @@ export DISPLAY_ID="${DISPLAY_ID:--1}"
 export N_EPOCHS="${N_EPOCHS:-50}"
 export N_EPOCHS_DECAY="${N_EPOCHS_DECAY:-10}"
 
-camsc_apply_model_env
-if [[ "${CAMSC_MODEL}" == "pix2pix" ]]; then
+if [[ "${CAMSC_MODEL}" == "fm_cross_attn" ]]; then
   # shellcheck source=/dev/null
-  source "${REPO_ROOT}/scripts/hemit_model_profiles.sh"
-  vanilla_fm_print_train_env 2>/dev/null || true
-  echo "CAMSC_MODEL=pix2pix netG=${NETG} ngf=${NGF:-64} TRAIN_NAME prefix=camsc_bf_pix2pix_fold*"
+  source "${REPO_ROOT}/scripts/vanilla_fm_env.sh"
+fi
+
+camsc_apply_model_env
+
+if [[ "${CAMSC_MODEL}" == "pix2pix" ]]; then
+  echo "pix2pix: ResNet9 G, names like camsc_bf_pix2pix_fold{N}_512"
 else
   vanilla_fm_print_train_env
-  echo "CAMSC_MODEL=fm_cross_attn cross_attn heads=${FM_CROSS_ATTN_HEADS:-4}"
+  echo "fm_cross_attn: flow matching + cross-attn bottleneck"
 fi
 
 for FOLD in $(seq 0 $((CAMSC_KFOLDS - 1))); do

@@ -17,10 +17,14 @@ Usage:
   python scripts/prepare_camsc_bf.py \\
     --src ~/Downloads/20260504 --auto-discover --dst ./datasets/camsc_bf
 
-  # Stratified 5-fold CV (fold0..fold4 under dst)
+  # Full-res prep + aug retrain workflow:
   python scripts/prepare_camsc_bf.py \\
-    --src ~/orcd/scratch/camsc/20260504 --auto-discover \\
-    --k-folds 5 --dst ./datasets/camsc_bf_kfold
+    --src ~/orcd/scratch/camsc/20260504 --auto-discover --k-folds 5 \\
+    --dst ./datasets/camsc_bf_kfold_aug --tile-size 0
+
+  CAMSC_ENABLE_AUG=1 sbatch bash_scripts/prepare_camsc_bf.sbatch
+  sbatch bash_scripts/train_camsc_bf_pix2pix_kfold.sbatch
+  TEST_EPOCH=50 sbatch bash_scripts/eval_camsc_bf_compare.sbatch
 
   # Aggregate test metrics after all folds trained:
   python scripts/eval_camsc_kfold.py --kfold-root ./datasets/camsc_bf_kfold \\
@@ -73,6 +77,8 @@ def _load_gray(path: Path) -> np.ndarray:
 
 
 def _resize_gray(arr: np.ndarray, size: int) -> np.ndarray:
+    if size is None or size <= 0:
+        return arr
     if arr.shape[0] == size and arr.shape[1] == size:
         return arr
     img = Image.fromarray(arr)
@@ -248,7 +254,15 @@ def write_meta(
         "train_output_nc": 3,
         "fm_channel_weights": "1,1,0",
         "n_pairs": total,
-        "tile_size": tile_size,
+        "tile_size": tile_size if tile_size > 0 else "full_res",
+        "full_res": tile_size <= 0,
+        "train_augment": {
+            "dataset_mode": "aligned_camsc",
+            "random_crop": 512,
+            "flip": True,
+            "rotate90": True,
+            "bf_jitter": True,
+        },
         "src": str(src),
         "manifest": str(manifest),
     }
@@ -325,7 +339,8 @@ def main() -> None:
     p.add_argument("--k-folds", type=int, default=0,
                    help="If >0, write stratified K-fold dataroots to dst/fold0..fold{K-1}")
     p.add_argument("--dst", type=str, default="./datasets/camsc_bf")
-    p.add_argument("--tile-size", type=int, default=512)
+    p.add_argument("--tile-size", type=int, default=512,
+                   help="Output size; 0 = native resolution (random 512 crops at train)")
     args = p.parse_args()
 
     src = Path(args.src).expanduser().resolve()

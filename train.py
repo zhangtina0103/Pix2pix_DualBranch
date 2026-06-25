@@ -28,21 +28,22 @@ from util.visualizer import Visualizer
 from post_process import validation_train
 from torch.utils.data import random_split
 from util import util
-from data.aligned_dataset import AlignedDataset
+from data import find_dataset_using_name
 import csv
 from tqdm import tqdm
 import os
 
 if __name__ == '__main__':
     opt = TrainOptions().parse()   # get training options
-    dataset_train = AlignedDataset(opt)
+    DatasetClass = find_dataset_using_name(opt.dataset_mode)
+    dataset_train = DatasetClass(opt)
     n_train = len(dataset_train)
     dataset_size = len(dataset_train)    # get the number of images in the dataset.
     print('The number of training images = %d' % dataset_size)
 
     # Update opt for the validation phase
     opt.phase = 'val'
-    dataset_validation = AlignedDataset(opt)
+    dataset_validation = DatasetClass(opt)
     n_val = len(dataset_validation)
     print('The number of validation images = %d' % n_val)
 

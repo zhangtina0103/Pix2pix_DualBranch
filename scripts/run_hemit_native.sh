@@ -216,6 +216,18 @@ train() {
       echo "    FM conditioning CLI: dataset_mode=${DATASET_MODE:-aligned} seg=${FM_USE_SEG:-0} flow=${FM_FLOW_PATH:-noise} init_cond=${FM_INIT_FROM_COND:-0}"
       ;;
   esac
+  local flip_args=(--no_flip)
+  local camsc_extra=()
+  if [[ "${CAMSC_ENABLE_AUG:-0}" == "1" ]]; then
+    flip_args=()
+    camsc_extra=(
+      --dataset_mode "${DATASET_MODE:-aligned_camsc}"
+      --camsc_repeats "${CAMSC_REPEATS:-8}"
+      --camsc_scale_jitter "${CAMSC_SCALE_JITTER:-0.12}"
+      --camsc_bf_noise "${CAMSC_BF_NOISE:-0.02}"
+    )
+    echo "    CaMSC aug: repeats=${CAMSC_REPEATS:-8} scale_jitter=${CAMSC_SCALE_JITTER:-0.12} crop=${CROP_SIZE:-512}"
+  fi
   local train_args=(
     --dataroot "${DATAROOT}" --name "${TRAIN_NAME}"
     --model "${PY_MODEL}" --direction AtoB --display_id "${DISPLAY_ID:-0}"
@@ -223,13 +235,14 @@ train() {
     --load_size "${LOAD_SIZE:-512}" --crop_size "${CROP_SIZE:-512}"
     --preprocess "${PREPROCESS:-resize_and_crop}"
     --num_threads "${NUM_THREADS:-8}"
-    --lr "${TRAIN_LR}" --no_flip --verbose
+    --lr "${TRAIN_LR}" "${flip_args[@]}" --verbose
     --n_epochs "${N_EPOCHS}" --n_epochs_decay "${N_EPOCHS_DECAY}"
     --lr_policy step --batch_size "${BATCH_SIZE}"
     --lr_decay_iters "${LR_DECAY_ITERS:-50}"
     --val_freq "${VAL_FREQ:-5}"
     --save_epoch_freq "${SAVE_EPOCH_FREQ:-5}"
     "${extra[@]}"
+    "${camsc_extra[@]}"
   )
   [[ -n "${MAX_DATASET_SIZE:-}" ]] && train_args+=(--max_dataset_size "${MAX_DATASET_SIZE}")
   case "${PY_MODEL}" in

@@ -1,8 +1,8 @@
 #!/bin/bash
-# Test all CaMSC k-folds sequentially on ONE GPU + aggregate metrics.
+# Test vanilla FM k-folds + aggregate metrics (separate from compare eval).
 #
 #   TEST_EPOCH=50 sbatch bash_scripts/eval_camsc_kfold.sbatch
-#SBATCH --job-name=camsc_ev
+#SBATCH --job-name=camsc_vfm_ev
 #SBATCH --output=logs/camsc_kfold_eval_%j.out
 #SBATCH --error=logs/camsc_kfold_eval_%j.err
 #SBATCH --partition=mit_normal_gpu
@@ -21,29 +21,31 @@ source "${REPO_ROOT}/bash_scripts/_cuda.sh"
 
 # shellcheck source=/dev/null
 source "${REPO_ROOT}/scripts/camsc_scratch_env.sh"
+# shellcheck source=/dev/null
+source "${REPO_ROOT}/scripts/vanilla_fm_env.sh"
 
-export MODEL="${CAMSC_MODEL:-vanilla_fm}"
-export MODE=test
+export CAMSC_MODEL=vanilla_fm
 export GPU_IDS=0
 export TEST_EPOCH="${TEST_EPOCH:-50}"
 export NUM_TEST="${NUM_TEST:-9999}"
 export FM_CHANNEL_WEIGHTS="${FM_CHANNEL_WEIGHTS:-1,1,0}"
 
-# shellcheck source=/dev/null
-source "${REPO_ROOT}/scripts/vanilla_fm_env.sh"
-vanilla_fm_apply_train_env
+camsc_apply_model_env
 
 for FOLD in $(seq 0 $((CAMSC_KFOLDS - 1))); do
-  export DATAROOT="$(camsc_fold_dataroot "${FOLD}")"
-  export TRAIN_NAME="$(camsc_fold_train_name "${FOLD}")"
-  echo "========== test fold ${FOLD} epoch=${TEST_EPOCH} name=${TRAIN_NAME} =========="
-  bash scripts/run_hemit_vanilla_fm.sh
+  echo "========== test vanilla_fm fold ${FOLD} epoch=${TEST_EPOCH} =========="
+  camsc_run_fold_test "${FOLD}"
 done
 
+OUT="${CAMSC_KFOLD_ROOT}/eval/vanilla_fm"
+mkdir -p "${OUT}"
 python scripts/eval_camsc_kfold.py \
   --kfold-root "${CAMSC_KFOLD_ROOT}" \
   --results-root "${REPO_ROOT}/results" \
-  --name-prefix "camsc_bf_${CAMSC_MODEL:-vanilla_fm}_fold" \
+  --name-prefix "$(camsc_results_name_prefix)" \
   --name-suffix "_${HEMIT_TRAIN_SIZE:-512}" \
   --epoch "${TEST_EPOCH}" \
-  --k-folds "${CAMSC_KFOLDS}"
+  --k-folds "${CAMSC_KFOLDS}" \
+  --out-dir "${OUT}"
+
+echo "vanilla_fm metrics: ${OUT}/kfold_aggregate.json"

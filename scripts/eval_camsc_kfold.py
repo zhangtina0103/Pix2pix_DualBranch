@@ -87,7 +87,7 @@ def main() -> None:
     p.add_argument("--results-root", type=str, default="./results")
     p.add_argument("--name-prefix", type=str, default="camsc_bf_vanilla_fm_fold")
     p.add_argument("--name-suffix", type=str, default="_512",
-                   help="Appended after fold index (matches hemit_model_profiles _512 suffix)")
+                   help="Appended after fold index (use _512_aug for augmented retrain)")
     p.add_argument("--epoch", type=int, default=80)
     p.add_argument("--k-folds", type=int, default=5)
     p.add_argument("--out-dir", type=str, default="")

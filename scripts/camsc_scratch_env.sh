@@ -53,6 +53,27 @@ camsc_fold_train_name() {
   echo "camsc_bf_${model}_fold${fold}_${size}${aug_suffix}"
 }
 
+# TRAIN_NAME after hemit_model_profiles.sh appends _${HEMIT_TRAIN_SIZE} when missing.
+camsc_resolved_train_name() {
+  local fold="${1:?fold}"
+  local name
+  name="$(camsc_fold_train_name "${fold}")"
+  local size="${HEMIT_TRAIN_SIZE:-512}"
+  if [[ "${size}" != "1024" ]] && [[ "${name}" != *"_${size}" ]]; then
+    name="${name}_${size}"
+  fi
+  echo "${name}"
+}
+
+# Suffix after fold index for eval_camsc_kfold.py (e.g. _512_aug_512).
+camsc_eval_name_suffix() {
+  local fold="${1:-0}"
+  local resolved prefix
+  resolved="$(camsc_resolved_train_name "${fold}")"
+  prefix="camsc_bf_${CAMSC_MODEL}_fold${fold}"
+  echo "${resolved#"${prefix}"}"
+}
+
 camsc_results_name_prefix() {
   echo "camsc_bf_${CAMSC_MODEL}_fold"
 }

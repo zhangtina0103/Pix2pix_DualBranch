@@ -38,8 +38,8 @@ for CAMSC_MODEL in pix2pix fm_cross_attn; do
   camsc_apply_model_env
   export MODE=test
 
-  NAME_SUFFIX="_${HEMIT_TRAIN_SIZE:-512}"
-  [[ "${CAMSC_ENABLE_AUG:-0}" == "1" ]] && NAME_SUFFIX="${NAME_SUFFIX}_aug"
+  NAME_SUFFIX="$(camsc_eval_name_suffix 0)"
+  [[ "${CAMSC_ENABLE_AUG:-0}" == "1" ]] || NAME_SUFFIX="_${HEMIT_TRAIN_SIZE:-512}"
 
   for FOLD in $(seq 0 $((CAMSC_KFOLDS - 1))); do
     echo "========== test ${CAMSC_MODEL} fold ${FOLD} epoch=${TEST_EPOCH} =========="

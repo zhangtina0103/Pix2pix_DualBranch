@@ -3,7 +3,7 @@
 #
 #   export CAMSC_KFOLD_ROOT=~/orcd/scratch/camsc/datasets/camsc_bf_kfold_aug
 #   export CAMSC_ENABLE_AUG=1
-#   TEST_EPOCH=120 sbatch bash_scripts/eval_camsc_bf_pix2pix.sbatch
+#   TEST_EPOCH=80 sbatch bash_scripts/eval_camsc_bf_pix2pix.sbatch
 #SBATCH --job-name=camsc_p2p_ev
 #SBATCH --output=logs/camsc_pix2pix_eval_%j.out
 #SBATCH --error=logs/camsc_pix2pix_eval_%j.err
@@ -31,21 +31,70 @@ export CAMSC_MODEL=pix2pix
 camsc_apply_model_env
 export MODE=test
 export GPU_IDS=0
-export TEST_EPOCH="${TEST_EPOCH:-120}"
+export TEST_EPOCH="${TEST_EPOCH:-80}"
 export NUM_TEST="${NUM_TEST:-9999}"
 
-NAME_SUFFIX="_${HEMIT_TRAIN_SIZE:-512}"
-[[ "${CAMSC_ENABLE_AUG:-0}" == "1" ]] && NAME_SUFFIX="${NAME_SUFFIX}_aug"
+NAME_SUFFIX="$(camsc_eval_name_suffix 0)"
+echo "Checkpoint dirs like: camsc_bf_pix2pix_fold{N}${NAME_SUFFIX}"
+echo "Requested TEST_EPOCH=${TEST_EPOCH}"
+echo ""
 
+camsc_resolve_test_epoch() {
+  local fold="$1"
+  local dir="${REPO_ROOT}/checkpoints/$(camsc_resolved_train_name "${fold}")"
+  if [[ ! -d "${dir}" ]]; then
+    echo ""
+    return 1
+  fi
+  local req="${REQUESTED_EPOCH:-${TEST_EPOCH}}"
+  if [[ "${req}" == "latest" ]] && [[ -f "${dir}/latest_net_G.pth" ]]; then
+    echo "latest"
+    return 0
+  fi
+  if [[ -f "${dir}/${req}_net_G.pth" ]]; then
+    echo "${req}"
+    return 0
+  fi
+  if [[ -f "${dir}/latest_net_G.pth" ]]; then
+    echo "latest"
+    return 0
+  fi
+  local best="" f epoch
+  shopt -s nullglob
+  for f in "${dir}"/*_net_G.pth; do
+    epoch="$(basename "${f}" _net_G.pth)"
+    [[ "${epoch}" =~ ^[0-9]+$ ]] || continue
+    if [[ -z "${best}" || "${epoch}" -gt "${best}" ]] && [[ "${epoch}" -le "${req}" ]]; then
+      best="${epoch}"
+    fi
+  done
+  shopt -u nullglob
+  [[ -n "${best}" ]] && echo "${best}" && return 0
+  echo ""
+  return 1
+}
+
+RAN_ANY=0
+REQUESTED_EPOCH="${TEST_EPOCH}"
 for FOLD in $(seq 0 $((CAMSC_KFOLDS - 1))); do
-  CKPT="${REPO_ROOT}/checkpoints/camsc_bf_pix2pix_fold${FOLD}${NAME_SUFFIX}/${TEST_EPOCH}_net_G.pth"
-  if [[ ! -f "${CKPT}" ]]; then
-    echo "[skip] fold ${FOLD}: missing ${CKPT}"
+  RESOLVED="$(camsc_resolve_test_epoch "${FOLD}" || true)"
+  if [[ -z "${RESOLVED}" ]]; then
+    echo "[skip] fold ${FOLD}: no checkpoint in $(camsc_resolved_train_name "${FOLD}")/"
     continue
   fi
-  echo "========== test pix2pix fold ${FOLD} epoch=${TEST_EPOCH} =========="
+  if [[ "${RESOLVED}" != "${REQUESTED_EPOCH}" ]]; then
+    echo "[note] fold ${FOLD}: using epoch ${RESOLVED} (requested ${REQUESTED_EPOCH})"
+  fi
+  export TEST_EPOCH="${RESOLVED}"
+  echo "========== test pix2pix fold ${FOLD} name=$(camsc_resolved_train_name "${FOLD}") epoch=${TEST_EPOCH} =========="
   camsc_run_fold_test "${FOLD}"
+  RAN_ANY=1
 done
+
+if [[ "${RAN_ANY}" != "1" ]]; then
+  echo "ERROR: no checkpoints. ls checkpoints/camsc_bf_pix2pix_fold*" >&2
+  exit 1
+fi
 
 OUT="${CAMSC_KFOLD_ROOT}/eval/pix2pix"
 mkdir -p "${OUT}"
@@ -54,8 +103,8 @@ python scripts/eval_camsc_kfold.py \
   --results-root "${REPO_ROOT}/results" \
   --name-prefix "$(camsc_results_name_prefix)" \
   --name-suffix "${NAME_SUFFIX}" \
-  --epoch "${TEST_EPOCH}" \
+  --epoch "${REQUESTED_EPOCH}" \
   --k-folds "${CAMSC_KFOLDS}" \
   --out-dir "${OUT}"
 
-echo "pix2pix metrics @ epoch ${TEST_EPOCH}: ${OUT}/kfold_aggregate.json"
+echo "pix2pix metrics: ${OUT}/kfold_aggregate.json"

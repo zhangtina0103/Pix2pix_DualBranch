@@ -19,7 +19,8 @@ export CAMSC_KFOLD_ROOT="${CAMSC_KFOLD_ROOT:-${CAMSC_SCRATCH_ROOT}/datasets/cams
 export CAMSC_KFOLDS="${CAMSC_KFOLDS:-5}"
 export FM_CHANNEL_WEIGHTS="${FM_CHANNEL_WEIGHTS:-1,1,0}"
 
-# CAMSC_MODEL: pix2pix | fm_cross_attn | vanilla_fm
+# CAMSC_MODEL: pix2pix | cut | asp | cyclegan | fm_cross_attn | fm_cross_attn_ft |
+#              fm_cross_attn_zeroshot | diffvs_zeroshot | vanilla_fm
 export CAMSC_MODEL="${CAMSC_MODEL:-vanilla_fm}"
 
 # Train-time aug only (random crops / flips / BF jitter in aligned_camsc loader):
@@ -78,6 +79,17 @@ camsc_results_name_prefix() {
   echo "camsc_bf_${CAMSC_MODEL}_fold"
 }
 
+_camsc_apply_fm_cross_attn_env() {
+  export MODEL=vanilla_fm
+  export PY_MODEL=vanilla_fm
+  vanilla_fm_apply_fm_cross_attn_scratch_env
+  unset FM_CROSS_ATTN_DECODER
+  export FM_CROSS_ATTN_HEADS="${FM_CROSS_ATTN_HEADS:-4}"
+  export FM_CHANNEL_WEIGHTS="${FM_CHANNEL_WEIGHTS:-1,1,0}"
+  export VANILLA_FM_ENV_LOCKED=1
+  camsc_apply_train_data_env
+}
+
 # Apply model-specific training env. Call after sourcing vanilla_fm_env.sh (FM only).
 camsc_apply_model_env() {
   case "${CAMSC_MODEL}" in
@@ -88,17 +100,45 @@ camsc_apply_model_env() {
       export NGF="${NGF:-64}"
       export LAMBDA_L1="${LAMBDA_L1:-100}"
       ;;
+    cut)
+      export MODEL=cut
+      export PY_MODEL=cut
+      export NETG="${NETG:-resnet_9blocks}"
+      export NGF="${NGF:-64}"
+      export LAMBDA_L1="${LAMBDA_L1:-100}"
+      export LAMBDA_NCE="${LAMBDA_NCE:-1.0}"
+      camsc_apply_train_data_env
+      ;;
+    asp)
+      export MODEL=asp
+      export PY_MODEL=asp
+      export NETG="${NETG:-resnet_9blocks}"
+      export NGF="${NGF:-64}"
+      export LAMBDA_L1="${LAMBDA_L1:-100}"
+      export LAMBDA_ASP="${LAMBDA_ASP:-1.0}"
+      camsc_apply_train_data_env
+      ;;
+    cyclegan)
+      export MODEL=cyclegan
+      export PY_MODEL=cycle_gan
+      export NETG="${NETG:-resnet_9blocks}"
+      export NGF="${NGF:-64}"
+      export LAMBDA_A="${LAMBDA_A:-10.0}"
+      export LAMBDA_B="${LAMBDA_B:-10.0}"
+      export LAMBDA_IDENTITY="${LAMBDA_IDENTITY:-0.5}"
+      camsc_apply_train_data_env
+      ;;
     fm_cross_attn|cross_attn)
       export CAMSC_MODEL=fm_cross_attn
-      export MODEL=vanilla_fm
-      export PY_MODEL=vanilla_fm
-      vanilla_fm_apply_fm_cross_attn_scratch_env
-      unset FM_CROSS_ATTN_DECODER
-      export FM_CROSS_ATTN_HEADS="${FM_CROSS_ATTN_HEADS:-4}"
-      export FM_CHANNEL_WEIGHTS="${FM_CHANNEL_WEIGHTS:-1,1,0}"
-      export VANILLA_FM_ENV_LOCKED=1
-      # FM env unsets DATASET_MODE; restore CaMSC loader settings for train-time aug
-      camsc_apply_train_data_env
+      _camsc_apply_fm_cross_attn_env
+      ;;
+    fm_cross_attn_ft|fm_cross_attn_finetune)
+      export CAMSC_MODEL=fm_cross_attn_ft
+      _camsc_apply_fm_cross_attn_env
+      ;;
+    fm_cross_attn_zeroshot|zeroshot)
+      export CAMSC_MODEL=fm_cross_attn_zeroshot
+      _camsc_apply_fm_cross_attn_env
       ;;
     vanilla_fm)
       export MODEL=vanilla_fm
@@ -106,7 +146,9 @@ camsc_apply_model_env() {
       export FM_CHANNEL_WEIGHTS="${FM_CHANNEL_WEIGHTS:-1,1,0}"
       ;;
     *)
-      echo "ERROR: unknown CAMSC_MODEL=${CAMSC_MODEL} (pix2pix | fm_cross_attn | vanilla_fm)" >&2
+      echo "ERROR: unknown CAMSC_MODEL=${CAMSC_MODEL}" >&2
+      echo "  pix2pix | cut | asp | cyclegan | fm_cross_attn | fm_cross_attn_ft |" >&2
+      echo "  fm_cross_attn_zeroshot | diffvs_zeroshot | vanilla_fm" >&2
       return 1
       ;;
   esac
@@ -119,14 +161,18 @@ camsc_run_fold_train() {
   export TRAIN_NAME="$(camsc_fold_train_name "${fold}")"
   export MODE=train
   case "${CAMSC_MODEL}" in
-    pix2pix)
-      export MODEL=pix2pix
-      export PY_MODEL=pix2pix
-      export NETG="${NETG:-resnet_9blocks}"
-      export NGF="${NGF:-64}"
-      export LAMBDA_L1="${LAMBDA_L1:-100}"
-      echo "==> pix2pix fold=${fold} DATAROOT=${DATAROOT} TRAIN_NAME=${TRAIN_NAME}"
+    pix2pix|cut|asp|cyclegan)
+      camsc_apply_model_env
+      echo "==> ${CAMSC_MODEL} fold=${fold} DATAROOT=${DATAROOT} TRAIN_NAME=${TRAIN_NAME}"
       bash scripts/run_hemit_native.sh
+      ;;
+    fm_cross_attn_ft)
+      # shellcheck source=/dev/null
+      source "${REPO_ROOT}/scripts/camsc_fm_finetune.sh"
+      camsc_finetune_setup_from_hemit "${fold}"
+      export VANILLA_FM_EXPECTED_TRAIN_NAME="${TRAIN_NAME}"
+      echo "==> fm_cross_attn_ft fold=${fold} DATAROOT=${DATAROOT} TRAIN_NAME=${TRAIN_NAME}"
+      bash scripts/run_hemit_vanilla_fm.sh
       ;;
     *)
       export VANILLA_FM_EXPECTED_TRAIN_NAME="${TRAIN_NAME}"
@@ -141,12 +187,9 @@ camsc_run_fold_test() {
   export TRAIN_NAME="$(camsc_fold_train_name "${fold}")"
   export MODE=test
   case "${CAMSC_MODEL}" in
-    pix2pix)
-      export MODEL=pix2pix
-      export PY_MODEL=pix2pix
-      export NETG="${NETG:-resnet_9blocks}"
-      export NGF="${NGF:-64}"
-      echo "==> pix2pix test fold=${fold} TRAIN_NAME=${TRAIN_NAME} epoch=${TEST_EPOCH:-?}"
+    pix2pix|cut|asp|cyclegan)
+      camsc_apply_model_env
+      echo "==> ${CAMSC_MODEL} test fold=${fold} TRAIN_NAME=${TRAIN_NAME} epoch=${TEST_EPOCH:-?}"
       bash scripts/run_hemit_native.sh
       ;;
     *)

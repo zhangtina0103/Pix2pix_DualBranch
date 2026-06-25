@@ -16,21 +16,19 @@ fi
 export CAMSC_SCRATCH_ROOT
 export CAMSC_SRC="${CAMSC_SRC:-${CAMSC_SCRATCH_ROOT}/20260504}"
 export CAMSC_KFOLD_ROOT="${CAMSC_KFOLD_ROOT:-${CAMSC_SCRATCH_ROOT}/datasets/camsc_bf_kfold}"
-export CAMSC_KFOLD_ROOT_AUG="${CAMSC_KFOLD_ROOT_AUG:-${CAMSC_SCRATCH_ROOT}/datasets/camsc_bf_kfold_aug}"
 export CAMSC_KFOLDS="${CAMSC_KFOLDS:-5}"
 export FM_CHANNEL_WEIGHTS="${FM_CHANNEL_WEIGHTS:-1,1,0}"
 
 # CAMSC_MODEL: pix2pix | fm_cross_attn | vanilla_fm
 export CAMSC_MODEL="${CAMSC_MODEL:-vanilla_fm}"
 
-# Retrain with full-res + random 512 crops, flips, rot90, BF jitter:
+# Train-time aug only (random crops / flips / BF jitter in aligned_camsc loader):
 #   export CAMSC_ENABLE_AUG=1
-#   sbatch bash_scripts/prepare_camsc_bf.sbatch   # writes camsc_bf_kfold_aug
+#   sbatch bash_scripts/train_camsc_bf_pix2pix_kfold.sbatch
 camsc_apply_train_data_env() {
   if [[ "${CAMSC_ENABLE_AUG:-0}" != "1" ]]; then
     return 0
   fi
-  export CAMSC_KFOLD_ROOT="${CAMSC_KFOLD_ROOT_AUG}"
   export DATASET_MODE=aligned_camsc
   export PREPROCESS=crop
   export CROP_SIZE="${CROP_SIZE:-512}"
@@ -38,7 +36,7 @@ camsc_apply_train_data_env() {
   export CAMSC_REPEATS="${CAMSC_REPEATS:-8}"
   export CAMSC_SCALE_JITTER="${CAMSC_SCALE_JITTER:-0.12}"
   export CAMSC_BF_NOISE="${CAMSC_BF_NOISE:-0.02}"
-  echo "CaMSC aug ON → ${CAMSC_KFOLD_ROOT} (full-res, random ${CROP_SIZE}px crops, repeats=${CAMSC_REPEATS})" >&2
+  echo "CaMSC train-time aug ON (dataset_mode=${DATASET_MODE}, repeats=${CAMSC_REPEATS})" >&2
 }
 
 camsc_fold_dataroot() {

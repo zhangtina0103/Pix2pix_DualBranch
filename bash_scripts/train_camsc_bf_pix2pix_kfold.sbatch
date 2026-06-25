@@ -1,8 +1,8 @@
 #!/bin/bash
-# CaMSC k-fold pix2pix with augmentations (full-res prep + random 512 crops).
+# CaMSC k-fold pix2pix with train-time augmentations (random 512 crops from full-res fields).
 #
-#   CAMSC_ENABLE_AUG=1 sbatch bash_scripts/prepare_camsc_bf.sbatch
-#   sbatch bash_scripts/train_camsc_bf_pix2pix_kfold.sbatch
+#   sbatch bash_scripts/prepare_camsc_bf.sbatch
+#   CAMSC_ENABLE_AUG=1 sbatch bash_scripts/train_camsc_bf_pix2pix_kfold.sbatch
 #SBATCH --job-name=camsc_p2p
 #SBATCH --output=logs/camsc_pix2pix_%j.out
 #SBATCH --error=logs/camsc_pix2pix_%j.err
@@ -10,7 +10,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
-#SBATCH --time=03:00:00
+#SBATCH --time=12:00:00
 
 set -euo pipefail
 source "${SLURM_SUBMIT_DIR:-$PWD}/bash_scripts/_common.sh"
@@ -31,8 +31,9 @@ export MODE=train
 export GPU_IDS=0
 export BATCH_SIZE="${BATCH_SIZE:-4}"
 export DISPLAY_ID="${DISPLAY_ID:--1}"
-export N_EPOCHS="${N_EPOCHS:-50}"
-export N_EPOCHS_DECAY="${N_EPOCHS_DECAY:-10}"
+export N_EPOCHS="${N_EPOCHS:-100}"
+export N_EPOCHS_DECAY="${N_EPOCHS_DECAY:-20}"
+export LR_DECAY_ITERS="${LR_DECAY_ITERS:-100}"
 
 camsc_apply_model_env
 echo "pix2pix k-fold @ ${CAMSC_KFOLD_ROOT}"

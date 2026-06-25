@@ -1,11 +1,9 @@
 #!/bin/bash
-# Prepare CaMSC 5-fold dataroots on scratch.
+# Prepare CaMSC 5-fold dataroots on scratch (one file per field; no aug on disk).
 #
-#   # Augmented retrain (full-res + random 512 crops at train):
-#   CAMSC_ENABLE_AUG=1 sbatch bash_scripts/prepare_camsc_bf.sbatch
-#
-#   # Legacy 512² prep (no aug):
 #   sbatch bash_scripts/prepare_camsc_bf.sbatch
+#   # native res (recommended for train-time random crops):
+#   CAMSC_TILE_SIZE=0 sbatch bash_scripts/prepare_camsc_bf.sbatch
 #SBATCH --job-name=camsc_prep
 #SBATCH --output=logs/camsc_prepare_%j.out
 #SBATCH --error=logs/camsc_prepare_%j.err
@@ -23,7 +21,6 @@ conda activate "${CONDA_ENV:-pix2pix_cuda}" 2>/dev/null || true
 
 # shellcheck source=/dev/null
 source "${REPO_ROOT}/scripts/camsc_scratch_env.sh"
-camsc_apply_train_data_env
 
 [[ -d "${CAMSC_SRC}" ]] || {
   echo "ERROR: missing ${CAMSC_SRC}" >&2
@@ -31,18 +28,12 @@ camsc_apply_train_data_env
   exit 1
 }
 
-TILE_SIZE="${CAMSC_TILE_SIZE:-512}"
-if [[ "${CAMSC_ENABLE_AUG:-0}" == "1" ]]; then
-  TILE_SIZE=0
-  echo "CAMSC_ENABLE_AUG=1 → full-res TIFs, random 512 crops at train → ${CAMSC_KFOLD_ROOT}"
-fi
-
 python scripts/prepare_camsc_bf.py \
   --src "${CAMSC_SRC}" \
   --auto-discover \
   --k-folds "${CAMSC_KFOLDS}" \
   --dst "${CAMSC_KFOLD_ROOT}" \
-  --tile-size "${TILE_SIZE}" \
+  --tile-size "${CAMSC_TILE_SIZE:-0}" \
   --seed "${CAMSC_SEED:-42}"
 
 cat "${CAMSC_KFOLD_ROOT}/folds.json"

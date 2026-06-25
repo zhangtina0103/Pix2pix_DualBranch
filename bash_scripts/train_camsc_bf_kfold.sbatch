@@ -34,8 +34,9 @@ export GPU_IDS=0
 export BATCH_SIZE="${BATCH_SIZE:-4}"
 export DISPLAY_ID="${DISPLAY_ID:--1}"
 export FM_CHANNEL_WEIGHTS="${FM_CHANNEL_WEIGHTS:-1,1,0}"
-export N_EPOCHS="${N_EPOCHS:-50}"
-export N_EPOCHS_DECAY="${N_EPOCHS_DECAY:-10}"
+export N_EPOCHS="${N_EPOCHS:-100}"
+export N_EPOCHS_DECAY="${N_EPOCHS_DECAY:-20}"
+export LR_DECAY_ITERS="${LR_DECAY_ITERS:-100}"
 
 camsc_apply_model_env
 vanilla_fm_print_train_env

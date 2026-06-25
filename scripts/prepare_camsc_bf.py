@@ -17,13 +17,13 @@ Usage:
   python scripts/prepare_camsc_bf.py \\
     --src ~/Downloads/20260504 --auto-discover --dst ./datasets/camsc_bf
 
-  # Full-res prep + aug retrain workflow:
+  # Full-res prep + train-time random crops (aug in loader, not on disk):
   python scripts/prepare_camsc_bf.py \\
     --src ~/orcd/scratch/camsc/20260504 --auto-discover --k-folds 5 \\
-    --dst ./datasets/camsc_bf_kfold_aug --tile-size 0
+    --dst ./datasets/camsc_bf_kfold --tile-size 0
 
-  CAMSC_ENABLE_AUG=1 sbatch bash_scripts/prepare_camsc_bf.sbatch
-  sbatch bash_scripts/train_camsc_bf_pix2pix_kfold.sbatch
+  sbatch bash_scripts/prepare_camsc_bf.sbatch
+  CAMSC_ENABLE_AUG=1 sbatch bash_scripts/train_camsc_bf_pix2pix_kfold.sbatch
   TEST_EPOCH=50 sbatch bash_scripts/eval_camsc_bf_compare.sbatch
 
   # Aggregate test metrics after all folds trained:

@@ -1,0 +1,38 @@
+{
+  "k_folds": 5,
+  "seed": 42,
+  "n_val_per_group": 1,
+  "src": "/Users/tinazhang/Downloads/20260504",
+  "folds": [
+    {
+      "fold": 0,
+      "train": 35,
+      "val": 5,
+      "test": 10
+    },
+    {
+      "fold": 1,
+      "train": 35,
+      "val": 5,
+      "test": 10
+    },
+    {
+      "fold": 2,
+      "train": 35,
+      "val": 5,
+      "test": 10
+    },
+    {
+      "fold": 3,
+      "train": 35,
+      "val": 5,
+      "test": 10
+    },
+    {
+      "fold": 4,
+      "train": 35,
+      "val": 5,
+      "test": 10
+    }
+  ]
+}

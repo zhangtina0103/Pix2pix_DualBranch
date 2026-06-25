@@ -27,5 +27,6 @@ camsc_fold_dataroot() {
 camsc_fold_train_name() {
   local fold="${1:?fold index required}"
   local model="${CAMSC_MODEL:-vanilla_fm}"
-  echo "camsc_bf_${model}_fold${fold}"
+  local size="${HEMIT_TRAIN_SIZE:-512}"
+  echo "camsc_bf_${model}_fold${fold}_${size}"
 }

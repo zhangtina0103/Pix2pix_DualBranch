@@ -3,7 +3,7 @@
 #
 #   export CAMSC_KFOLD_ROOT=~/orcd/scratch/camsc/datasets/camsc_bf_kfold_aug
 #   export CAMSC_ENABLE_AUG=1
-#   CAMSC_MODEL=pix2pix_ft CAMSC_EVAL_FOLDS=0 TEST_EPOCH=110 sbatch bash_scripts/eval_camsc_bf_gan_finetune.sbatch
+#   CAMSC_GAN_FT_MODEL=pix2pix_ft CAMSC_EVAL_FOLDS=0 TEST_EPOCH=110 sbatch bash_scripts/eval_camsc_bf_gan_finetune.sbatch
 #SBATCH --job-name=camsc_gft_ev
 #SBATCH --output=logs/camsc_gan_ft_eval_%j.out
 #SBATCH --error=logs/camsc_gan_ft_eval_%j.err
@@ -26,10 +26,10 @@ source "${REPO_ROOT}/scripts/camsc_scratch_env.sh"
 # shellcheck source=/dev/null
 source "${REPO_ROOT}/scripts/camsc_gan_finetune.sh"
 
-export CAMSC_MODEL="${CAMSC_MODEL:-pix2pix_ft}"
+export CAMSC_MODEL="${CAMSC_GAN_FT_MODEL:-pix2pix_ft}"
 case "${CAMSC_MODEL}" in
   pix2pix_ft|cut_ft|asp_ft) ;;
-  *) echo "ERROR: CAMSC_MODEL=${CAMSC_MODEL}" >&2; exit 1 ;;
+  *) echo "ERROR: CAMSC_MODEL=${CAMSC_MODEL} (use pix2pix_ft|cut_ft|asp_ft or set CAMSC_GAN_FT_MODEL)" >&2; exit 1 ;;
 esac
 
 export CAMSC_ENABLE_AUG="${CAMSC_ENABLE_AUG:-1}"

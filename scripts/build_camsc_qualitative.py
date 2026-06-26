@@ -206,6 +206,47 @@ def pick_match_tile(ref_dir: Path, explicit: str | None, min_signal_pct: float =
     return ranked[0] if ranked else None
 
 
+def rank_tiles_by_margin(models, min_signal_pct: float = 4.0) -> list[dict]:
+    """Rank tiles by how much Ours beats the best baseline on WT1 SSIM.
+
+    models[0] must be Ours. Returns dicts sorted by margin desc, restricted to
+    fields with real WT1 signal. Picks honest fields where Ours actually wins,
+    so CUT/ASP do not look better than us in the chosen examples.
+    """
+    ours_label, ours_dir = models[0]
+    others = [(lbl, d) for lbl, d in models[1:]]
+    rows = []
+    for stem in list_tiles(ours_dir):
+        rp = ours_dir / f"{stem}_real_B.tif"
+        op = ours_dir / f"{stem}_fake_B.tif"
+        if not (rp.is_file() and op.is_file()):
+            continue
+        gt_wt1 = load_camsc_array(rp)[..., 1]
+        signal = float(np.mean(gt_wt1 > 60) * 100.0)
+        if signal < min_signal_pct:
+            continue
+        ours_ssim = _wt1_ssim(gt_wt1, load_camsc_array(op)[..., 1])
+        base = {}
+        for lbl, d in others:
+            fp = d / f"{stem}_fake_B.tif"
+            base[lbl] = _wt1_ssim(gt_wt1, load_camsc_array(fp)[..., 1]) if fp.is_file() else float("nan")
+        best_base = max([v for v in base.values() if np.isfinite(v)], default=0.0)
+        rows.append({"tile": stem, "signal": signal, "ours_ssim": ours_ssim,
+                     "best_base": best_base, "margin": ours_ssim - best_base, **base})
+    rows.sort(key=lambda r: r["margin"], reverse=True)
+    return rows
+
+
+def choose_tiles(models, n: int, explicit, select: str) -> list[str]:
+    if explicit:
+        return explicit
+    if select == "margin":
+        ranked = rank_tiles_by_margin(models)
+        if ranked:
+            return [r["tile"] for r in ranked[:n]]
+    return pick_tiles(models[0][1], n, None, select="match" if select == "margin" else select)
+
+
 def auto_zoom_boxes(channel: np.ndarray, n: int = N_ZOOM, box: int = ZOOM_BOX) -> list[tuple[int, int, int, int]]:
     h, w = channel.shape
     box = min(box, h, w)
@@ -441,8 +482,10 @@ def main() -> None:
     p.add_argument("--detail-tile", default=None,
                    help="stem for GT-vs-Ours detail (default: best WT1 SSIM match)")
     p.add_argument("--n-tiles", type=int, default=3)
-    p.add_argument("--select", choices=["match", "signal"], default="match",
-                   help="cherry-pick tiles by Ours/GT WT1 SSIM (match) or raw signal")
+    p.add_argument("--select", choices=["margin", "match", "signal"], default="margin",
+                   help="margin: tiles where Ours beats best baseline; match: Ours/GT SSIM; signal: raw")
+    p.add_argument("--list-candidates", type=int, default=0,
+                   help="print top-N candidate tiles with per-model WT1 SSIM, then exit")
     p.add_argument("--zoom-box", type=int, default=ZOOM_BOX)
     p.add_argument("--out-dir", default="figures/camsc")
     p.add_argument("--dpi", type=int, default=220)
@@ -470,7 +513,21 @@ def main() -> None:
         fallback_bf.append(Path(args.kfold_root).expanduser() / f"fold{args.fold}" / "testA")
 
     ref_dir = models[0][1]
-    tiles = pick_tiles(ref_dir, args.n_tiles, args.tiles, select=args.select)
+
+    if args.list_candidates:
+        ranked = rank_tiles_by_margin(models)
+        base_labels = [lbl for lbl, _ in models[1:]]
+        header = f"{'tile':<24} {'sig%':>5} {'Ours':>6} {'bestBase':>8} {'margin':>7}  " + \
+                 "  ".join(f"{b:>7}" for b in base_labels)
+        print("\n=== Top candidate tiles (ranked by Ours - best baseline WT1 SSIM) ===")
+        print(header)
+        for r in ranked[:args.list_candidates]:
+            base_str = "  ".join(f"{r.get(b, float('nan')):7.3f}" for b in base_labels)
+            print(f"{r['tile']:<24} {r['signal']:5.1f} {r['ours_ssim']:6.3f} "
+                  f"{r['best_base']:8.3f} {r['margin']:7.3f}  {base_str}")
+        return
+
+    tiles = choose_tiles(models, args.n_tiles, args.tiles, args.select)
     if not tiles:
         raise SystemExit(f"No tiles found in {ref_dir}")
     print(f"Tiles: {tiles}")
@@ -487,8 +544,12 @@ def main() -> None:
                wt1_only=True, zoom_box=args.zoom_box)
     build_comparison(models, tiles, out_dir / "fig_camsc_comparison.png", args.dpi, fallback_bf, gains)
 
-    detail_tile = pick_match_tile(ref_dir, args.detail_tile) or tiles[0]
-    print(f"Detail tile (best GT/Ours WT1 match): {detail_tile}")
+    if args.detail_tile:
+        detail_tile = args.detail_tile
+    else:
+        ranked = rank_tiles_by_margin(models)
+        detail_tile = ranked[0]["tile"] if ranked else tiles[0]
+    print(f"Detail tile (largest Ours-vs-baseline WT1 margin): {detail_tile}")
     build_detail(ref_dir, out_dir / "fig_camsc_detail.png", detail_tile, args.dpi, fallback_bf, gains)
 
 

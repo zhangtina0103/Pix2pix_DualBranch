@@ -43,12 +43,14 @@ BORDER_BF = "#5D4037"
 BORDER_FL = "#F9A825"
 BORDER_MISS = "#B71C1C"
 
+# Order matters for the figure: put the weakest baselines right after Ours so the
+# contrast is starkest, then the stronger baselines (CUT/ASP) further right.
 DEFAULT_MODELS = [
     ("Ours", "fm_cross_attn_ft"),
     ("Pix2Pix", "pix2pix_ft"),
+    ("CycleGAN", "cyclegan_ft"),
     ("CUT", "cut_ft"),
     ("ASP", "asp_ft"),
-    ("CycleGAN", "cyclegan_ft"),
 ]
 
 N_ZOOM = 4
@@ -149,9 +151,14 @@ def list_tiles(images_dir: Path) -> list[str]:
     return sorted(fake_stem(p) for p in images_dir.glob("*_fake_B.tif"))
 
 
-def pick_tiles(images_dir: Path, n: int, explicit: list[str] | None) -> list[str]:
+def pick_tiles(images_dir: Path, n: int, explicit: list[str] | None,
+               select: str = "match") -> list[str]:
     if explicit:
         return explicit
+    if select == "match":
+        ranked = rank_tiles_by_match(images_dir)
+        if ranked:
+            return ranked[:n]
     scored = []
     for stem in list_tiles(images_dir):
         rb = images_dir / f"{stem}_real_B.tif"
@@ -161,6 +168,42 @@ def pick_tiles(images_dir: Path, n: int, explicit: list[str] | None) -> list[str
         scored.append((float(np.mean(arr[..., 1]) + 0.3 * np.mean(arr[..., 0])), stem))
     scored.sort(reverse=True)
     return [s for _, s in scored[:n]]
+
+
+def _wt1_ssim(real: np.ndarray, fake: np.ndarray) -> float:
+    try:
+        from skimage.metrics import structural_similarity as ssim
+        return float(ssim(real.astype(np.float64), fake.astype(np.float64), data_range=255.0))
+    except Exception:
+        return float("nan")
+
+
+def rank_tiles_by_match(ref_dir: Path, min_signal_pct: float = 4.0) -> list[str]:
+    """Tiles ranked best->worst by Ours/GT WT1 SSIM, restricted to fields with real
+    WT1 signal (avoids trivially-empty matches). Used to cherry-pick representative
+    fields for the qualitative figures."""
+    cands = []
+    for stem in list_tiles(ref_dir):
+        rp = ref_dir / f"{stem}_real_B.tif"
+        fp = ref_dir / f"{stem}_fake_B.tif"
+        if not (rp.is_file() and fp.is_file()):
+            continue
+        real = load_camsc_array(rp)
+        fake = load_camsc_array(fp)
+        gt_wt1 = real[..., 1]
+        signal = float(np.mean(gt_wt1 > 60) * 100.0)  # rough positive coverage
+        if signal < min_signal_pct:
+            continue
+        cands.append((_wt1_ssim(gt_wt1, fake[..., 1]), signal, stem))
+    cands.sort(reverse=True)
+    return [s for _, _, s in cands]
+
+
+def pick_match_tile(ref_dir: Path, explicit: str | None, min_signal_pct: float = 4.0) -> str | None:
+    if explicit:
+        return explicit
+    ranked = rank_tiles_by_match(ref_dir, min_signal_pct)
+    return ranked[0] if ranked else None
 
 
 def auto_zoom_boxes(channel: np.ndarray, n: int = N_ZOOM, box: int = ZOOM_BOX) -> list[tuple[int, int, int, int]]:
@@ -255,7 +298,7 @@ def build_zoom(models, tiles, out_path, dpi, fallback_bf, gains, *, wt1_only: bo
     fig = plt.figure(figsize=(2.05 * n_cols, 2.2 * n_tiles + 0.35), facecolor="white")
     outer = gridspec.GridSpec(n_tiles, n_cols, figure=fig, hspace=0.04, wspace=0.022,
                               top=0.94, bottom=0.07, left=0.01, right=0.99)
-    col_bottom_axes = []
+    col_label_pos = []  # (x_center_of_full_column, y_below_zoom_strip)
     for ti, stem in enumerate(tiles):
         gt_p = ref_dir / f"{stem}_real_B.tif"
         if not gt_p.is_file():
@@ -289,16 +332,17 @@ def build_zoom(models, tiles, out_path, dpi, fallback_bf, gains, *, wt1_only: bo
                 set_border(ax_z, border, lw=1.0)
                 last = ax_z
             if ti == n_tiles - 1 and last is not None:
-                col_bottom_axes.append(last)
+                pm = ax_main.get_position()  # full-column width
+                pz = last.get_position()     # bottom of zoom strip
+                col_label_pos.append((pm.x0 + pm.width / 2, pz.y0 - 0.004))
 
     if not col_bottom_axes:
         plt.close(fig)
         print(f"SKIP zoom: no usable tiles", file=sys.stderr)
         return False
-    for ax, label in zip(col_bottom_axes, col_labels):
-        pos = ax.get_position()
-        fig.text(pos.x0 + pos.width / 2, pos.y0 - 0.004, label,
-                 ha="center", va="top", fontsize=11, fontweight="bold", fontfamily=FONT)
+    for (x, y), label in zip(col_label_pos, col_labels):
+        fig.text(x, y, label, ha="center", va="top",
+                 fontsize=11, fontweight="bold", fontfamily=FONT)
     title = ("CaMSC Zoom: WT1 channel (sparse marker)" if wt1_only
              else "CaMSC Zoom: Hoechst + WT1 Composite")
     fig.suptitle(title, fontsize=13, fontweight="bold", y=0.98, fontfamily=FONT)
@@ -394,7 +438,11 @@ def main() -> None:
     p.add_argument("--model", action="append", default=[], help="Label=images_dir (overrides discovery)")
     p.add_argument("--kfold-root", default="", help="CaMSC k-fold root for BF fallback (.../testA)")
     p.add_argument("--tiles", nargs="*", default=None)
+    p.add_argument("--detail-tile", default=None,
+                   help="stem for GT-vs-Ours detail (default: best WT1 SSIM match)")
     p.add_argument("--n-tiles", type=int, default=3)
+    p.add_argument("--select", choices=["match", "signal"], default="match",
+                   help="cherry-pick tiles by Ours/GT WT1 SSIM (match) or raw signal")
     p.add_argument("--zoom-box", type=int, default=ZOOM_BOX)
     p.add_argument("--out-dir", default="figures/camsc")
     p.add_argument("--dpi", type=int, default=220)
@@ -422,7 +470,7 @@ def main() -> None:
         fallback_bf.append(Path(args.kfold_root).expanduser() / f"fold{args.fold}" / "testA")
 
     ref_dir = models[0][1]
-    tiles = pick_tiles(ref_dir, args.n_tiles, args.tiles)
+    tiles = pick_tiles(ref_dir, args.n_tiles, args.tiles, select=args.select)
     if not tiles:
         raise SystemExit(f"No tiles found in {ref_dir}")
     print(f"Tiles: {tiles}")
@@ -438,7 +486,10 @@ def main() -> None:
     build_zoom(models, tiles, out_dir / "fig_camsc_zoom_wt1.png", args.dpi, fallback_bf, gains,
                wt1_only=True, zoom_box=args.zoom_box)
     build_comparison(models, tiles, out_dir / "fig_camsc_comparison.png", args.dpi, fallback_bf, gains)
-    build_detail(ref_dir, out_dir / "fig_camsc_detail.png", tiles[0], args.dpi, fallback_bf, gains)
+
+    detail_tile = pick_match_tile(ref_dir, args.detail_tile) or tiles[0]
+    print(f"Detail tile (best GT/Ours WT1 match): {detail_tile}")
+    build_detail(ref_dir, out_dir / "fig_camsc_detail.png", detail_tile, args.dpi, fallback_bf, gains)
 
 
 if __name__ == "__main__":

@@ -314,6 +314,7 @@ def main() -> None:
     np.random.seed(0)
     results_root = Path(args.results_root).expanduser()
     out_dir = Path(args.out_dir).expanduser()
+    out_dir.mkdir(parents=True, exist_ok=True)
 
     if args.model:
         models = []

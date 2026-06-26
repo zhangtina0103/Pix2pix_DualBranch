@@ -336,7 +336,7 @@ def build_zoom(models, tiles, out_path, dpi, fallback_bf, gains, *, wt1_only: bo
                 pz = last.get_position()     # bottom of zoom strip
                 col_label_pos.append((pm.x0 + pm.width / 2, pz.y0 - 0.004))
 
-    if not col_bottom_axes:
+    if not col_label_pos:
         plt.close(fig)
         print(f"SKIP zoom: no usable tiles", file=sys.stderr)
         return False

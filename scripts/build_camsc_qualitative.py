@@ -240,7 +240,8 @@ def discover_model_dirs(results_root: Path, fold: int, epoch: int,
 # Figures
 # ---------------------------------------------------------------------------
 
-def build_zoom(models, tiles, out_path, dpi, fallback_bf, gains, *, wt1_only: bool) -> bool:
+def build_zoom(models, tiles, out_path, dpi, fallback_bf, gains, *, wt1_only: bool,
+               zoom_box: int = ZOOM_BOX) -> bool:
     """HEMIT-style: per cell a main panel + numbered boxes + N_ZOOM zoom strip."""
     if not models or not tiles:
         return False
@@ -260,7 +261,7 @@ def build_zoom(models, tiles, out_path, dpi, fallback_bf, gains, *, wt1_only: bo
         if not gt_p.is_file():
             continue
         gt_arr = load_camsc_array(gt_p)
-        boxes = auto_zoom_boxes(gt_arr[..., 1])
+        boxes = auto_zoom_boxes(gt_arr[..., 1], box=zoom_box)
 
         # column images
         bf_p = find_bf(ref_dir, stem, fallback_bf)
@@ -399,8 +400,6 @@ def main() -> None:
     p.add_argument("--dpi", type=int, default=220)
     args = p.parse_args()
 
-    global ZOOM_BOX
-    ZOOM_BOX = args.zoom_box
     apply_style()
     out_dir = Path(args.out_dir).expanduser()
     results_root = Path(args.results_root).expanduser()
@@ -434,8 +433,10 @@ def main() -> None:
     gains = compute_global_gain(gt_arrays)
     print(f"Display gain (Hoechst, WT1) = ({gains[0]:.2f}, {gains[1]:.2f})")
 
-    build_zoom(models, tiles, out_dir / "fig_camsc_zoom.png", args.dpi, fallback_bf, gains, wt1_only=False)
-    build_zoom(models, tiles, out_dir / "fig_camsc_zoom_wt1.png", args.dpi, fallback_bf, gains, wt1_only=True)
+    build_zoom(models, tiles, out_dir / "fig_camsc_zoom.png", args.dpi, fallback_bf, gains,
+               wt1_only=False, zoom_box=args.zoom_box)
+    build_zoom(models, tiles, out_dir / "fig_camsc_zoom_wt1.png", args.dpi, fallback_bf, gains,
+               wt1_only=True, zoom_box=args.zoom_box)
     build_comparison(models, tiles, out_dir / "fig_camsc_comparison.png", args.dpi, fallback_bf, gains)
     build_detail(ref_dir, out_dir / "fig_camsc_detail.png", tiles[0], args.dpi, fallback_bf, gains)
 

@@ -161,13 +161,26 @@ def _palette(labels: list[str]) -> list[str]:
     return [OURS_COLOR if m == OURS_LABEL else BASE_COLOR for m in labels]
 
 
-def fig_metrics_box(df: pd.DataFrame, out_path: Path, dpi: int, channel_name: str) -> None:
-    metrics = [("ssim", "SSIM \u2191"), ("pearson", "Pearson r \u2191"),
-               ("spearman", "Spearman \u03c1 \u2191"), ("psnr", "PSNR (dB) \u2191")]
+METRIC_TITLES = {
+    "ssim": "SSIM \u2191", "pearson": "Pearson r \u2191",
+    "spearman": "Spearman \u03c1 \u2191", "psnr": "PSNR (dB) \u2191",
+    "mae": "MAE \u2193",
+}
+
+
+def fig_metrics_box(df: pd.DataFrame, out_path: Path, dpi: int, channel_name: str,
+                    metric_cols: list[str]) -> None:
+    metrics = [(c, METRIC_TITLES.get(c, c)) for c in metric_cols]
     labels = _order(df)
     colors = _palette(labels)
-    fig, axes = plt.subplots(2, 2, figsize=(10.5, 8.0), facecolor="white")
-    for ax, (col, title) in zip(axes.ravel(), metrics):
+    n = len(metrics)
+    ncol = min(3, n)
+    nrow = int(np.ceil(n / ncol))
+    fig, axes = plt.subplots(nrow, ncol, figsize=(3.7 * ncol, 4.0 * nrow),
+                             facecolor="white", squeeze=False)
+    axflat = axes.ravel()
+    for k, (col, title) in enumerate(metrics):
+        ax = axflat[k]
         data = [df.loc[df["model"] == m, col].dropna().values for m in labels]
         bp = ax.boxplot(data, patch_artist=True, widths=0.6, showfliers=False,
                         medianprops=dict(color="black", linewidth=1.4))
@@ -181,9 +194,11 @@ def fig_metrics_box(df: pd.DataFrame, out_path: Path, dpi: int, channel_name: st
         ax.set_xticklabels(labels, rotation=20, ha="right")
         ax.set_title(title, fontsize=12, fontweight="bold")
         ax.grid(axis="y", alpha=0.3)
+    for k in range(n, nrow * ncol):
+        axflat[k].axis("off")
     fig.suptitle(f"CaMSC {channel_name} per-tile metrics across models",
                  fontsize=14, fontweight="bold")
-    fig.tight_layout(rect=(0, 0, 1, 0.96))
+    fig.tight_layout(rect=(0, 0, 1, 0.94))
     out_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out_path, dpi=dpi, bbox_inches="tight", facecolor="white")
     plt.close(fig)
@@ -205,15 +220,16 @@ def fig_collapse_scatter(df: pd.DataFrame, out_path: Path, dpi: int) -> None:
         ax.plot([0, hi], [0, hi], "--", color="gray", linewidth=1.0, zorder=1)
         ax.scatter(sub["gt_ppf"] * 100, sub["pred_ppf"] * 100, s=14, color=c,
                    alpha=0.7, edgecolor="none", zorder=2)
-        recov = sub["pred_ppf"].mean() / max(sub["gt_ppf"].mean(), 1e-9) * 100
-        ax.set_title(f"{m}  (recovery {recov:.0f}%)", fontsize=11,
+        track = sub["gt_ppf"].corr(sub["pred_ppf"])
+        track_str = "n/a" if not np.isfinite(track) else f"{track:.2f}"
+        ax.set_title(f"{m}  (tracking r={track_str})", fontsize=11,
                      fontweight="bold", color=c if m == OURS_LABEL else "black")
         ax.set_xlim(0, hi * 100); ax.set_ylim(0, hi * 100)
         ax.set_xlabel("GT WT1 PPF (%)"); ax.set_ylabel("Pred WT1 PPF (%)")
         ax.grid(alpha=0.3)
     for j in range(n, nrow * ncol):
         axes[j // ncol][j % ncol].axis("off")
-    fig.suptitle("WT1 signal recovery: predicted vs GT positive-pixel-fraction",
+    fig.suptitle("WT1 coverage tracking: does predicted PPF follow GT per tile?",
                  fontsize=14, fontweight="bold")
     fig.tight_layout(rect=(0, 0, 1, 0.95))
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -236,7 +252,8 @@ def fig_ppf_bar(df: pd.DataFrame, out_path: Path, dpi: int) -> None:
         ax.text(xi, p + 0.2, f"{p:.1f}", ha="center", va="bottom", fontsize=9)
     ax.set_xticks(x); ax.set_xticklabels(labels, rotation=20, ha="right")
     ax.set_ylabel("Mean WT1 positive-pixel-fraction (%)")
-    ax.set_title("WT1 coverage: how much signal each model produces", fontsize=13, fontweight="bold")
+    ax.set_title("Sparse-marker collapse: baselines under-produce WT1 vs GT",
+                 fontsize=13, fontweight="bold")
     ax.legend(frameon=False)
     ax.grid(axis="y", alpha=0.3)
     fig.tight_layout()
@@ -306,9 +323,14 @@ def main() -> None:
     p.add_argument("--k-folds", type=int, default=5)
     p.add_argument("--model", action="append", default=[], help="Label=key (overrides defaults)")
     p.add_argument("--with-hoechst", action="store_true", help="also emit dense Hoechst metric boxplot")
+    p.add_argument("--metrics", default="ssim,pearson,psnr",
+                   help="comma list for boxplot panels (ssim,pearson,spearman,psnr,mae)")
+    p.add_argument("--intensity-scatter", action="store_true",
+                   help="also emit tile-mean intensity scatter (weak metric; off by default)")
     p.add_argument("--out-dir", default="figures/camsc/wt1")
     p.add_argument("--dpi", type=int, default=220)
     args = p.parse_args()
+    metric_cols = [m.strip() for m in args.metrics.split(",") if m.strip()]
 
     apply_style()
     np.random.seed(0)
@@ -338,16 +360,17 @@ def main() -> None:
     df.to_csv(out_dir / "wt1_per_tile.csv", index=False)
     print(f"Wrote {out_dir / 'wt1_per_tile.csv'}  ({len(df)} tile-rows)")
 
-    fig_metrics_box(df, out_dir / "fig_wt1_metrics_box.png", args.dpi, "WT1")
+    fig_metrics_box(df, out_dir / "fig_wt1_metrics_box.png", args.dpi, "WT1", metric_cols)
     fig_collapse_scatter(df, out_dir / "fig_wt1_collapse_scatter.png", args.dpi)
     fig_ppf_bar(df, out_dir / "fig_wt1_ppf_bar.png", args.dpi)
-    fig_intensity_scatter(df, out_dir / "fig_wt1_intensity_scatter.png", args.dpi)
+    if args.intensity_scatter:
+        fig_intensity_scatter(df, out_dir / "fig_wt1_intensity_scatter.png", args.dpi)
     write_summary(df, out_dir / "fig_wt1_summary.csv")
 
     if args.with_hoechst:
         print("Collecting Hoechst per-tile metrics (dense reference)...")
         dfh = collect(model_dirs, HOECHST_IDX)
-        fig_metrics_box(dfh, out_dir / "fig_hoechst_metrics_box.png", args.dpi, "Hoechst")
+        fig_metrics_box(dfh, out_dir / "fig_hoechst_metrics_box.png", args.dpi, "Hoechst", metric_cols)
 
 
 if __name__ == "__main__":

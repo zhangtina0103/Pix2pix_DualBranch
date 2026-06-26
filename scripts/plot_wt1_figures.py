@@ -169,7 +169,7 @@ METRIC_TITLES = {
 
 
 def fig_metrics_box(df: pd.DataFrame, out_path: Path, dpi: int, channel_name: str,
-                    metric_cols: list[str]) -> None:
+                    metric_cols: list[str], show_points: bool = False) -> None:
     metrics = [(c, METRIC_TITLES.get(c, c)) for c in metric_cols]
     labels = _order(df)
     colors = _palette(labels)
@@ -186,10 +186,11 @@ def fig_metrics_box(df: pd.DataFrame, out_path: Path, dpi: int, channel_name: st
                         medianprops=dict(color="black", linewidth=1.4))
         for patch, c in zip(bp["boxes"], colors):
             patch.set_facecolor(c); patch.set_alpha(0.85)
-        for i, m in enumerate(labels, start=1):
-            y = df.loc[df["model"] == m, col].dropna().values
-            x = np.random.normal(i, 0.05, size=len(y))
-            ax.scatter(x, y, s=6, color="black", alpha=0.25, zorder=3)
+        if show_points:
+            for i, m in enumerate(labels, start=1):
+                y = df.loc[df["model"] == m, col].dropna().values
+                x = np.random.normal(i, 0.05, size=len(y))
+                ax.scatter(x, y, s=6, color="black", alpha=0.25, zorder=3)
         ax.set_xticks(range(1, len(labels) + 1))
         ax.set_xticklabels(labels, rotation=20, ha="right")
         ax.set_title(title, fontsize=12, fontweight="bold")
@@ -327,6 +328,8 @@ def main() -> None:
                    help="comma list for boxplot panels (ssim,pearson,spearman,psnr,mae)")
     p.add_argument("--intensity-scatter", action="store_true",
                    help="also emit tile-mean intensity scatter (weak metric; off by default)")
+    p.add_argument("--show-points", action="store_true",
+                   help="overlay per-tile jitter dots on boxplots (off by default)")
     p.add_argument("--out-dir", default="figures/camsc/wt1")
     p.add_argument("--dpi", type=int, default=220)
     args = p.parse_args()
@@ -360,7 +363,8 @@ def main() -> None:
     df.to_csv(out_dir / "wt1_per_tile.csv", index=False)
     print(f"Wrote {out_dir / 'wt1_per_tile.csv'}  ({len(df)} tile-rows)")
 
-    fig_metrics_box(df, out_dir / "fig_wt1_metrics_box.png", args.dpi, "WT1", metric_cols)
+    fig_metrics_box(df, out_dir / "fig_wt1_metrics_box.png", args.dpi, "WT1", metric_cols,
+                    show_points=args.show_points)
     fig_collapse_scatter(df, out_dir / "fig_wt1_collapse_scatter.png", args.dpi)
     fig_ppf_bar(df, out_dir / "fig_wt1_ppf_bar.png", args.dpi)
     if args.intensity_scatter:
@@ -370,7 +374,8 @@ def main() -> None:
     if args.with_hoechst:
         print("Collecting Hoechst per-tile metrics (dense reference)...")
         dfh = collect(model_dirs, HOECHST_IDX)
-        fig_metrics_box(dfh, out_dir / "fig_hoechst_metrics_box.png", args.dpi, "Hoechst", metric_cols)
+        fig_metrics_box(dfh, out_dir / "fig_hoechst_metrics_box.png", args.dpi, "Hoechst", metric_cols,
+                        show_points=args.show_points)
 
 
 if __name__ == "__main__":

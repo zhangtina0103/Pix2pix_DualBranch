@@ -152,11 +152,43 @@ def _best_threshold_f1(y: np.ndarray, score: np.ndarray) -> tuple[float, float, 
     return best
 
 
+def _roc_auc(y: np.ndarray, score: np.ndarray) -> float:
+    """ROC-AUC via the rank (Mann-Whitney U) formulation, with tie handling."""
+    pos = score[y == 1]
+    neg = score[y == 0]
+    n_pos, n_neg = pos.size, neg.size
+    if n_pos == 0 or n_neg == 0:
+        return float("nan")
+    order = np.argsort(score, kind="mergesort")
+    ranks = np.empty(score.size, dtype=np.float64)
+    s = score[order]
+    i = 0
+    while i < s.size:
+        j = i
+        while j + 1 < s.size and s[j + 1] == s[i]:
+            j += 1
+        ranks[order[i:j + 1]] = 0.5 * (i + j) + 1.0  # average rank for ties (1-indexed)
+        i = j + 1
+    sum_ranks_pos = float(np.sum(ranks[y == 1]))
+    auc = (sum_ranks_pos - n_pos * (n_pos + 1) / 2.0) / (n_pos * n_neg)
+    return float(auc)
+
+
+def _average_precision(y: np.ndarray, score: np.ndarray) -> float:
+    """AP = area under precision-recall (step), matching sklearn's definition."""
+    if y.sum() == 0:
+        return float("nan")
+    order = np.argsort(-score, kind="mergesort")
+    y_sorted = y[order]
+    tp = np.cumsum(y_sorted)
+    fp = np.cumsum(1 - y_sorted)
+    precision = tp / np.maximum(tp + fp, 1)
+    recall = tp / y.sum()
+    recall_prev = np.concatenate([[0.0], recall[:-1]])
+    return float(np.sum((recall - recall_prev) * precision))
+
+
 def summarize(df: pd.DataFrame) -> pd.DataFrame:
-    try:
-        from sklearn.metrics import average_precision_score, roc_auc_score
-    except Exception as exc:
-        raise SystemExit(f"scikit-learn is required for AUC/AP: {exc}")
     rows = []
     for model in list(dict.fromkeys(df["model"])):
         sub = df[df["model"] == model].copy()
@@ -165,8 +197,8 @@ def summarize(df: pd.DataFrame) -> pd.DataFrame:
         if len(np.unique(y)) < 2:
             auc = ap = float("nan")
         else:
-            auc = float(roc_auc_score(y, score))
-            ap = float(average_precision_score(y, score))
+            auc = _roc_auc(y, score)
+            ap = _average_precision(y, score)
         thr, f1, bal = _best_threshold_f1(y, score)
         rows.append({
             "model": model,

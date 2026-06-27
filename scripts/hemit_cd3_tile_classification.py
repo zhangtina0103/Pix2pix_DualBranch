@@ -134,7 +134,7 @@ def _best_threshold_f1(y: np.ndarray, score: np.ndarray) -> tuple[float, float, 
     thresholds = np.unique(score[np.isfinite(score)])
     if thresholds.size == 0:
         return float("nan"), float("nan"), float("nan")
-    best = (float("nan"), -1.0, float("nan"))  # threshold, f1, balanced_acc
+    best = (float("nan"), -1.0, -1.0)  # threshold, f1, balanced_acc
     for thr in thresholds:
         pred = score >= thr
         tp = int(np.sum((pred == 1) & (y == 1)))

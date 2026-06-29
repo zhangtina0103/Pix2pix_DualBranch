@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import csv
 import math
+import os
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -18,6 +19,7 @@ from PIL import Image
 # ---------------------------------------------------------------------------
 
 FONT = "Arial"
+OURS_LABEL = "ContextFM (Ours)"
 
 TITLES = {
     "benchmark_bars": "Quantitative Benchmark on the HEMIT Test Set (Epoch 80, n = 945)",
@@ -27,19 +29,20 @@ TITLES = {
     "downstream": "Downstream Biological Validation (Per-Cell Analysis, n = 945)",
     "qual_zoom": "Qualitative Comparison of Virtual Staining Methods on HEMIT",
     "qual_comparison": "Qualitative Comparison of Virtual Staining Methods on HEMIT",
-    "qual_detail": "Representative Virtual Staining Result (Ground Truth vs. Ours)",
+    "qual_detail": f"Representative Virtual Staining Result (Ground Truth vs. {OURS_LABEL})",
 }
 
 COL_LABELS = [
-    "H&E", "Ground Truth", "Ours", "Pix2Pix", "CUT", "CycleGAN", "ASP", "DiffVS",
+    "H&E", "Ground Truth", OURS_LABEL, "Pix2Pix", "CUT", "CycleGAN", "ASP", "D-VST",
 ]
 
 BORDER_HE = "#D32F2F"
 BORDER_MIF = "#F9A825"
 
-OURS_COLOR = "#2E7D32"
+OURS_COLOR = "#8B1E3F"
 BASELINE_COLOR = "#78909C"
 BOX_FACE = "#ECEFF1"
+EDGE_COLOR = "#263238"
 
 ZOOM_TILES = [
     "[18778,52957]_patch_0_8",
@@ -54,7 +57,7 @@ COMPARISON_TILES = [
     "[19129,51780]_patch_4_7",
 ]
 
-# GT vs Ours detail panel — visible DAPI + close match to ground truth
+# GT vs ContextFM detail panel — visible DAPI + close match to ground truth
 DETAIL_TILE = "[19129,51780]_patch_2_8"
 
 MODEL_KEYS = [
@@ -74,28 +77,29 @@ BENCHMARK_MODELS = [
     ("cut", "CUT"),
     ("cyclegan", "CycleGAN"),
     ("asp", "ASP"),
-    ("dvst", "DiffVS"),
-    ("cross_attn", "Ours"),
+    ("dvst", "D-VST"),
+    ("cross_attn", OURS_LABEL),
 ]
 
 ABLATION_CSV_MAP: list[tuple[str, list[str] | None]] = [
     ("Vanilla FM", ["vanilla.csv"]),
-    ("+ cross-attn + vel", None),
-    ("+ focal γ=1", ["focal_loss.csv", "focal_loss (1).csv"]),
-    ("+ CD3 focal", ["cd3_focal.csv"]),
-    ("+ seg cond.", ["score-seg.csv", "score-segonly80.csv"]),
+    (OURS_LABEL, ["score-2.csv"]),
+    ("ContextFM + focal γ=1", ["focal_loss.csv", "focal_loss (1).csv"]),
+    ("ContextFM + CD3 focal", ["cd3_focal.csv"]),
+    ("ContextFM + seg cond.", ["score-seg.csv", "score-segonly80.csv"]),
+    ("ContextFM + cons. reg.", ["score-3.csv"]),
 ]
 
 DOWNSTREAM_MODELS = [
-    ("cyclegan", "CycleGAN"),
     ("pix2pix", "Pix2Pix"),
     ("cut", "CUT"),
+    ("cyclegan", "CycleGAN"),
     ("asp", "ASP"),
-    ("vanilla_fm", "Vanilla FM"),
-    ("cross_attn", "Ours"),
+    ("dvst", "D-VST"),
+    ("cross_attn", OURS_LABEL),
 ]
 
-CROSS_ATTN_CANDIDATES = ["score-3.csv", "score-2.csv", "cross_attn.csv", "score-cross-attn.csv"]
+CROSS_ATTN_CANDIDATES = ["score-2.csv", "cross_attn.csv", "score-cross-attn.csv"]
 
 
 def apply_plot_style() -> None:
@@ -147,7 +151,7 @@ def load_benchmark_summary(benchmark_dir: Path) -> list[tuple[str, str, float, f
 def load_per_marker_from_benchmark(benchmark_dir: Path) -> dict[str, tuple[float, float, float]]:
     """display name -> (DAPI r, CD3 r, panCK r) means."""
     out: dict[str, tuple[float, float, float]] = {}
-    for key, display in [("asp", "ASP"), ("cut", "CUT"), ("cross_attn", "Ours")]:
+    for key, display in BENCHMARK_MODELS:
         p = benchmark_dir / key / "extended_metrics_summary.csv"
         if not p.is_file():
             continue
@@ -181,13 +185,27 @@ def load_mif_array(path: Path) -> np.ndarray:
 
 
 def tif_to_mif_rgb(path: Path, size: int = 512) -> np.ndarray:
-    """panCK→R, CD3→G, DAPI→B — same linear mapping as post_process.tif_composite."""
+    """panCK→R, CD3→G, DAPI→B — linear mapping as post_process.tif_composite.
+
+    Set env HEMIT_COMPOSITE_ENHANCE=1 for display-only per-channel brightening
+    (percentile stretch like single-marker panels); HEMIT_COMPOSITE_GAMMA<1
+    brightens midtones further (default 0.8 when enhance is on).
+    """
     arr = load_mif_array(path)
     dapi, cd3, panck = arr[..., 0], arr[..., 1], arr[..., 2]
-    rgb = np.zeros((*arr.shape[:2], 3), dtype=np.uint8)
-    rgb[..., 0] = panck.astype(np.uint8)
-    rgb[..., 1] = cd3.astype(np.uint8)
-    rgb[..., 2] = dapi.astype(np.uint8)
+    if os.environ.get("HEMIT_COMPOSITE_ENHANCE", "0") == "1":
+        gamma = float(os.environ.get("HEMIT_COMPOSITE_GAMMA", "0.8"))
+        chans = []
+        for ch in (panck, cd3, dapi):  # R, G, B order
+            s = _stretch_marker_channel(ch) / 255.0
+            s = np.power(np.clip(s, 0, 1), gamma)
+            chans.append((s * 255.0).astype(np.uint8))
+        rgb = np.stack(chans, axis=-1)
+    else:
+        rgb = np.zeros((*arr.shape[:2], 3), dtype=np.uint8)
+        rgb[..., 0] = panck.astype(np.uint8)
+        rgb[..., 1] = cd3.astype(np.uint8)
+        rgb[..., 2] = dapi.astype(np.uint8)
     if rgb.shape[0] != size or rgb.shape[1] != size:
         rgb = np.asarray(Image.fromarray(rgb).resize((size, size), Image.BILINEAR))
     return rgb
@@ -227,6 +245,11 @@ def marker_to_rgb(ch: np.ndarray, marker: str, enhance: bool = False) -> np.ndar
     ch = ch.astype(np.float64)
     if enhance:
         ch = _stretch_marker_channel(ch)
+        # Match composite brightening when enhance mode is active.
+        if os.environ.get("HEMIT_COMPOSITE_ENHANCE", "0") == "1":
+            gamma = float(os.environ.get("HEMIT_COMPOSITE_GAMMA", "0.8"))
+            s = np.power(np.clip(ch / 255.0, 0, 1), gamma)
+            ch = s * 255.0
     ch = np.clip(ch, 0, 255).astype(np.uint8)
     rgb = np.zeros((*ch.shape, 3), dtype=np.uint8)
     if marker == "dapi":
@@ -466,7 +489,7 @@ def build_single_tile_detail(
 
     rows_data = [
         ("Ground Truth", he, gt_comp, gt_arr),
-        ("Ours (FM + Cross-Attention)", he, pr_comp, pr_arr),
+        (OURS_LABEL, he, pr_comp, pr_arr),
     ]
     markers = [None, None, "dapi", "cd3", "panck"]
 
@@ -533,18 +556,35 @@ def _summary_stats(vals: list[float]) -> tuple[float, float, float]:
     return mu, sd, med
 
 
+def _has_full_extended_metrics(per_tile: Path) -> bool:
+    """Full extended export includes per-channel MAE/LPIPS, not post_process score.csv."""
+    if not per_tile.is_file():
+        return False
+    with per_tile.open() as f:
+        row = next(csv.DictReader(f), None)
+    return bool(row and "cd3_mae" in row)
+
+
 def sync_cross_attn_benchmark(score_csv: Path, benchmark_dir: Path) -> None:
-    """Write cross_attn/ benchmark CSVs from post_process score.csv (e.g. cross-attn+vel)."""
+    """Write cross_attn/ benchmark CSVs from post_process score.csv (ablation only).
+
+    Skips if benchmark already has full extended metrics (cd3_mae column) so we do
+    not overwrite deployed ContextFM numbers (0.567 Pearson) with ablation score-2.
+    """
+    out_dir = benchmark_dir / "cross_attn"
+    per_tile = out_dir / "extended_metrics_per_tile.csv"
+    if _has_full_extended_metrics(per_tile):
+        print(f"Keep existing full cross_attn metrics → {per_tile}")
+        return
+
     with score_csv.open() as f:
         rows = list(csv.DictReader(f))
     if not rows:
         raise ValueError(f"No rows in {score_csv}")
 
-    out_dir = benchmark_dir / "cross_attn"
     out_dir.mkdir(parents=True, exist_ok=True)
 
     tile_cols = list(rows[0].keys())
-    per_tile = out_dir / "extended_metrics_per_tile.csv"
     with per_tile.open("w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=tile_cols)
         w.writeheader()
@@ -604,17 +644,17 @@ def styled_boxplot(ax, data, labels, *, highlight: str | None = None, show_outli
     bp = ax.boxplot(
         data, patch_artist=True, widths=0.55,
         showfliers=show_outliers,
-        medianprops=dict(color="#E65100", linewidth=1.4),
-        whiskerprops=dict(linewidth=0.9),
-        capprops=dict(linewidth=0.9),
-        boxprops=dict(linewidth=0.9),
+        medianprops=dict(color=EDGE_COLOR, linewidth=1.4),
+        whiskerprops=dict(color=EDGE_COLOR, linewidth=0.9),
+        capprops=dict(color=EDGE_COLOR, linewidth=0.9),
+        boxprops=dict(color=EDGE_COLOR, linewidth=0.9),
         **{kw: labels},
     )
     for i, patch in enumerate(bp["boxes"]):
         is_ours = highlight is not None and labels[i] == highlight
         patch.set_facecolor(OURS_COLOR if is_ours else BOX_FACE)
         patch.set_alpha(0.85 if is_ours else 0.95)
-        patch.set_edgecolor("#37474F")
+        patch.set_edgecolor(EDGE_COLOR)
 
 
 def resolve_cross_attn_csv(metrics_dir: Path, explicit: Path | None) -> Path | None:
@@ -644,8 +684,8 @@ def sync_ablation_metrics(metrics_dir: Path, ablation_dir: Path) -> None:
             names.update(cands)
     names.update(CROSS_ATTN_CANDIDATES)
     for name in sorted(names):
-        src = metrics_dir / name
-        if src.is_file():
+        src = next((p for p in (metrics_dir / name, metrics_dir / "ablation" / name) if p.is_file()), None)
+        if src is not None:
             dst = ablation_dir / name
             if not dst.exists() or src.stat().st_mtime > dst.stat().st_mtime:
                 dst.write_bytes(src.read_bytes())
@@ -668,7 +708,7 @@ def build_benchmark_bars(benchmark_dir: Path, out_path: Path) -> None:
     fig, axes = plt.subplots(1, 3, figsize=(13.5, 4.5))
     fig.subplots_adjust(top=0.82, bottom=0.18, wspace=0.32)
     x = np.arange(len(models))
-    colors = [OURS_COLOR if m == "Ours" else BASELINE_COLOR for m in models]
+    colors = [OURS_COLOR if m == OURS_LABEL else BASELINE_COLOR for m in models]
 
     for ax, (ylabel, data, ymin, _) in zip(axes, specs):
         means = [d[0] for d in data]
@@ -716,7 +756,7 @@ def build_benchmark_boxplots(benchmark_dir: Path, out_path: Path, show_outliers:
             if vals:
                 data.append(vals)
                 labels.append(label)
-        styled_boxplot(ax, data, labels, highlight="Ours", show_outliers=show_outliers)
+        styled_boxplot(ax, data, labels, highlight=OURS_LABEL, show_outliers=show_outliers)
         ax.set_ylabel(ylab, fontweight="bold")
         ax.set_ylim(ylim)
         ax.tick_params(axis="x", rotation=28)
@@ -726,47 +766,133 @@ def build_benchmark_boxplots(benchmark_dir: Path, out_path: Path, show_outliers:
     _save(fig, out_path)
 
 
-def build_per_marker_bars(benchmark_dir: Path, out_path: Path) -> None:
-    per_marker = load_per_marker_from_benchmark(benchmark_dir)
-    if not per_marker:
-        print("SKIP per-marker bars")
-        return
+def load_leaderboard_channel_metric(
+    leaderboard_path: Path, model: str, channel: str, metric: str,
+) -> tuple[float | None, float | None]:
+    """Return (mean, std) from leaderboard_extended_metrics.csv."""
+    if not leaderboard_path.is_file():
+        return None, None
+    with leaderboard_path.open() as f:
+        for row in csv.DictReader(f):
+            if (
+                row.get("model") == model
+                and row.get("scope") == "channel"
+                and row.get("channel") == channel
+                and row.get("metric") == metric
+            ):
+                mean_s, std_s = row.get("mean", ""), row.get("std", "")
+                if not mean_s or str(mean_s).lower() == "nan":
+                    return None, None
+                mean = float(mean_s)
+                std = float(std_s) if std_s and str(std_s).lower() != "nan" else 0.0
+                return mean, std
+    return None, None
 
-    models = list(per_marker.keys())
-    markers = ["DAPI", "CD3", "panCK"]
-    x = np.arange(len(markers))
-    width = 0.25
-    fig, ax = plt.subplots(figsize=(7.5, 4.2))
-    fig.subplots_adjust(top=0.82, bottom=0.15)
 
-    for i, model in enumerate(models):
-        vals = per_marker[model]
-        offset = (i - 1) * width
-        color = OURS_COLOR if model == "Ours" else BASELINE_COLOR
-        bars = ax.bar(x + offset, vals, width, label=model, color=color, edgecolor="white")
-        for bar, v in zip(bars, vals):
-            ax.text(bar.get_x() + bar.get_width() / 2, v + 0.012, f"{v:.3f}", ha="center", va="bottom", fontsize=9)
+def _set_model_xticklabels(ax, labels: list[str]) -> None:
+    ticks = ax.set_xticklabels(labels, rotation=28, ha="right")
+    for lab, model in zip(ticks, labels):
+        if model == OURS_LABEL:
+            lab.set_fontweight("bold")
 
+
+def build_cd3_story_figure(
+    benchmark_dir: Path,
+    leaderboard_path: Path,
+    out_path: Path,
+    *,
+    show_outliers: bool = False,
+) -> None:
+    """Two-panel CD3 figure: Pearson bars (collapse visible) + MAE boxplots."""
+    models = list(BENCHMARK_MODELS)
+    labels = [display for _, display in models]
+
+    fig, axes = plt.subplots(1, 2, figsize=(12.5, 4.8))
+    fig.subplots_adjust(top=0.84, bottom=0.28, wspace=0.30)
+
+    # Left: CD3 Pearson r (table-aligned means; leaderboard first, else per-tile).
+    ax = axes[0]
+    x = np.arange(len(models))
+    for xi, (key, display) in enumerate(models):
+        mean, _ = load_leaderboard_channel_metric(leaderboard_path, key, "cd3", "pearson")
+        if mean is None:
+            per_tile = benchmark_dir / key / "extended_metrics_per_tile.csv"
+            vals = load_metric_column(per_tile, "cd3_pearson") if per_tile.is_file() else []
+            mean = float(sum(vals) / len(vals)) if vals else None
+        if mean is None or not math.isfinite(mean):
+            ax.text(xi, 0.02, "N/A\n(collapsed)", ha="center", va="bottom",
+                    fontsize=8, color="#B0392E", fontstyle="italic")
+            continue
+        ax.bar(xi, mean, width=0.66, color=BASELINE_COLOR, edgecolor=EDGE_COLOR, linewidth=0.6)
+        ax.text(xi, mean + 0.012, f"{mean:.3f}", ha="center", va="bottom", fontsize=9)
     ax.set_xticks(x)
-    ax.set_xticklabels(markers)
-    ax.set_ylabel("Pearson r", fontweight="bold")
-    ax.set_ylim(0.48, 1.02)
-    ax.legend(frameon=False)
+    _set_model_xticklabels(ax, labels)
+    ax.set_ylabel("CD3 Pearson r", fontweight="bold")
+    ax.set_ylim(0.0, 0.72)
     ax.grid(axis="y", alpha=0.22)
-    fig.suptitle(TITLES["per_marker"], fontweight="bold", y=0.98, fontfamily=FONT)
+    ax.set_title("CD3 Pearson Correlation", fontweight="bold", fontfamily=FONT)
+
+    # Right: CD3 MAE per-tile distributions (lower is better).
+    ax = axes[1]
+    data, plot_labels = [], []
+    for key, display in models:
+        per_tile = benchmark_dir / key / "extended_metrics_per_tile.csv"
+        vals = load_metric_column(per_tile, "cd3_mae") if per_tile.is_file() else []
+        if len(vals) >= 10:
+            data.append(vals)
+            plot_labels.append(display)
+        else:
+            print(f"  CD3 MAE missing/skipped: {display} ({per_tile})")
+    if len(data) < 2:
+        print("SKIP CD3 MAE panel: need per-tile cd3_mae CSVs")
+        plt.close(fig)
+        return
+    styled_boxplot(ax, data, plot_labels, highlight=None, show_outliers=show_outliers)
+    ax.set_ylabel("CD3 MAE (lower is better)", fontweight="bold")
+    ax.grid(axis="y", alpha=0.22)
+    ax.set_title("CD3 Mean Absolute Error", fontweight="bold", fontfamily=FONT)
+    _set_model_xticklabels(ax, plot_labels)
+
+    fig.suptitle(
+        "CD3 Virtual Staining Performance (HEMIT Test Set, n = 945)",
+        fontweight="bold", y=0.98, fontfamily=FONT,
+    )
     _save(fig, out_path)
 
 
-def build_ablation_boxplots(metrics_dir: Path, out_path: Path, cross_attn_csv: Path | None, show_outliers: bool = False) -> None:
+def build_per_marker_bars(benchmark_dir: Path, out_path: Path) -> None:
+    """Deprecated wrapper — use build_cd3_story_figure for the paper CD3 panel."""
+    leaderboard = benchmark_dir / "leaderboard_extended_metrics.csv"
+    build_cd3_story_figure(benchmark_dir, leaderboard, out_path)
+
+
+def build_ablation_boxplots(
+    metrics_dir: Path,
+    out_path: Path,
+    cross_attn_csv: Path | None,
+    benchmark_dir: Path | None = None,
+    show_outliers: bool = False,
+) -> None:
     paths: list[tuple[str, Path]] = []
+    deployed_ours = None
+    if benchmark_dir is not None:
+        candidate = benchmark_dir / "cross_attn" / "extended_metrics_per_tile.csv"
+        if _has_full_extended_metrics(candidate):
+            deployed_ours = candidate
+
     for label, cands in ABLATION_CSV_MAP:
-        if label.startswith("+ cross-attn"):
-            if cross_attn_csv is not None and cross_attn_csv.is_file():
+        if label == OURS_LABEL:
+            if deployed_ours is not None:
+                paths.append((label, deployed_ours))
+                print(f"  ablation {label}: {deployed_ours.name} (deployed cross_attn)")
+            elif cross_attn_csv is not None and cross_attn_csv.is_file():
                 paths.append((label, cross_attn_csv))
+                print(f"  ablation {label}: {cross_attn_csv.name}")
             else:
                 print(f"  ablation missing: {label}")
             continue
         if not cands:
+            print(f"  ablation missing: {label}")
             continue
         p = resolve_ablation_csv(metrics_dir, cands)
         if p is not None:
@@ -778,28 +904,28 @@ def build_ablation_boxplots(metrics_dir: Path, out_path: Path, cross_attn_csv: P
         print("SKIP ablation boxplots")
         return
 
-    fig, axes = plt.subplots(1, 2, figsize=(12, 4.5))
-    fig.subplots_adjust(top=0.82, bottom=0.22, wspace=0.28)
+    fig, axes = plt.subplots(1, 2, figsize=(12.5, 4.6))
+    fig.subplots_adjust(top=0.86, bottom=0.34, wspace=0.26)
     for ax, col, ylab, ylim in zip(
         axes,
-        ["average_pearson", "average_ssim"],
-        ["Average Pearson r", "Average SSIM"],
-        [(0.0, 1.0), (0.55, 1.0)],
+        ["cd3_pearson", "average_ssim"],
+        ["CD3 Pearson r", "Average SSIM"],
+        [(0.20, 0.85), (0.55, 1.0)],
     ):
         data, labels = [], []
         for label, path in paths:
             vals = load_metric_column(path, col)
             if vals:
                 data.append(vals)
-                labels.append(label.replace("+ ", ""))
+                labels.append(label)
         styled_boxplot(
             ax, data, labels,
-            highlight=next((l.replace("+ ", "") for l, _ in paths if "cross" in l.lower()), None),
+            highlight=OURS_LABEL,
             show_outliers=show_outliers,
         )
         ax.set_ylabel(ylab, fontweight="bold")
         ax.set_ylim(ylim)
-        ax.tick_params(axis="x", rotation=22)
+        ax.tick_params(axis="x", rotation=28)
         ax.grid(axis="y", alpha=0.22)
 
     fig.suptitle(TITLES["ablation"], fontweight="bold", y=0.98, fontfamily=FONT)
@@ -821,30 +947,35 @@ def build_downstream_boxplots(metrics_dir: Path, out_path: Path, show_outliers: 
         print("SKIP downstream boxplots")
         return
 
-    metrics = [
+    def _draw(metrics: list[tuple[str, str]], target: Path, *, title_suffix: str) -> None:
+        fig, axes = plt.subplots(1, len(metrics), figsize=(5.6 * len(metrics), 4.8), squeeze=False)
+        fig.subplots_adjust(top=0.84, bottom=0.30, wspace=0.30)
+        for ax, (col, ylab) in zip(axes.ravel(), metrics):
+            data, labels = [], []
+            for label, path in loaded:
+                vals = load_metric_column(path, col)
+                if len(vals) >= 10:
+                    data.append(vals)
+                    labels.append(label)
+            if not data:
+                continue
+            # All-gray, formal: no highlight color; bold the Ours tick label only.
+            styled_boxplot(ax, data, labels, highlight=None, show_outliers=show_outliers)
+            ax.set_ylabel(ylab, fontweight="bold", fontsize=10)
+            _set_model_xticklabels(ax, labels)
+            ax.grid(axis="y", alpha=0.22)
+        fig.suptitle(f"{TITLES['downstream']}: {title_suffix}", fontweight="bold", y=0.98, fontfamily=FONT)
+        _save(fig, target)
+
+    pearson_metrics = [
         ("cd3_percell_pearson", "CD3 Per-Cell Pearson r"),
         ("panck_percell_pearson", "panCK Per-Cell Pearson r"),
+    ]
+    coexpr_metrics = [
         ("coexp_abs_err", "Co-Expression Error (Lower Is Better)"),
     ]
-
-    fig, axes = plt.subplots(1, 3, figsize=(14.5, 4.5))
-    fig.subplots_adjust(top=0.82, bottom=0.22, wspace=0.32)
-    for ax, (col, ylab) in zip(axes, metrics):
-        data, labels = [], []
-        for label, path in loaded:
-            vals = load_metric_column(path, col)
-            if len(vals) >= 10:
-                data.append(vals)
-                labels.append(label)
-        if not data:
-            continue
-        styled_boxplot(ax, data, labels, highlight="Ours", show_outliers=show_outliers)
-        ax.set_ylabel(ylab, fontweight="bold", fontsize=10)
-        ax.tick_params(axis="x", rotation=28)
-        ax.grid(axis="y", alpha=0.22)
-
-    fig.suptitle(TITLES["downstream"], fontweight="bold", y=0.98, fontfamily=FONT)
-    _save(fig, out_path)
+    _draw(pearson_metrics, out_path, title_suffix="Marker Pearson")
+    _draw(coexpr_metrics, out_path.with_name("fig_downstream_coexpression_boxplots.png"), title_suffix="Co-Expression Error")
 
 
 def main() -> None:
@@ -887,8 +1018,15 @@ def main() -> None:
     if not args.skip_quant:
         build_benchmark_bars(benchmark_dir, out / "fig_benchmark_bars.png")
         build_benchmark_boxplots(benchmark_dir, out / "fig_benchmark_boxplots.png", args.show_outliers)
-        build_per_marker_bars(benchmark_dir, out / "fig_per_marker_bars.png")
-        build_ablation_boxplots(metrics_dir, out / "fig_ablation_boxplots.png", cross, args.show_outliers)
+        build_cd3_story_figure(
+            benchmark_dir,
+            benchmark_dir / "leaderboard_extended_metrics.csv",
+            out / "fig_cd3_story.png",
+            show_outliers=args.show_outliers,
+        )
+        build_ablation_boxplots(
+            metrics_dir, out / "fig_ablation_boxplots.png", cross, benchmark_dir, args.show_outliers,
+        )
         build_downstream_boxplots(args.metrics_dir, out / "fig_downstream_boxplots.png", args.show_outliers)
 
     if not args.skip_qual:

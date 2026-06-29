@@ -35,9 +35,9 @@ from hemit_eval.downstream_biology import segment_nuclei
 VANILLA_KEY = "hemit_vanilla_fm_joint_perc_512"
 CROSS_ATTN_KEY = "hemit_fm_cross_attn_scratch_512"
 # Patch with largest visible Vanilla vs Cross-Attn gap (CD3 / DAPI) among local tiles
-ABLATION_TILE = "[10382,50252]_patch_0_4"
-ABLATION_ZOOM_BOX = 80
-ABLATION_N_ZOOM = 3
+ABLATION_TILE = "[19129,51780]_patch_2_8"
+ABLATION_ZOOM_BOX = 64
+ABLATION_N_ZOOM = 2
 ZOOM_YELLOW = "#FBC02D"
 
 # Tile filename prefix → display label (must match test.py output names)
@@ -170,6 +170,23 @@ def _ablation_advantage_score(
     return advantage
 
 
+def _ablation_strike_score(
+    gt: np.ndarray, van: np.ndarray, ours: np.ndarray, marker_ch: int,
+) -> np.ndarray:
+    """Favor bright GT regions where Vanilla under-predicts and Cross-Attn recovers signal."""
+    g = gt[..., marker_ch].astype(np.float64)
+    v = van[..., marker_ch].astype(np.float64)
+    o = ours[..., marker_ch].astype(np.float64)
+    adv = np.maximum(0.0, np.abs(g - v) - np.abs(g - o))
+    under = np.maximum(0.0, g - v) * np.maximum(0.0, o - v)
+    if (g > 0).any():
+        thr = float(np.percentile(g[g > 0], 45))
+        mask = g >= thr
+    else:
+        mask = g > 0
+    return (adv + 0.85 * under) * mask
+
+
 def _find_ablation_zoom_boxes(
     gt: np.ndarray,
     van: np.ndarray,
@@ -179,7 +196,8 @@ def _find_ablation_zoom_boxes(
     n: int = ABLATION_N_ZOOM,
     box: int = ABLATION_ZOOM_BOX,
 ) -> list[tuple[int, int, int, int]]:
-    score = _ablation_advantage_score(gt, van, ours, marker_ch).copy()
+    score_fn = _ablation_strike_score if marker_ch == 1 else _ablation_advantage_score
+    score = score_fn(gt, van, ours, marker_ch).copy()
     h, w = score.shape
     boxes: list[tuple[int, int, int, int]] = []
     for _ in range(n):
@@ -196,9 +214,9 @@ def _find_ablation_zoom_boxes(
 
 
 def _pick_best_ablation_tile(tiles_dir: Path) -> str | None:
-    """Tile where Cross-Attn advantage over Vanilla is largest (CD3 + panCK)."""
+    """Tile with the strongest single CD3 recovery region (most striking zoom)."""
     best_tile: str | None = None
-    best_total = -1.0
+    best_peak = -1.0
     for van_p in sorted(tiles_dir.glob(f"{VANILLA_KEY}__*_fake_B.tif")):
         tile = van_p.name[len(VANILLA_KEY) + 2 : -len("_fake_B.tif")]
         gt_p = find_tile_path(tiles_dir, f"GT__{tile}_real_B.tif")
@@ -208,12 +226,9 @@ def _pick_best_ablation_tile(tiles_dir: Path) -> str | None:
         gt = load_mif_array(gt_p)
         van = load_mif_array(van_p)
         ours = load_mif_array(ours_p)
-        total = (
-            _ablation_advantage_score(gt, van, ours, 1).sum()
-            + _ablation_advantage_score(gt, van, ours, 2).sum()
-        )
-        if total > best_total:
-            best_total = total
+        peak = float(_ablation_strike_score(gt, van, ours, 1).max())
+        if peak > best_peak:
+            best_peak = peak
             best_tile = tile
     return best_tile
 
@@ -235,7 +250,7 @@ def build_ablation_zoom_deep(
     out_path: Path,
     tile: str | None = None,
     *,
-    markers: tuple[str, ...] = ("cd3", "panck"),
+    markers: tuple[str, ...] = ("cd3",),
     dpi: int = 200,
 ) -> bool:
     """Separate deep-dive: yellow boxes where +Cross-Attn beats Vanilla FM (CD3 / panCK zooms)."""

@@ -45,9 +45,14 @@ FONT = "Arial"
 WT1_IDX = 1
 HOECHST_IDX = 0
 OURS_LABEL = "Ours"
+OURS_DISPLAY = "ContextFM (Ours)"
 OURS_COLOR = "#C62828"
 BASE_COLOR = "#90A4AE"
 GT_COLOR = "#2E7D32"
+
+
+def _display(label: str) -> str:
+    return OURS_DISPLAY if label == OURS_LABEL else label
 
 DEFAULT_MODELS = [
     ("Ours", "fm_cross_attn_ft"),
@@ -140,7 +145,7 @@ def collect(model_dirs: dict[str, list[Path]], ch_idx: int) -> pd.DataFrame:
                 rows.append({
                     "model": label,
                     "tile": fp.stem.replace("_fake_B", ""),
-                    "ssim": m["ssim"], "pearson": m["pearson"],
+                    "ssim": m["ssim"], "pearson": m["pearson"], "r2": m["r2"],
                     "spearman": m["spearman"], "psnr": m["psnr"], "mae": m["mae"],
                     "gt_ppf": float(np.mean(real > thr)),
                     "pred_ppf": float(np.mean(pred > thr)),
@@ -163,8 +168,13 @@ def _palette(labels: list[str]) -> list[str]:
 
 METRIC_TITLES = {
     "ssim": "SSIM \u2191", "pearson": "Pearson r \u2191",
+    "r2": "R\u00b2 \u2191",
     "spearman": "Spearman \u03c1 \u2191", "psnr": "PSNR (dB) \u2191",
     "mae": "MAE \u2193",
+}
+# Clip R² panel for readability (CycleGAN can be strongly negative per tile).
+METRIC_YLIMS: dict[str, tuple[float, float] | None] = {
+    "r2": (-0.5, 1.05),
 }
 
 
@@ -172,11 +182,11 @@ def fig_metrics_box(df: pd.DataFrame, out_path: Path, dpi: int, channel_name: st
                     metric_cols: list[str], show_points: bool = False) -> None:
     metrics = [(c, METRIC_TITLES.get(c, c)) for c in metric_cols]
     labels = _order(df)
-    colors = _palette(labels)
+    disp_labels = [_display(m) for m in labels]
     n = len(metrics)
     ncol = min(3, n)
     nrow = int(np.ceil(n / ncol))
-    fig, axes = plt.subplots(nrow, ncol, figsize=(3.7 * ncol, 4.0 * nrow),
+    fig, axes = plt.subplots(nrow, ncol, figsize=(4.4 * ncol, 4.2 * nrow),
                              facecolor="white", squeeze=False)
     axflat = axes.ravel()
     for k, (col, title) in enumerate(metrics):
@@ -184,22 +194,35 @@ def fig_metrics_box(df: pd.DataFrame, out_path: Path, dpi: int, channel_name: st
         data = [df.loc[df["model"] == m, col].dropna().values for m in labels]
         bp = ax.boxplot(data, patch_artist=True, widths=0.6, showfliers=False,
                         medianprops=dict(color="black", linewidth=1.4))
-        for patch, c in zip(bp["boxes"], colors):
-            patch.set_facecolor(c); patch.set_alpha(0.85)
+        # All-gray boxes; bold (thicker) outline only on ContextFM (Ours).
+        for patch, m in zip(bp["boxes"], labels):
+            patch.set_facecolor(BASE_COLOR)
+            patch.set_alpha(0.85)
+            patch.set_edgecolor("black")
+            patch.set_linewidth(2.4 if m == OURS_LABEL else 0.9)
         if show_points:
             for i, m in enumerate(labels, start=1):
                 y = df.loc[df["model"] == m, col].dropna().values
                 x = np.random.normal(i, 0.05, size=len(y))
                 ax.scatter(x, y, s=6, color="black", alpha=0.25, zorder=3)
         ax.set_xticks(range(1, len(labels) + 1))
-        ax.set_xticklabels(labels, rotation=20, ha="right")
-        ax.set_title(title, fontsize=12, fontweight="bold")
+        ax.set_xticklabels(disp_labels, rotation=20, ha="right")
+        for tick, m in zip(ax.get_xticklabels(), labels):
+            if m == OURS_LABEL:
+                tick.set_fontweight("bold")
+        # Metric name on the right side, rotated 90 degrees (frees vertical space).
+        ax.yaxis.set_label_position("right")
+        ax.set_ylabel(title, fontsize=12, fontweight="bold", rotation=270,
+                      labelpad=18, va="bottom")
+        if METRIC_YLIMS.get(col):
+            ax.set_ylim(METRIC_YLIMS[col])
         ax.grid(axis="y", alpha=0.3)
     for k in range(n, nrow * ncol):
         axflat[k].axis("off")
     fig.suptitle(f"CaMSC {channel_name} per-tile metrics across models",
                  fontsize=14, fontweight="bold")
     fig.tight_layout(rect=(0, 0, 1, 0.94))
+    fig.subplots_adjust(wspace=0.45)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out_path, dpi=dpi, bbox_inches="tight", facecolor="white")
     plt.close(fig)
@@ -305,6 +328,7 @@ def write_summary(df: pd.DataFrame, out_path: Path) -> None:
             "n_tiles": len(sub),
             "ssim_mean": sub["ssim"].mean(), "ssim_std": sub["ssim"].std(),
             "pearson_mean": sub["pearson"].mean(), "pearson_std": sub["pearson"].std(),
+            "r2_mean": sub["r2"].mean(), "r2_std": sub["r2"].std(),
             "spearman_mean": sub["spearman"].mean(), "spearman_std": sub["spearman"].std(),
             "psnr_mean": sub["psnr"].mean(), "psnr_std": sub["psnr"].std(),
             "mae_mean": sub["mae"].mean(),
@@ -324,8 +348,8 @@ def main() -> None:
     p.add_argument("--k-folds", type=int, default=5)
     p.add_argument("--model", action="append", default=[], help="Label=key (overrides defaults)")
     p.add_argument("--with-hoechst", action="store_true", help="also emit dense Hoechst metric boxplot")
-    p.add_argument("--metrics", default="ssim,pearson,psnr",
-                   help="comma list for boxplot panels (ssim,pearson,spearman,psnr,mae)")
+    p.add_argument("--metrics", default="ssim,pearson,r2",
+                   help="comma list for boxplot panels (ssim,pearson,r2,spearman,psnr,mae)")
     p.add_argument("--intensity-scatter", action="store_true",
                    help="also emit tile-mean intensity scatter (weak metric; off by default)")
     p.add_argument("--show-points", action="store_true",

@@ -52,9 +52,10 @@ This vanilla FM model is the **reference ablation** (not a row in the main bench
 
 Our final model keeps the **same FM objective, perceptual weighting, timestep sampling, and Heun-25 inference** as vanilla FM, and adds **multi-head cross-attention at the U-Net bottleneck**:
 
-- **Query:** bottleneck features of the FM U-Net at **64×64** spatial resolution.
-- **Key/Value:** multi-scale features from a dedicated **H&E encoder** (morphology at multiple resolutions).
-- **Mechanism:** 4-head cross-attention; attended features are **added residually** to the bottleneck tensor before decoding.
+- **Bottleneck resolution:** For 512×512 input, the FM U-Net bottleneck (and the matching H&E encoder stage) is **128×128** (1/4 spatial resolution).
+- **Query:** bottleneck FM features at **128×128**.
+- **Key/Value:** H&E context features from a dedicated encoder at the **same 128×128** scale (`he_feats[2]` in `fm_cond_unet.py`).
+- **Mechanism:** 4-head cross-attention. When maps are larger than 64×64, queries and keys/values are **average-pooled to 64×64** for efficient MHA (full 128² attention is prohibitive); the residual update is then **upsampled back to 128×128** and added to the bottleneck tensor before decoding.
 - **Rationale:** Each predicted IF channel can attend to H&E structures relevant to that marker (e.g., nuclear morphology for DAPI, membrane/cytoplasmic patterns for panCK, lymphocyte-rich regions for CD3) while still being generated jointly.
 
 The model is **trained from scratch for 80 epochs** (no GAN pretraining). No tri-head decoupling is used (`FM_USE_TRI_HEAD=0`); a single joint decoder outputs all three channels.

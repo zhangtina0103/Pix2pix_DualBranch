@@ -65,7 +65,10 @@ if __name__ == '__main__':
     visualizer = Visualizer(opt)   # create a visualizer that display/save images and plots
     total_iters = 0                # the total number of training iterations
 
-    f = open('./checkpoints/' + '%s/' % opt.name + 'validation_train.csv', 'w', encoding='utf-8', newline='') # record validation result
+    ckpt_dir = os.path.join(opt.checkpoints_dir, opt.name)
+    os.makedirs(ckpt_dir, exist_ok=True)
+    val_csv = os.path.join(ckpt_dir, 'validation_train.csv')
+    f = open(val_csv, 'w', encoding='utf-8', newline='')  # record validation result
     csv_writer = csv.writer(f)
     csv_writer.writerow(['epoch', 'dapi', 'cd3', 'panck', 'average'])
 

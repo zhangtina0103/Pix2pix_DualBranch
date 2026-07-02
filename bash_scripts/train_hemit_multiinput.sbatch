@@ -6,6 +6,9 @@
 #   HEMIT_MULTI_VARIANT=dapi sbatch bash_scripts/train_hemit_multiinput.sbatch
 #   HEMIT_MULTI_VARIANT=he_dapi sbatch bash_scripts/train_hemit_multiinput.sbatch
 #
+# After 6h timeout:
+#   HEMIT_MULTI_VARIANT=he sbatch bash_scripts/resume_hemit_multiinput.sbatch
+#
 # All three: sbatch bash_scripts/train_hemit_multiinput_array.sbatch
 #SBATCH --job-name=hemit_multi_tr
 #SBATCH --output=logs/hemit_multiinput_train_%j.out

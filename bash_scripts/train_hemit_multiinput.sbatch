@@ -31,6 +31,11 @@ export DISPLAY_ID=-1
 source "${REPO_ROOT}/bash_scripts/_vanilla_fm_sbatch_preamble.sh"
 source "${REPO_ROOT}/scripts/hemit_multiinput_env.sh"
 hemit_multiinput_apply_env
+[[ -d "${DATAROOT}/trainA" ]] || {
+  echo "ERROR: DATAROOT missing trainA: ${DATAROOT}" >&2
+  echo "  Prep: HEMIT_MULTI_VARIANTS=${HEMIT_MULTI_VARIANT} sbatch bash_scripts/prepare_hemit_multiinput.sbatch" >&2
+  exit 1
+}
 vanilla_fm_print_train_env
 echo "DATAROOT=${DATAROOT} CHECKPOINTS_DIR=${CHECKPOINTS_DIR}"
 bash "${REPO_ROOT}/scripts/run_hemit_vanilla_fm.sh"

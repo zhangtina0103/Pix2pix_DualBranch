@@ -30,7 +30,8 @@ fi
 
 python scripts/prepare_hemit_multiinput.py \
   --src "${DATAROOT_HEMIT}" \
-  --dst-base "${HEMIT_MULTI_ROOT}"
+  --dst-base "${HEMIT_MULTI_ROOT}" \
+  --variants "${HEMIT_MULTI_VARIANTS:-he,dapi,he_dapi}"
 
 echo "Done."
 echo "  base:   ${DATAROOT_HEMIT}"

@@ -2,6 +2,8 @@
 # Prepare HEMIT multi-input dataroots on ORCD scratch (not home).
 #
 #   sbatch bash_scripts/prepare_hemit_multiinput.sbatch
+#   HEMIT_MULTI_VARIANTS=he sbatch bash_scripts/prepare_hemit_multiinput.sbatch
+#   HEMIT_MULTI_VARIANTS=dapi,he_dapi sbatch bash_scripts/prepare_hemit_multiinput.sbatch
 #
 # Scratch layout:
 #   ~/orcd/scratch/hemit/datasets/hemit/       — base pix2pix (symlinks to HEMIT_SRC)
@@ -18,11 +20,13 @@ set -euo pipefail
 source "${SLURM_SUBMIT_DIR:-$PWD}/bash_scripts/_common.sh"
 mkdir -p logs
 
+source /home/zhangtin/miniforge3/etc/profile.d/conda.sh 2>/dev/null || true
+conda activate "${CONDA_ENV:-pix2pix_cuda}" 2>/dev/null || true
+
 # shellcheck source=/dev/null
 source "${REPO_ROOT}/scripts/hemit_scratch_env.sh"
 hemit_apply_scratch_env
 
-# Base pix2pix dataroot on scratch (symlinks — minimal extra disk vs HEMIT_SRC on home)
 if [[ ! -d "${DATAROOT_HEMIT}/trainA" ]]; then
   echo "==> Building ${DATAROOT_HEMIT} from ${HEMIT_SRC} (symlinks)"
   python scripts/prepare_hemit_data.py --src "${HEMIT_SRC}" --dst "${DATAROOT_HEMIT}"
@@ -34,6 +38,6 @@ python scripts/prepare_hemit_multiinput.py \
   --variants "${HEMIT_MULTI_VARIANTS:-he,dapi,he_dapi}"
 
 echo "Done."
-echo "  base:   ${DATAROOT_HEMIT}"
-echo "  multi:  ${HEMIT_MULTI_ROOT}/{he,dapi,he_dapi}"
+echo "  base:  ${DATAROOT_HEMIT}"
+echo "  multi: ${HEMIT_MULTI_ROOT}/{he,dapi,he_dapi}"
 du -sh "${HEMIT_MULTI_ROOT}"/* 2>/dev/null || true

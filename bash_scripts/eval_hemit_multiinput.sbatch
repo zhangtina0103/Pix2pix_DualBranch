@@ -1,6 +1,7 @@
 #!/bin/bash
 # Eval one HEMIT multi-input variant @ TEST_EPOCH (default 80); ckpts/results on scratch.
 #
+#   HEMIT_MULTI_VARIANT=he TEST_EPOCH=80 sbatch bash_scripts/eval_hemit_multiinput.sbatch
 #   HEMIT_MULTI_VARIANT=he_dapi TEST_EPOCH=80 sbatch bash_scripts/eval_hemit_multiinput.sbatch
 #SBATCH --job-name=hemit_multi_ev
 #SBATCH --output=logs/hemit_multiinput_eval_%j.out
@@ -20,13 +21,14 @@ conda activate "${CONDA_ENV:-pix2pix_cuda}"
 source "${REPO_ROOT}/bash_scripts/_cuda.sh"
 
 export MODEL=vanilla_fm
-export HEMIT_MULTI_VARIANT="${HEMIT_MULTI_VARIANT:?Set HEMIT_MULTI_VARIANT=he|dapi|he_dapi}"
+export HEMIT_MULTI_VARIANT="${HEMIT_MULTI_VARIANT:-he}"
 export TEST_EPOCH="${TEST_EPOCH:-80}"
 export NUM_TEST=945
-export GPU_IDS=0
-export DISPLAY_ID=-1
+export GPU_IDS="${GPU_IDS:-0}"
+export DISPLAY_ID="${DISPLAY_ID:--1}"
 
 source "${REPO_ROOT}/bash_scripts/_vanilla_fm_sbatch_preamble.sh"
+# shellcheck source=/dev/null
 source "${REPO_ROOT}/scripts/hemit_multiinput_env.sh"
 hemit_multiinput_apply_env
 export VANILLA_FM_ENV_LOCKED=1
@@ -36,7 +38,7 @@ vanilla_fm_verify_locked_env
 vanilla_fm_print_train_env
 
 CKPT="${CHECKPOINTS_DIR}/${TRAIN_NAME}/${TEST_EPOCH}_net_G.pth"
-echo "TRAIN_NAME=${TRAIN_NAME} TEST_EPOCH=${TEST_EPOCH}"
+echo "HEMIT_MULTI_VARIANT=${HEMIT_MULTI_VARIANT} TRAIN_NAME=${TRAIN_NAME} TEST_EPOCH=${TEST_EPOCH}"
 echo "DATAROOT=${DATAROOT}"
 echo "CHECKPOINTS_DIR=${CHECKPOINTS_DIR} RESULTS_DIR=${RESULTS_DIR}"
 [[ -f "${CKPT}" ]] || { echo "ERROR: missing ${CKPT}" >&2; exit 1; }

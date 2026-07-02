@@ -1,12 +1,9 @@
 # shellcheck shell=bash
 # HEMIT multi-input CD3/panCK experiments (FM + cross-attention @ 80 epochs).
 #
-# Defaults use scratch (source hemit_scratch_env.sh):
-#   ~/orcd/scratch/hemit/datasets/hemit_multi/{he,dapi,he_dapi}
-#
-# Usage:
-#   source scripts/hemit_scratch_env.sh
-#   HEMIT_MULTI_VARIANT=he_dapi sbatch bash_scripts/train_hemit_multiinput.sbatch
+#   sbatch bash_scripts/prepare_hemit_multiinput.sbatch
+#   HEMIT_MULTI_VARIANT=he sbatch bash_scripts/train_hemit_multiinput.sbatch
+#   HEMIT_MULTI_VARIANT=he_dapi sbatch bash_scripts/eval_hemit_multiinput.sbatch
 
 hemit_multiinput_apply_env() {
   local variant="${HEMIT_MULTI_VARIANT:?Set HEMIT_MULTI_VARIANT=he|dapi|he_dapi}"

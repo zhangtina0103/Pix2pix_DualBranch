@@ -231,6 +231,7 @@ train() {
   local train_args=(
     --dataroot "${DATAROOT}" --name "${TRAIN_NAME}"
     --model "${PY_MODEL}" --direction AtoB --display_id "${DISPLAY_ID:-0}"
+    --input_nc "${INPUT_NC:-3}" --output_nc "${OUTPUT_NC:-3}"
     --gpu_ids "${GPU_IDS}"
     --load_size "${LOAD_SIZE:-512}" --crop_size "${CROP_SIZE:-512}"
     --preprocess "${PREPROCESS:-resize_and_crop}"
@@ -330,6 +331,7 @@ test_one() {
   local test_args=(
     --dataroot "${DATAROOT}" --name "${name}"
     --model "${PY_MODEL}" --direction AtoB
+    --input_nc "${INPUT_NC:-3}" --output_nc "${OUTPUT_NC:-3}"
     --gpu_ids "${GPU_IDS}"
     --load_size "${LOAD_SIZE:-512}" --crop_size "${CROP_SIZE:-512}"
     --preprocess "${PREPROCESS:-resize_and_crop}"
@@ -345,8 +347,12 @@ test_one() {
 metrics_one() {
   local name="$1" epoch="$2"
   [[ -d "results/${name}/test_${epoch}/images" ]] || die "run MODE=test first"
-  python post_process.py --srcdir "results/${name}/test_${epoch}/" \
-    ${METRICS_COMPOSITE:+--composite}
+  if [[ -n "${HEMIT_METRICS_SCRIPT:-}" ]]; then
+    python "${HEMIT_METRICS_SCRIPT}" --srcdir "results/${name}/test_${epoch}/"
+  else
+    python post_process.py --srcdir "results/${name}/test_${epoch}/" \
+      ${METRICS_COMPOSITE:+--composite}
+  fi
 }
 
 eval_pretrained() {

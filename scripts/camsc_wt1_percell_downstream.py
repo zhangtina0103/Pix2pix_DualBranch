@@ -77,6 +77,7 @@ TILE_METRICS = [
     ("wt1_count_abs_err", False),
     ("wt1_pos_recall", True),
     ("wt1_pos_precision", True),
+    ("wt1_pos_f1", True),
     ("wt1_low_expr_recall", True),
     ("nucleus_wt1_ssim_mean", True),
     ("nucleus_wt1_mae_mean", False),
@@ -90,11 +91,13 @@ METRIC_LABELS = {
     "wt1_count_abs_err": "|pred − GT| WT1+ count",
     "wt1_pos_recall": "WT1+ recall",
     "wt1_pos_precision": "WT1+ precision",
+    "wt1_pos_f1": "WT1+ F1",
     "wt1_low_expr_recall": "Low-expr WT1+ recall",
     "nucleus_wt1_ssim_mean": "Nucleus-patch WT1 SSIM",
     "nucleus_wt1_mae_mean": "Nucleus-mask WT1 MAE",
     "cell_roc_auc": "Cell-level ROC-AUC",
-    "cell_f1": "Cell-level F1",
+    "cell_wt1_pos_f1": "WT1+ F1 (pooled Otsu)",
+    "cell_f1_best_threshold": "WT1+ F1 (best threshold)",
     "cell_wt1_pos_recall": "Pooled WT1+ recall",
     "cell_low_expr_recall": "Pooled low-expr recall",
 }
@@ -181,6 +184,30 @@ def _pos_recall_precision(
     else:
         precision = float(np.mean(real_pos[fake_pos]))
     return recall, precision
+
+
+def _f1_from_recall_precision(recall: float, precision: float) -> float:
+    if not np.isfinite(recall) or not np.isfinite(precision):
+        return float("nan")
+    denom = recall + precision
+    if denom <= 0:
+        return 0.0
+    return float(2.0 * recall * precision / denom)
+
+
+def _pooled_classification_at_threshold(
+    real: np.ndarray, fake: np.ndarray, threshold: float,
+) -> tuple[float, float, float]:
+    """Recall, precision, F1 on all pooled nuclei at a fixed intensity threshold."""
+    y = real >= threshold
+    pred = fake >= threshold
+    tp = int(np.sum(pred & y))
+    fp = int(np.sum(pred & ~y))
+    fn = int(np.sum(~pred & y))
+    recall = float(tp / (tp + fn)) if (tp + fn) else float("nan")
+    precision = float(tp / (tp + fp)) if (tp + fp) else float("nan")
+    f1 = _f1_from_recall_precision(recall, precision)
+    return recall, precision, f1
 
 
 def _low_expr_recall(
@@ -295,6 +322,7 @@ def score_tile(
             "wt1_count_abs_err": 0,
             "wt1_pos_recall": nan,
             "wt1_pos_precision": nan,
+            "wt1_pos_f1": nan,
             "wt1_low_expr_recall": nan,
             "nucleus_wt1_ssim_mean": nan,
             "nucleus_wt1_mae_mean": nan,
@@ -329,6 +357,7 @@ def score_tile(
         "wt1_count_abs_err": abs(int(fake_pos.sum()) - int(real_pos.sum())),
         "wt1_pos_recall": recall,
         "wt1_pos_precision": precision,
+        "wt1_pos_f1": _f1_from_recall_precision(recall, precision),
         "wt1_low_expr_recall": _low_expr_recall(real_means, fake_means, threshold),
         "nucleus_wt1_ssim_mean": nuc_ssim,
         "nucleus_wt1_mae_mean": nuc_mae,
@@ -448,9 +477,10 @@ def cell_classification(pooled: dict[str, dict[str, np.ndarray]], threshold: flo
         if real.size == 0:
             continue
         y = (real >= threshold).astype(int)
-        fake_pos = fake >= threshold
-        thr, f1, bal = _best_f1(y, fake)
-        pooled_recall = float(np.mean(fake_pos[y == 1])) if np.any(y == 1) else float("nan")
+        otsu_recall, otsu_precision, otsu_f1 = _pooled_classification_at_threshold(
+            real, fake, threshold,
+        )
+        thr, f1_best, bal = _best_f1(y, fake)
         pooled_low = _low_expr_recall(real, fake, threshold)
         rows.append({
             "model": model,
@@ -460,10 +490,36 @@ def cell_classification(pooled: dict[str, dict[str, np.ndarray]], threshold: flo
             "cell_roc_auc": _roc_auc(y, fake),
             "cell_average_precision": _average_precision(y, fake),
             "cell_best_threshold": thr,
-            "cell_f1": f1,
+            "cell_f1_best_threshold": f1_best,
             "cell_balanced_accuracy": bal,
-            "cell_wt1_pos_recall": pooled_recall,
+            # Pooled at global GT Otsu threshold (matches per-tile recall/precision definition).
+            "cell_wt1_pos_recall": otsu_recall,
+            "cell_wt1_pos_precision": otsu_precision,
+            "cell_wt1_pos_f1": otsu_f1,
             "cell_low_expr_recall": pooled_low,
+        })
+    return pd.DataFrame(rows)
+
+
+def build_paper_main_table(df: pd.DataFrame, cell_lb: pd.DataFrame) -> pd.DataFrame:
+    """Main-text table: tile-mean recall/precision/F1/SSIM/Pearson + pooled Otsu F1."""
+    rows = []
+    for model in order_models(list(dict.fromkeys(df["model"]))):
+        sub = df[df["model"] == model]
+        cell = cell_lb[cell_lb["model"] == model]
+        rows.append({
+            "model": model,
+            "n_tiles": len(sub),
+            "wt1_recall_tile_mean": float(sub["wt1_pos_recall"].mean()),
+            "wt1_precision_tile_mean": float(sub["wt1_pos_precision"].mean()),
+            "wt1_f1_tile_mean": float(sub["wt1_pos_f1"].mean()),
+            "nucleus_wt1_ssim_tile_mean": float(sub["nucleus_wt1_ssim_mean"].mean()),
+            "percell_pearson_tile_mean": float(sub["wt1_percell_pearson"].mean()),
+            "wt1_recall_pooled_otsu": float(cell["cell_wt1_pos_recall"].iloc[0]) if len(cell) else float("nan"),
+            "wt1_precision_pooled_otsu": float(cell["cell_wt1_pos_precision"].iloc[0]) if len(cell) else float("nan"),
+            "wt1_f1_pooled_otsu": float(cell["cell_wt1_pos_f1"].iloc[0]) if len(cell) else float("nan"),
+            "cell_roc_auc": float(cell["cell_roc_auc"].iloc[0]) if len(cell) else float("nan"),
+            "cell_f1_best_threshold": float(cell["cell_f1_best_threshold"].iloc[0]) if len(cell) else float("nan"),
         })
     return pd.DataFrame(rows)
 
@@ -581,8 +637,9 @@ def print_leaderboard_table(
         "wt1_enriched_tiles": f"WT1-enriched (top {enrichment_top_frac:.0%} mean WT1)",
     }
     key_metrics = [
-        "wt1_percell_pearson", "wt1_pos_recall", "wt1_low_expr_recall",
-        "nucleus_wt1_ssim_mean", "wt1_expr_fraction_abs_err", "wt1_count_abs_err",
+        "wt1_percell_pearson", "wt1_pos_recall", "wt1_pos_precision", "wt1_pos_f1",
+        "wt1_low_expr_recall", "nucleus_wt1_ssim_mean",
+        "wt1_expr_fraction_abs_err", "wt1_count_abs_err",
     ]
     for scope in scopes:
         block = subset_lb[subset_lb["scope"] == scope]
@@ -597,6 +654,8 @@ def print_leaderboard_table(
                     short = {
                         "wt1_percell_pearson": "pearson",
                         "wt1_pos_recall": "recall",
+                        "wt1_pos_precision": "precision",
+                        "wt1_pos_f1": "f1",
                         "wt1_low_expr_recall": "low_recall",
                         "nucleus_wt1_ssim_mean": "nuc_ssim",
                         "wt1_expr_fraction_abs_err": "frac_err",
@@ -606,14 +665,42 @@ def print_leaderboard_table(
             print("  " + "  ".join(parts))
 
     if not cell_lb.empty:
-        print("\n=== Pooled cell-level classification ===")
+        print("\n=== Pooled nuclei @ global Otsu threshold ===")
         for _, row in cell_lb.iterrows():
             print(
-                f"{row['model']:<10} AUC={row['cell_roc_auc']:.3f} "
-                f"F1={row['cell_f1']:.3f} "
-                f"recall={row['cell_wt1_pos_recall']:.3f} "
+                f"{row['model']:<10} recall={row['cell_wt1_pos_recall']:.3f} "
+                f"precision={row['cell_wt1_pos_precision']:.3f} "
+                f"F1={row['cell_wt1_pos_f1']:.3f} "
+                f"AUC={row['cell_roc_auc']:.3f} "
                 f"low_expr_recall={row['cell_low_expr_recall']:.3f}"
             )
+        print("\n=== Pooled F1 at score-optimized threshold (supplement) ===")
+        for _, row in cell_lb.iterrows():
+            print(
+                f"{row['model']:<10} F1_best={row['cell_f1_best_threshold']:.3f} "
+                f"(thr={row['cell_best_threshold']:.1f})"
+            )
+
+
+def print_paper_main_table(paper: pd.DataFrame) -> None:
+    print("\n=== MAIN PAPER TABLE (tile-mean recall/precision/F1/SSIM/Pearson) ===")
+    header = (
+        f"{'Model':<10} {'Recall':>7} {'Prec':>7} {'F1':>7} "
+        f"{'NucSSIM':>8} {'Pearson':>8}"
+    )
+    print(header)
+    print("-" * len(header))
+    for _, row in paper.iterrows():
+        def f(v: float) -> str:
+            return f"{v:.3f}" if np.isfinite(v) else "—"
+        print(
+            f"{row['model']:<10} "
+            f"{f(row['wt1_recall_tile_mean']):>7} "
+            f"{f(row['wt1_precision_tile_mean']):>7} "
+            f"{f(row['wt1_f1_tile_mean']):>7} "
+            f"{f(row['nucleus_wt1_ssim_tile_mean']):>8} "
+            f"{f(row['percell_pearson_tile_mean']):>8}"
+        )
 
 
 def main() -> None:
@@ -670,6 +757,9 @@ def main() -> None:
     cell_lb = cell_classification(pooled, threshold)
     cell_lb.to_csv(out_dir / "wt1_cell_classification_leaderboard.csv", index=False)
 
+    paper_table = build_paper_main_table(df, cell_lb)
+    paper_table.to_csv(out_dir / "wt1_paper_main_table.csv", index=False)
+
     summary = {
         "wt1_threshold": threshold,
         "wt1_enrichment_top_frac": args.wt1_enrichment_top_frac,
@@ -697,6 +787,16 @@ def main() -> None:
         df, "wt1_pos_recall", METRIC_LABELS["wt1_pos_recall"],
         "CaMSC WT1+ recall per tile",
         out_dir / "fig_wt1_pos_recall.png", args.dpi,
+    )
+    boxplot(
+        df, "wt1_pos_precision", METRIC_LABELS["wt1_pos_precision"],
+        "CaMSC WT1+ precision per tile",
+        out_dir / "fig_wt1_pos_precision.png", args.dpi,
+    )
+    boxplot(
+        df, "wt1_pos_f1", METRIC_LABELS["wt1_pos_f1"],
+        "CaMSC WT1+ F1 per tile (global Otsu threshold)",
+        out_dir / "fig_wt1_pos_f1.png", args.dpi,
     )
     boxplot(
         df, "wt1_low_expr_recall", METRIC_LABELS["wt1_low_expr_recall"],
@@ -728,9 +828,9 @@ def main() -> None:
             out_dir / "fig_wt1_cell_auc.png", args.dpi, chance=0.5,
         )
         bar_metric(
-            cell_lb, "cell_f1", METRIC_LABELS["cell_f1"],
-            "CaMSC WT1+ cell classification (F1)",
-            out_dir / "fig_wt1_cell_f1.png", args.dpi,
+            cell_lb, "cell_wt1_pos_f1", METRIC_LABELS["wt1_pos_f1"],
+            "CaMSC WT1+ F1 (pooled, global Otsu threshold)",
+            out_dir / "fig_wt1_cell_f1_otsu.png", args.dpi,
         )
         bar_metric(
             cell_lb, "cell_wt1_pos_recall", METRIC_LABELS["cell_wt1_pos_recall"],
@@ -744,6 +844,7 @@ def main() -> None:
         )
 
     print_leaderboard_table(subset_lb, cell_lb, args.wt1_enrichment_top_frac)
+    print_paper_main_table(paper_table)
 
 
 if __name__ == "__main__":

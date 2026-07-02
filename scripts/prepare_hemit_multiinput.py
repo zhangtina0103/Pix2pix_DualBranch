@@ -200,10 +200,11 @@ def main() -> None:
         grand += n
 
     print(f"\nDone. {grand} total pair-writes across {len(variants)} variant(s).")
-    print("Train examples:")
-    print("  H&E only:     DATAROOT=.../he       HEMIT_MULTI_VARIANT=he")
-    print("  DAPI only:    DATAROOT=.../dapi     HEMIT_MULTI_VARIANT=dapi")
-    print("  H&E+DAPI:     DATAROOT=.../he_dapi  HEMIT_MULTI_VARIANT=he_dapi")
+    print("Train examples (scratch defaults):")
+    print("  source scripts/hemit_scratch_env.sh")
+    print("  HEMIT_MULTI_VARIANT=he       DATAROOT=~/orcd/scratch/hemit/datasets/hemit_multi/he")
+    print("  HEMIT_MULTI_VARIANT=dapi     DATAROOT=~/orcd/scratch/hemit/datasets/hemit_multi/dapi")
+    print("  HEMIT_MULTI_VARIANT=he_dapi  DATAROOT=~/orcd/scratch/hemit/datasets/hemit_multi/he_dapi")
 
 
 if __name__ == "__main__":

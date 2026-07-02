@@ -1,15 +1,21 @@
 # shellcheck shell=bash
 # HEMIT multi-input CD3/panCK experiments (FM + cross-attention @ 80 epochs).
 #
-# Usage (after prepare_hemit_multiinput.py):
-#   HEMIT_MULTI_VARIANT=he       DATAROOT=./datasets/hemit_multi/he       sbatch ...
-#   HEMIT_MULTI_VARIANT=dapi       DATAROOT=./datasets/hemit_multi/dapi     sbatch ...
-#   HEMIT_MULTI_VARIANT=he_dapi    DATAROOT=./datasets/hemit_multi/he_dapi  sbatch ...
+# Defaults use scratch (source hemit_scratch_env.sh):
+#   ~/orcd/scratch/hemit/datasets/hemit_multi/{he,dapi,he_dapi}
+#
+# Usage:
+#   source scripts/hemit_scratch_env.sh
+#   HEMIT_MULTI_VARIANT=he_dapi sbatch bash_scripts/train_hemit_multiinput.sbatch
 
 hemit_multiinput_apply_env() {
   local variant="${HEMIT_MULTI_VARIANT:?Set HEMIT_MULTI_VARIANT=he|dapi|he_dapi}"
   local _root
   _root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+  # shellcheck source=/dev/null
+  source "${_root}/scripts/hemit_scratch_env.sh"
+  hemit_scratch_ensure_dirs
 
   # shellcheck source=/dev/null
   source "${_root}/scripts/vanilla_fm_env.sh"
@@ -35,17 +41,17 @@ hemit_multiinput_apply_env() {
   case "${variant}" in
     he)
       export TRAIN_NAME=hemit_multi_he_cd3panck
-      export DATAROOT="${DATAROOT:-./datasets/hemit_multi/he}"
+      export DATAROOT="${DATAROOT:-$(hemit_multiinput_dataroot he)}"
       unset DATASET_MODE FM_USE_SEG
       ;;
     dapi)
       export TRAIN_NAME=hemit_multi_dapi_cd3panck
-      export DATAROOT="${DATAROOT:-./datasets/hemit_multi/dapi}"
+      export DATAROOT="${DATAROOT:-$(hemit_multiinput_dataroot dapi)}"
       unset DATASET_MODE FM_USE_SEG
       ;;
     he_dapi)
       export TRAIN_NAME=hemit_multi_he_dapi_cd3panck
-      export DATAROOT="${DATAROOT:-./datasets/hemit_multi/he_dapi}"
+      export DATAROOT="${DATAROOT:-$(hemit_multiinput_dataroot he_dapi)}"
       export DATASET_MODE=aligned_cond
       export FM_USE_SEG=1
       ;;
@@ -62,7 +68,5 @@ hemit_multiinput_apply_env() {
 }
 
 hemit_multiinput_datadir() {
-  local base="${HEMIT_MULTI_ROOT:-./datasets/hemit_multi}"
-  local variant="${HEMIT_MULTI_VARIANT:?}"
-  echo "${base}/${variant}"
+  hemit_multiinput_dataroot "${HEMIT_MULTI_VARIANT:?}"
 }

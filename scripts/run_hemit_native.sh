@@ -246,6 +246,7 @@ train() {
     "${extra[@]}"
   )
   [[ -n "${MAX_DATASET_SIZE:-}" ]] && train_args+=(--max_dataset_size "${MAX_DATASET_SIZE}")
+  [[ -n "${CHECKPOINTS_DIR:-}" ]] && train_args+=(--checkpoints_dir "${CHECKPOINTS_DIR}")
   case "${PY_MODEL}" in
     pix2pix|cut|asp) train_args+=(--lambda_L1 "${LAMBDA_L1:-100}") ;;
   esac
@@ -341,16 +342,19 @@ test_one() {
   if [[ "${PY_MODEL}" != "vanilla_fm" ]]; then
     test_args+=(--netG "${NETG}" --ngf "${NGF:-64}")
   fi
+  [[ -n "${CHECKPOINTS_DIR:-}" ]] && test_args+=(--checkpoints_dir "${CHECKPOINTS_DIR}")
+  [[ -n "${RESULTS_DIR:-}" ]] && test_args+=(--results_dir "${RESULTS_DIR}")
   python test.py "${test_args[@]}"
 }
 
 metrics_one() {
   local name="$1" epoch="$2"
-  [[ -d "results/${name}/test_${epoch}/images" ]] || die "run MODE=test first"
+  local results_root="${RESULTS_DIR:-./results}"
+  [[ -d "${results_root}/${name}/test_${epoch}/images" ]] || die "run MODE=test first"
   if [[ -n "${HEMIT_METRICS_SCRIPT:-}" ]]; then
-    python "${HEMIT_METRICS_SCRIPT}" --srcdir "results/${name}/test_${epoch}/"
+    python "${HEMIT_METRICS_SCRIPT}" --srcdir "${results_root}/${name}/test_${epoch}/"
   else
-    python post_process.py --srcdir "results/${name}/test_${epoch}/" \
+    python post_process.py --srcdir "${results_root}/${name}/test_${epoch}/" \
       ${METRICS_COMPOSITE:+--composite}
   fi
 }

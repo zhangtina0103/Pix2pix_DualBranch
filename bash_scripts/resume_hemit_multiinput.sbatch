@@ -5,6 +5,9 @@
 #   HEMIT_MULTI_VARIANT=dapi RESUME_FROM_EPOCH=45 sbatch bash_scripts/resume_hemit_multiinput.sbatch
 #   HEMIT_MULTI_VARIANT=he_dapi sbatch bash_scripts/resume_hemit_multiinput.sbatch
 #
+# Schedule he + dapi resume 6h from now:
+#   bash bash_scripts/schedule_hemit_multiinput_resume.sbatch
+#
 # RESUME_FROM_EPOCH optional — auto-detects latest *_net_G.pth under scratch checkpoints.
 #SBATCH --job-name=hemit_multi_res
 #SBATCH --output=logs/hemit_multiinput_resume_%j.out

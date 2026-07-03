@@ -11,9 +11,21 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 from skimage.metrics import peak_signal_noise_ratio, structural_similarity as ssim
+from tqdm import tqdm
 
 
 CHANNELS = ("cd3", "panck")
+
+
+def resolve_image_dir(srcdir: Path) -> Path:
+    """test.py saves TIFFs under <test_epoch>/images/."""
+    srcdir = srcdir.resolve()
+    images = srcdir / "images"
+    if images.is_dir():
+        for ext in (".tif", ".tiff", ".png"):
+            if any(images.glob(f"*_fake_B{ext}")):
+                return images
+    return srcdir
 
 
 def _load_hwc(path: Path) -> np.ndarray:
@@ -27,16 +39,14 @@ def _load_hwc(path: Path) -> np.ndarray:
     raise ValueError(f"Bad image shape {arr.shape} in {path}")
 
 
-def _find_pairs(srcdir: Path) -> list[tuple[Path, Path, str]]:
-    img_dir = srcdir / "images"
-    if not img_dir.is_dir():
-        img_dir = srcdir
+def _find_pairs(img_dir: Path) -> list[tuple[Path, Path, str]]:
     pairs = []
-    for fake_path in sorted(img_dir.glob("*_fake_B.png")):
-        stem = fake_path.name.replace("_fake_B.png", "")
-        real_path = img_dir / f"{stem}_real_B.png"
-        if real_path.is_file():
-            pairs.append((real_path, fake_path, stem))
+    for ext in (".tif", ".tiff", ".png"):
+        for fake_path in sorted(img_dir.glob(f"*_fake_B{ext}")):
+            stem = fake_path.name.replace(f"_fake_B{ext}", "")
+            real_path = img_dir / f"{stem}_real_B{ext}"
+            if real_path.is_file():
+                pairs.append((real_path, fake_path, stem))
     return pairs
 
 
@@ -46,15 +56,18 @@ def main() -> None:
     p.add_argument("--out-csv", type=str, default="", help="Output CSV (default: srcdir/score_cd3_panck.csv)")
     args = p.parse_args()
 
-    srcdir = Path(args.srcdir).expanduser().resolve()
+    srcdir = Path(args.srcdir).expanduser()
+    img_dir = resolve_image_dir(srcdir)
     out_csv = Path(args.out_csv).expanduser() if args.out_csv else srcdir / "score_cd3_panck.csv"
 
-    pairs = _find_pairs(srcdir)
+    pairs = _find_pairs(img_dir)
     if not pairs:
-        raise SystemExit(f"No *_fake_B.png pairs under {srcdir}")
+        raise SystemExit(f"No *_fake_B.{{tif,png}} pairs under {img_dir}")
+
+    print(f"Metrics on: {img_dir} ({len(pairs)} tiles)")
 
     rows = []
-    for real_path, fake_path, stem in pairs:
+    for real_path, fake_path, stem in tqdm(pairs, desc="score_cd3_panck"):
         real = _load_hwc(real_path)
         fake = _load_hwc(fake_path)
         row = {"file_name": stem}
@@ -91,15 +104,9 @@ def main() -> None:
 
     agg = {k: float(np.mean([r[k] for r in rows])) for k in fieldnames if k != "file_name"}
     print(f"Wrote {out_csv} ({len(rows)} tiles)")
-    print(
-        f"  CD3  SSIM={agg['cd3_ssim']:.4f}  Pearson={agg['cd3_pearson']:.4f}"
-    )
-    print(
-        f"  panCK SSIM={agg['panck_ssim']:.4f}  Pearson={agg['panck_pearson']:.4f}"
-    )
-    print(
-        f"  avg  SSIM={agg['average_ssim']:.4f}  Pearson={agg['average_pearson']:.4f}"
-    )
+    print(f"  CD3  SSIM={agg['cd3_ssim']:.4f}  Pearson={agg['cd3_pearson']:.4f}")
+    print(f"  panCK SSIM={agg['panck_ssim']:.4f}  Pearson={agg['panck_pearson']:.4f}")
+    print(f"  avg  SSIM={agg['average_ssim']:.4f}  Pearson={agg['average_pearson']:.4f}")
 
 
 if __name__ == "__main__":

@@ -350,9 +350,11 @@ test_one() {
 metrics_one() {
   local name="$1" epoch="$2"
   local results_root="${RESULTS_DIR:-./results}"
-  [[ -d "${results_root}/${name}/test_${epoch}/images" ]] || die "run MODE=test first"
+  local test_dir="${results_root}/${name}/test_${epoch}"
+  [[ -d "${test_dir}/images" ]] || die "run MODE=test first (missing ${test_dir}/images)"
+  echo "==> [metrics] ${test_dir} → score_cd3_panck.csv"
   if [[ -n "${HEMIT_METRICS_SCRIPT:-}" ]]; then
-    python "${HEMIT_METRICS_SCRIPT}" --srcdir "${results_root}/${name}/test_${epoch}/"
+    python "${HEMIT_METRICS_SCRIPT}" --srcdir "${test_dir}/"
   else
     python post_process.py --srcdir "${results_root}/${name}/test_${epoch}/" \
       ${METRICS_COMPOSITE:+--composite}

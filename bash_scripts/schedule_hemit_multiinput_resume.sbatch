@@ -1,23 +1,35 @@
 #!/bin/bash
-# Schedule delayed resume for HEMIT multi-input he + dapi (two GPU jobs).
+# Schedule delayed resume for HEMIT multi-input he + dapi (two rounds, 6h apart).
+#
+# Default: resume at now+6h and now+12h (4 jobs total: he + dapi each round).
 #
 #   bash bash_scripts/schedule_hemit_multiinput_resume.sbatch
-#   SLURM_BEGIN=now+8hours bash bash_scripts/schedule_hemit_multiinput_resume.sbatch
 #
-# Override begin time: SLURM_BEGIN accepts Slurm formats, e.g. now+6hours, now+360
+# Custom offset / rounds:
+#   SLURM_RESUME_OFFSET_HOURS=6 SLURM_RESUME_ROUNDS=3 bash bash_scripts/schedule_hemit_multiinput_resume.sbatch
 
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-BEGIN="${SLURM_BEGIN:-now+6hours}"
-echo "Scheduling hemit multi-input resume: he + dapi, begin=${BEGIN}"
+OFFSET_HOURS="${SLURM_RESUME_OFFSET_HOURS:-6}"
+ROUNDS="${SLURM_RESUME_ROUNDS:-2}"
 
-for variant in he dapi; do
-  echo "  queue ${variant} → resume_hemit_multiinput.sbatch"
-  sbatch --begin="${BEGIN}" \
-    --job-name="hemit_${variant}_res" \
-    --export=ALL,HEMIT_MULTI_VARIANT="${variant}" \
-    bash_scripts/resume_hemit_multiinput.sbatch
+echo "Scheduling hemit multi-input resume: he + dapi"
+echo "  rounds=${ROUNDS}  offset=${OFFSET_HOURS}h  → now+${OFFSET_HOURS}h .. now+$((ROUNDS * OFFSET_HOURS))h"
+
+for round in $(seq 1 "${ROUNDS}"); do
+  hours=$(( round * OFFSET_HOURS ))
+  BEGIN="now+${hours}hours"
+  echo ""
+  echo "==> round ${round}/${ROUNDS} begin=${BEGIN}"
+  for variant in he dapi; do
+    echo "  queue ${variant} (round ${round})"
+    sbatch --begin="${BEGIN}" \
+      --job-name="hemit_${variant}_r${round}" \
+      --export=ALL,HEMIT_MULTI_VARIANT="${variant}" \
+      bash_scripts/resume_hemit_multiinput.sbatch
+  done
 done
 
-echo "Queued 2 jobs. Check: squeue -u \$USER"
+echo ""
+echo "Queued $((ROUNDS * 2)) jobs. Check: squeue -u \$USER --start"

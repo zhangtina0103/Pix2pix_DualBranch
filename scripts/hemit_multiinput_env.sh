@@ -22,7 +22,8 @@ hemit_multiinput_apply_env() {
 
   export INPUT_NC=3
   export OUTPUT_NC=3
-  export FM_CHANNEL_WEIGHTS=2,1,0
+  # [CD3, panCK, pad] — match fair main HEMIT (1,1,1 on DAPI/CD3/panCK), zero pad
+  export FM_CHANNEL_WEIGHTS=1,1,0
   export FM_USE_TRI_HEAD=0
   export FM_USE_CROSS_ATTN=1
   export FM_CROSS_ATTN_DECODER="${FM_CROSS_ATTN_DECODER:-0}"

@@ -156,7 +156,7 @@ def prepare_variant(
         "src_label_order": list(LABEL_ORDER_SRC),
         "train_input_nc": 3,
         "train_output_nc": 3,
-        "fm_channel_weights": "2,1,0",
+        "fm_channel_weights": "1,1,0",
         "n_pairs": total,
         "src": str(src),
     }

@@ -2,7 +2,14 @@
 #
 #   source scripts/camsc_scratch_env.sh
 #
-# Raw TIFs:  ~/orcd/scratch/camsc/20260504/
+# Download → extract → prep workflow:
+#   export CAMSC_DOWNLOAD_URL='https://www.dropbox.com/s/.../file.zip?dl=1'
+#   sbatch bash_scripts/download_camsc_scratch.sbatch   # re-submit until complete
+#   sbatch bash_scripts/extract_camsc_scratch.sbatch    # unzip + merge old+new → camsc_all/
+#   export CAMSC_SRC=~/orcd/scratch/camsc/camsc_all
+#   sbatch bash_scripts/prepare_camsc_bf.sbatch
+#
+# Raw TIFs:  ~/orcd/scratch/camsc/20260504/  (old)  |  camsc_all/ (combined)
 # K-fold:     ~/orcd/scratch/camsc/datasets/camsc_bf_kfold/fold{0..4}/
 
 if [[ -z "${CAMSC_SCRATCH_ROOT:-}" ]]; then
@@ -14,7 +21,12 @@ if [[ -z "${CAMSC_SCRATCH_ROOT:-}" ]]; then
 fi
 
 export CAMSC_SCRATCH_ROOT
-export CAMSC_SRC="${CAMSC_SRC:-${CAMSC_SCRATCH_ROOT}/20260504}"
+export CAMSC_OLD_SRC="${CAMSC_OLD_SRC:-${CAMSC_SCRATCH_ROOT}/20260504}"
+export CAMSC_NEW_SRC="${CAMSC_NEW_SRC:-${CAMSC_SCRATCH_ROOT}/20260709}"
+export CAMSC_COMBINED_SRC="${CAMSC_COMBINED_SRC:-${CAMSC_SCRATCH_ROOT}/camsc_all}"
+export CAMSC_ZIP="${CAMSC_ZIP:-${CAMSC_SCRATCH_ROOT}/camsc_20260709.zip}"
+export CAMSC_ZIP_MIN_BYTES="${CAMSC_ZIP_MIN_BYTES:-8500000000}"
+export CAMSC_SRC="${CAMSC_SRC:-${CAMSC_COMBINED_SRC}}"
 export CAMSC_KFOLD_ROOT="${CAMSC_KFOLD_ROOT:-${CAMSC_SCRATCH_ROOT}/datasets/camsc_bf_kfold}"
 export CAMSC_KFOLDS="${CAMSC_KFOLDS:-5}"
 export FM_CHANNEL_WEIGHTS="${FM_CHANNEL_WEIGHTS:-1,1,0}"

@@ -24,7 +24,8 @@ source "${REPO_ROOT}/scripts/camsc_scratch_env.sh"
 
 [[ -d "${CAMSC_SRC}" ]] || {
   echo "ERROR: missing ${CAMSC_SRC}" >&2
-  echo "  rsync zip to ~/orcd/scratch/camsc/ && unzip" >&2
+  echo "  Download: export CAMSC_DOWNLOAD_URL=... && sbatch bash_scripts/download_camsc_scratch.sbatch" >&2
+  echo "  Extract:  sbatch bash_scripts/extract_camsc_scratch.sbatch" >&2
   exit 1
 }
 

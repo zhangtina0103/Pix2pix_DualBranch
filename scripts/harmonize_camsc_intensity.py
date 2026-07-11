@@ -4,10 +4,14 @@ Percentile intensity harmonization for CaMSC flat TIF pool.
 
 Modes
 -----
-split (default, recommended):
+split (default):
   - index <= ref_max_index (old batch): copy unchanged
   - index > ref_max_index (new batch): stretch using NEW-batch percentiles only
-  Fixes mixed acquisitions without crushing dim new fields or altering old GT.
+  Old GT untouched; helps but dim/bright alternating new fields may stay mismatched.
+
+split-per-image (recommended when new batch alternates dim/bright fields):
+  - old batch: passthrough
+  - new batch: each TIF stretched with its own p-low/p-high (full contrast per file)
 
 per-batch:
   Each batch uses its own per-marker p-low/p-high (old vs new separately).
@@ -137,6 +141,21 @@ def apply_stretch(arr: np.ndarray, lo: float, hi: float) -> np.ndarray:
     return np.clip(out, 0, 255).astype(np.uint8)
 
 
+def fit_image_percentiles(
+    arr: np.ndarray,
+    marker: str,
+    p_low: float,
+    p_high: float,
+    wt1_nonzero: bool,
+) -> tuple[float, float]:
+    vals = _values_for_stats(arr, marker, wt1_nonzero)
+    lo = float(np.percentile(vals, p_low))
+    hi = float(np.percentile(vals, p_high))
+    if hi <= lo + 1e-6:
+        hi = lo + 1.0
+    return lo, hi
+
+
 def harmonize(
     src: Path,
     dst: Path,
@@ -144,6 +163,9 @@ def harmonize(
     ref_max_index: int,
     mode: str,
     dry_run: bool,
+    p_low: float,
+    p_high: float,
+    wt1_nonzero: bool,
 ) -> int:
     dst.mkdir(parents=True, exist_ok=True)
     n = 0
@@ -153,7 +175,7 @@ def harmonize(
         marker = _normalize_marker(marker)
         batch = _batch_name(idx, ref_max_index)
 
-        if mode == "split" and batch == "old":
+        if mode in ("split", "split-per-image") and batch == "old":
             out_path = dst / p.name
             if dry_run:
                 arr = _load_gray(p)
@@ -163,14 +185,19 @@ def harmonize(
             n += 1
             continue
 
-        ref = refs[batch if mode in ("split", "per-batch") else "global"]
-        lo = ref[marker]["p_low"]
-        hi = ref[marker]["p_high"]
         arr = _load_gray(p)
+        if mode == "split-per-image":
+            lo, hi = fit_image_percentiles(arr, marker, p_low, p_high, wt1_nonzero)
+            tag = "per-image"
+        else:
+            ref = refs[batch if mode in ("split", "per-batch") else "global"]
+            lo = ref[marker]["p_low"]
+            hi = ref[marker]["p_high"]
+            tag = batch
         out = apply_stretch(arr, lo, hi)
         out_path = dst / p.name
         if dry_run:
-            print(f"[dry-run] {p.name} ({batch}) mean {arr.mean():.1f} => {out.mean():.1f}")
+            print(f"[dry-run] {p.name} ({tag}) mean {arr.mean():.1f} => {out.mean():.1f}")
         else:
             tifffile.imwrite(out_path, out)
         n += 1
@@ -185,6 +212,9 @@ def preview_indices(
     ref_max_index: int,
     mode: str,
     indices: list[int],
+    p_low: float,
+    p_high: float,
+    wt1_nonzero: bool,
 ) -> None:
     print("\nPreview (first glob match per marker):")
     for idx in indices:
@@ -197,9 +227,13 @@ def preview_indices(
             p = matches[0]
             m = _normalize_marker(marker)
             arr = _load_gray(p)
-            if mode == "split" and batch == "old":
+            if mode in ("split", "split-per-image") and batch == "old":
                 out = np.clip(arr, 0, 255).astype(np.uint8)
                 tag = "passthrough"
+            elif mode == "split-per-image":
+                lo, hi = fit_image_percentiles(arr, m, p_low, p_high, wt1_nonzero)
+                out = apply_stretch(arr, lo, hi)
+                tag = "per-image"
             else:
                 ref = refs[batch if mode in ("split", "per-batch") else "global"]
                 out = apply_stretch(arr, ref[m]["p_low"], ref[m]["p_high"])
@@ -216,9 +250,9 @@ def main() -> None:
     p.add_argument("--dst", type=str, required=True)
     p.add_argument(
         "--mode",
-        choices=("split", "per-batch", "global"),
-        default="split",
-        help="split=old unchanged + new stretched; per-batch=both stretched; global=old ref on all",
+        choices=("split", "split-per-image", "per-batch", "global"),
+        default="split-per-image",
+        help="split-per-image=old passthrough + each new TIF own stretch (best for dim/bright mix)",
     )
     p.add_argument("--ref-max-index", type=int, default=10)
     p.add_argument("--p-low", type=float, default=1.0)
@@ -239,7 +273,9 @@ def main() -> None:
     print(f"Mode: {args.mode}  (split index <= {args.ref_max_index} = old)\n")
 
     refs: dict[str, dict[str, dict[str, float]]] = {}
-    if args.mode in ("split", "per-batch"):
+    if args.mode == "split-per-image":
+        print("New batch: per-image stretch (no pooled reference).")
+    elif args.mode in ("split", "per-batch"):
         for batch in ("old", "new"):
             if args.mode == "split" and batch == "old":
                 continue
@@ -262,10 +298,16 @@ def main() -> None:
         )
 
     preview = [int(x) for x in args.preview_indices.split(",") if x.strip()]
-    preview_indices(src, refs, args.ref_max_index, args.mode, preview)
+    preview_indices(
+        src, refs, args.ref_max_index, args.mode, preview,
+        args.p_low, args.p_high, args.wt1_nonzero,
+    )
 
     print(f"\nWriting {'[dry-run] ' if args.dry_run else ''}to {dst} ...")
-    n = harmonize(src, dst, refs, args.ref_max_index, args.mode, args.dry_run)
+    n = harmonize(
+        src, dst, refs, args.ref_max_index, args.mode, args.dry_run,
+        args.p_low, args.p_high, args.wt1_nonzero,
+    )
     meta = {
         "src": str(src),
         "dst": str(dst),

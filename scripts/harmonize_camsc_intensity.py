@@ -141,6 +141,40 @@ def apply_stretch(arr: np.ndarray, lo: float, hi: float) -> np.ndarray:
     return np.clip(out, 0, 255).astype(np.uint8)
 
 
+def saturation_fraction(arr: np.ndarray, sat_min: float = 254.0) -> float:
+    return float((arr >= sat_min).mean())
+
+
+# Post-plateau caps tuned to old-batch p99 (idx <= 10)
+_SAT_PLATEAU = {"BF": 165.0, "Hoechst": 245.0, "WT1": 125.0}
+
+
+def transform_new_image(
+    arr: np.ndarray,
+    marker: str,
+    p_low: float,
+    p_high: float,
+    wt1_nonzero: bool,
+    sat_frac_thresh: float = 0.20,
+    sat_min: float = 254.0,
+) -> tuple[np.ndarray, str]:
+    """Percentile stretch; heavily clipped captures get plateau cap + restretch."""
+    marker = _normalize_marker(marker)
+    sat_frac = saturation_fraction(arr, sat_min)
+
+    if sat_frac >= sat_frac_thresh:
+        plateau = _SAT_PLATEAU[marker]
+        work = np.where(arr >= sat_min, plateau, arr.astype(np.float32))
+        lo, hi = fit_image_percentiles(work, marker, p_low, p_high, wt1_nonzero)
+        out = apply_stretch(work, lo, hi)
+        tag = f"sat-cap p{p_low:g}-{p_high:g} ({sat_frac:.0%} clipped)"
+        return out, tag
+
+    lo, hi = fit_image_percentiles(arr, marker, p_low, p_high, wt1_nonzero)
+    out = apply_stretch(arr, lo, hi)
+    return out, f"per-image p{p_low:g}-{p_high:g}"
+
+
 def fit_image_percentiles(
     arr: np.ndarray,
     marker: str,
@@ -168,6 +202,7 @@ def harmonize(
     wt1_nonzero: bool,
     p_low_new: float | None = None,
     p_high_new: float | None = None,
+    sat_frac_thresh: float = 0.20,
 ) -> int:
     p_lo_new = p_low if p_low_new is None else p_low_new
     p_hi_new = p_high if p_high_new is None else p_high_new
@@ -191,14 +226,15 @@ def harmonize(
 
         arr = _load_gray(p)
         if mode == "split-per-image":
-            lo, hi = fit_image_percentiles(arr, marker, p_lo_new, p_hi_new, wt1_nonzero)
-            tag = f"per-image p{p_lo_new:g}-{p_hi_new:g}"
+            out, tag = transform_new_image(
+                arr, marker, p_lo_new, p_hi_new, wt1_nonzero, sat_frac_thresh,
+            )
         else:
             ref = refs[batch if mode in ("split", "per-batch") else "global"]
             lo = ref[marker]["p_low"]
             hi = ref[marker]["p_high"]
+            out = apply_stretch(arr, lo, hi)
             tag = batch
-        out = apply_stretch(arr, lo, hi)
         out_path = dst / p.name
         if dry_run:
             print(f"[dry-run] {p.name} ({tag}) mean {arr.mean():.1f} => {out.mean():.1f}")
@@ -221,6 +257,7 @@ def preview_indices(
     wt1_nonzero: bool,
     p_low_new: float | None = None,
     p_high_new: float | None = None,
+    sat_frac_thresh: float = 0.20,
 ) -> None:
     p_lo_new = p_low if p_low_new is None else p_low_new
     p_hi_new = p_high if p_high_new is None else p_high_new
@@ -239,9 +276,9 @@ def preview_indices(
                 out = np.clip(arr, 0, 255).astype(np.uint8)
                 tag = "passthrough"
             elif mode == "split-per-image":
-                lo, hi = fit_image_percentiles(arr, m, p_lo_new, p_hi_new, wt1_nonzero)
-                out = apply_stretch(arr, lo, hi)
-                tag = f"per-image p{p_lo_new:g}-{p_hi_new:g}"
+                out, tag = transform_new_image(
+                    arr, m, p_lo_new, p_hi_new, wt1_nonzero, sat_frac_thresh,
+                )
             else:
                 ref = refs[batch if mode in ("split", "per-batch") else "global"]
                 out = apply_stretch(arr, ref[m]["p_low"], ref[m]["p_high"])
@@ -277,6 +314,12 @@ def main() -> None:
         default=95.0,
         help="Percentile high for new batch (split-per-image). Default 95 (tighter than 99 for saturated WT1)",
     )
+    p.add_argument(
+        "--sat-frac-thresh",
+        type=float,
+        default=0.20,
+        help="If >= this fraction of pixels are 254+, cap plateau then stretch (WT1/BF/Hoechst)",
+    )
     p.add_argument("--wt1-nonzero", action="store_true", default=True)
     p.add_argument("--sample-step", type=int, default=4)
     p.add_argument("--preview-indices", type=str, default="8,13,14")
@@ -297,7 +340,8 @@ def main() -> None:
         p_lo_new = args.p_low if args.p_low_new is None else args.p_low_new
         p_hi_new = args.p_high if args.p_high_new is None else args.p_high_new
         print(
-            f"New batch: per-image stretch p{p_lo_new:g}–p{p_hi_new:g} "
+            f"New batch: per-image stretch p{p_lo_new:g}–p{p_hi_new:g}, "
+            f"sat-cap if >={args.sat_frac_thresh:.0%} pixels clipped "
             "(old batch passthrough)."
         )
     elif args.mode in ("split", "per-batch"):
@@ -326,14 +370,14 @@ def main() -> None:
     preview_indices(
         src, refs, args.ref_max_index, args.mode, preview,
         args.p_low, args.p_high, args.wt1_nonzero,
-        args.p_low_new, args.p_high_new,
+        args.p_low_new, args.p_high_new, args.sat_frac_thresh,
     )
 
     print(f"\nWriting {'[dry-run] ' if args.dry_run else ''}to {dst} ...")
     n = harmonize(
         src, dst, refs, args.ref_max_index, args.mode, args.dry_run,
         args.p_low, args.p_high, args.wt1_nonzero,
-        args.p_low_new, args.p_high_new,
+        args.p_low_new, args.p_high_new, args.sat_frac_thresh,
     )
     meta = {
         "src": str(src),
@@ -344,6 +388,8 @@ def main() -> None:
         "p_high": args.p_high,
         "p_low_new": args.p_low if args.p_low_new is None else args.p_low_new,
         "p_high_new": args.p_high if args.p_high_new is None else args.p_high_new,
+        "sat_frac_thresh": args.sat_frac_thresh,
+        "sat_plateau": _SAT_PLATEAU,
         "wt1_nonzero": args.wt1_nonzero,
         "reference": refs,
         "n_written": n,

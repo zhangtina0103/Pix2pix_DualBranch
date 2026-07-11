@@ -166,7 +166,11 @@ def harmonize(
     p_low: float,
     p_high: float,
     wt1_nonzero: bool,
+    p_low_new: float | None = None,
+    p_high_new: float | None = None,
 ) -> int:
+    p_lo_new = p_low if p_low_new is None else p_low_new
+    p_hi_new = p_high if p_high_new is None else p_high_new
     dst.mkdir(parents=True, exist_ok=True)
     n = 0
     for p in collect_paths(src):
@@ -187,8 +191,8 @@ def harmonize(
 
         arr = _load_gray(p)
         if mode == "split-per-image":
-            lo, hi = fit_image_percentiles(arr, marker, p_low, p_high, wt1_nonzero)
-            tag = "per-image"
+            lo, hi = fit_image_percentiles(arr, marker, p_lo_new, p_hi_new, wt1_nonzero)
+            tag = f"per-image p{p_lo_new:g}-{p_hi_new:g}"
         else:
             ref = refs[batch if mode in ("split", "per-batch") else "global"]
             lo = ref[marker]["p_low"]
@@ -215,7 +219,11 @@ def preview_indices(
     p_low: float,
     p_high: float,
     wt1_nonzero: bool,
+    p_low_new: float | None = None,
+    p_high_new: float | None = None,
 ) -> None:
+    p_lo_new = p_low if p_low_new is None else p_low_new
+    p_hi_new = p_high if p_high_new is None else p_high_new
     print("\nPreview (first glob match per marker):")
     for idx in indices:
         batch = _batch_name(idx, ref_max_index)
@@ -231,9 +239,9 @@ def preview_indices(
                 out = np.clip(arr, 0, 255).astype(np.uint8)
                 tag = "passthrough"
             elif mode == "split-per-image":
-                lo, hi = fit_image_percentiles(arr, m, p_low, p_high, wt1_nonzero)
+                lo, hi = fit_image_percentiles(arr, m, p_lo_new, p_hi_new, wt1_nonzero)
                 out = apply_stretch(arr, lo, hi)
-                tag = "per-image"
+                tag = f"per-image p{p_lo_new:g}-{p_hi_new:g}"
             else:
                 ref = refs[batch if mode in ("split", "per-batch") else "global"]
                 out = apply_stretch(arr, ref[m]["p_low"], ref[m]["p_high"])
@@ -257,6 +265,18 @@ def main() -> None:
     p.add_argument("--ref-max-index", type=int, default=10)
     p.add_argument("--p-low", type=float, default=1.0)
     p.add_argument("--p-high", type=float, default=99.0)
+    p.add_argument(
+        "--p-low-new",
+        type=float,
+        default=None,
+        help="Percentile low for new batch (split-per-image). Default: --p-low",
+    )
+    p.add_argument(
+        "--p-high-new",
+        type=float,
+        default=95.0,
+        help="Percentile high for new batch (split-per-image). Default 95 (tighter than 99 for saturated WT1)",
+    )
     p.add_argument("--wt1-nonzero", action="store_true", default=True)
     p.add_argument("--sample-step", type=int, default=4)
     p.add_argument("--preview-indices", type=str, default="8,13,14")
@@ -274,7 +294,12 @@ def main() -> None:
 
     refs: dict[str, dict[str, dict[str, float]]] = {}
     if args.mode == "split-per-image":
-        print("New batch: per-image stretch (no pooled reference).")
+        p_lo_new = args.p_low if args.p_low_new is None else args.p_low_new
+        p_hi_new = args.p_high if args.p_high_new is None else args.p_high_new
+        print(
+            f"New batch: per-image stretch p{p_lo_new:g}–p{p_hi_new:g} "
+            "(old batch passthrough)."
+        )
     elif args.mode in ("split", "per-batch"):
         for batch in ("old", "new"):
             if args.mode == "split" and batch == "old":
@@ -301,12 +326,14 @@ def main() -> None:
     preview_indices(
         src, refs, args.ref_max_index, args.mode, preview,
         args.p_low, args.p_high, args.wt1_nonzero,
+        args.p_low_new, args.p_high_new,
     )
 
     print(f"\nWriting {'[dry-run] ' if args.dry_run else ''}to {dst} ...")
     n = harmonize(
         src, dst, refs, args.ref_max_index, args.mode, args.dry_run,
         args.p_low, args.p_high, args.wt1_nonzero,
+        args.p_low_new, args.p_high_new,
     )
     meta = {
         "src": str(src),
@@ -315,6 +342,8 @@ def main() -> None:
         "ref_max_index": args.ref_max_index,
         "p_low": args.p_low,
         "p_high": args.p_high,
+        "p_low_new": args.p_low if args.p_low_new is None else args.p_low_new,
+        "p_high_new": args.p_high if args.p_high_new is None else args.p_high_new,
         "wt1_nonzero": args.wt1_nonzero,
         "reference": refs,
         "n_written": n,

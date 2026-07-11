@@ -270,10 +270,9 @@ def flag_outliers(df: pd.DataFrame) -> pd.DataFrame:
                 continue
             if mean < 5:
                 issues.append(f"{marker}_very_dark")
-            if mean > 220:
+            if mean > 180:
                 issues.append(f"{marker}_very_bright")
-            if p99 >= 254 and row.get("batch") == "new":
-                issues.append(f"{marker}_p99_saturated")
+            # p99≈255 on new batch is expected after per-image p1–p99 stretch — not a failure.
             if sat > 0.05:
                 issues.append(f"{marker}_high_sat_frac")
         # Cross-marker imbalance (new batch only)
@@ -438,6 +437,8 @@ def main() -> None:
         ]
         print(flagged.to_string(index=False))
         flagged.to_csv(out_dir / "flagged_fields.csv", index=False)
+    else:
+        print("(none — note: p99≈255 on new batch after stretch is normal, not flagged)")
 
     batch_summary = summarize(pool_df, ["batch"])
     pct_summary = summarize(pool_df, ["pct", "batch"])

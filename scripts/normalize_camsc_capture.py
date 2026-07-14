@@ -79,6 +79,7 @@ def discover_field_dirs(src: Path, mag: str = "10x") -> list[dict]:
 
 
 def copy_legacy_batch(old_src: Path, dst: Path) -> int:
+    dst.mkdir(parents=True, exist_ok=True)
     n = 0
     for path in sorted(old_src.glob("*.tif")):
         if not _LEGACY_RE.match(path.name):

@@ -203,9 +203,11 @@ def harmonize(
     p_low_new: float | None = None,
     p_high_new: float | None = None,
     sat_frac_thresh: float = 0.20,
+    passthrough_markers: set[str] | None = None,
 ) -> int:
     p_lo_new = p_low if p_low_new is None else p_low_new
     p_hi_new = p_high if p_high_new is None else p_high_new
+    skip = {_normalize_marker(m) for m in (passthrough_markers or set())}
     dst.mkdir(parents=True, exist_ok=True)
     n = 0
     for p in collect_paths(src):
@@ -213,9 +215,10 @@ def harmonize(
         assert marker is not None
         marker = _normalize_marker(marker)
         batch = _batch_name(idx, ref_max_index)
+        out_path = dst / p.name
 
-        if mode in ("split", "split-per-image") and batch == "old":
-            out_path = dst / p.name
+        # Old batch always passthrough in split* modes; optional markers always copy.
+        if marker in skip or (mode in ("split", "split-per-image") and batch == "old"):
             if dry_run:
                 arr = _load_gray(p)
                 print(f"[dry-run] {p.name} -> passthrough mean {arr.mean():.1f}")
@@ -235,7 +238,6 @@ def harmonize(
             hi = ref[marker]["p_high"]
             out = apply_stretch(arr, lo, hi)
             tag = batch
-        out_path = dst / p.name
         if dry_run:
             print(f"[dry-run] {p.name} ({tag}) mean {arr.mean():.1f} => {out.mean():.1f}")
         else:
@@ -258,9 +260,11 @@ def preview_indices(
     p_low_new: float | None = None,
     p_high_new: float | None = None,
     sat_frac_thresh: float = 0.20,
+    passthrough_markers: set[str] | None = None,
 ) -> None:
     p_lo_new = p_low if p_low_new is None else p_low_new
     p_hi_new = p_high if p_high_new is None else p_high_new
+    passthrough_markers = {_normalize_marker(m) for m in (passthrough_markers or set())}
     print("\nPreview (first glob match per marker):")
     for idx in indices:
         batch = _batch_name(idx, ref_max_index)
@@ -272,7 +276,9 @@ def preview_indices(
             p = matches[0]
             m = _normalize_marker(marker)
             arr = _load_gray(p)
-            if mode in ("split", "split-per-image") and batch == "old":
+            if m in passthrough_markers or (
+                mode in ("split", "split-per-image") and batch == "old"
+            ):
                 out = np.clip(arr, 0, 255).astype(np.uint8)
                 tag = "passthrough"
             elif mode == "split-per-image":
@@ -320,6 +326,12 @@ def main() -> None:
         default=0.20,
         help="If >= this fraction of pixels are 254+, cap plateau then stretch (WT1/BF/Hoechst)",
     )
+    p.add_argument(
+        "--passthrough-markers",
+        type=str,
+        default="",
+        help="Comma-separated markers to never stretch (e.g. BF). Still copied to dst.",
+    )
     p.add_argument("--wt1-nonzero", action="store_true", default=True)
     p.add_argument("--sample-step", type=int, default=4)
     p.add_argument("--preview-indices", type=str, default="8,13,14")
@@ -332,8 +344,16 @@ def main() -> None:
         raise SystemExit(f"Missing src: {src}")
 
     paths = collect_paths(src)
+    passthrough = {
+        _normalize_marker(x.strip())
+        for x in args.passthrough_markers.split(",")
+        if x.strip()
+    }
     print(f"Found {len(paths)} marker TIFs in {src}")
-    print(f"Mode: {args.mode}  (split index <= {args.ref_max_index} = old)\n")
+    print(f"Mode: {args.mode}  (split index <= {args.ref_max_index} = old)")
+    if passthrough:
+        print(f"Passthrough markers (never stretch): {sorted(passthrough)}")
+    print()
 
     refs: dict[str, dict[str, dict[str, float]]] = {}
     if args.mode == "split-per-image":
@@ -371,6 +391,7 @@ def main() -> None:
         src, refs, args.ref_max_index, args.mode, preview,
         args.p_low, args.p_high, args.wt1_nonzero,
         args.p_low_new, args.p_high_new, args.sat_frac_thresh,
+        passthrough,
     )
 
     print(f"\nWriting {'[dry-run] ' if args.dry_run else ''}to {dst} ...")
@@ -378,6 +399,7 @@ def main() -> None:
         src, dst, refs, args.ref_max_index, args.mode, args.dry_run,
         args.p_low, args.p_high, args.wt1_nonzero,
         args.p_low_new, args.p_high_new, args.sat_frac_thresh,
+        passthrough,
     )
     meta = {
         "src": str(src),
@@ -389,6 +411,7 @@ def main() -> None:
         "p_low_new": args.p_low if args.p_low_new is None else args.p_low_new,
         "p_high_new": args.p_high if args.p_high_new is None else args.p_high_new,
         "sat_frac_thresh": args.sat_frac_thresh,
+        "passthrough_markers": sorted(passthrough),
         "sat_plateau": _SAT_PLATEAU,
         "wt1_nonzero": args.wt1_nonzero,
         "reference": refs,

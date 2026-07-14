@@ -194,7 +194,10 @@ def main() -> None:
         print("\n=== Cross-check channel-map CSV vs source Capture RGB ===")
         map_bad = []
         map_ok = 0
-        for (pct_dir, field), caps in sorted(channel_map.items(), key=lambda x: (x[0], int(x[1]))):
+        for (pct_dir, field), caps in sorted(
+            channel_map.items(),
+            key=lambda item: (item[0][0], int(item[0][1])),
+        ):
             field_dir = src_new / pct_dir / field
             if not field_dir.is_dir():
                 map_bad.append((pct_dir, field, "missing field dir"))
